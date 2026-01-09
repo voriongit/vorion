@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      "@vorion/basis/*": ["src/basis/*"],
+      "@vorion/cognigate/*": ["src/cognigate/*"],
+      "@vorion/enforce/*": ["src/enforce/*"],
+      "@vorion/intent/*": ["src/intent/*"],
+      "@vorion/proof/*": ["src/proof/*"],
+      "@vorion/trust-engine/*": ["src/trust-engine/*"],
+      "@vorion/api/*": ["src/api/*"],
+      "@vorion/common/*": ["src/common/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "tests"]
+}

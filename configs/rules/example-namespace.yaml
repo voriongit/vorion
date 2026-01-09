@@ -1,0 +1,111 @@
+# Example Rule Namespace
+# This demonstrates the BASIS rule configuration format
+
+namespace: "example"
+description: "Example rules for demonstration"
+version: "1.0.0"
+
+rules:
+  # Basic allow rule
+  - id: "example-001"
+    name: "Allow Low-Risk Operations"
+    description: "Allows operations that are classified as low risk"
+    priority: 100
+    enabled: true
+    when:
+      intentType: "*"
+      conditions:
+        - field: "intent.context.riskLevel"
+          operator: "equals"
+          value: "low"
+    evaluate:
+      - condition: "true"
+        result: "allow"
+        reason: "Low risk operations are permitted"
+
+  # Amount limit rule
+  - id: "example-002"
+    name: "Transaction Amount Limit"
+    description: "Limits transaction amounts based on trust level"
+    priority: 50
+    enabled: true
+    when:
+      intentType: "financial_transaction"
+    evaluate:
+      - condition: "intent.context.amount <= entity.attributes.transactionLimit"
+        result: "allow"
+        reason: "Amount within entity limit"
+      - condition: "intent.context.amount <= entity.attributes.transactionLimit * 1.5"
+        result: "escalate"
+        reason: "Amount exceeds limit but within escalation range"
+        escalation:
+          to: "finance_approver"
+          timeout: "2h"
+          autoDenyOnTimeout: true
+      - condition: "true"
+        result: "deny"
+        reason: "Amount exceeds maximum threshold"
+
+  # Trust level requirement
+  - id: "example-003"
+    name: "Minimum Trust Level"
+    description: "Requires minimum trust level for sensitive operations"
+    priority: 10
+    enabled: true
+    when:
+      intentType:
+        - "data_access"
+        - "system_modification"
+    evaluate:
+      - condition: "entity.trustLevel >= 2"
+        result: "allow"
+        reason: "Trust level sufficient"
+      - condition: "entity.trustLevel == 1"
+        result: "escalate"
+        reason: "Provisional trust requires approval"
+        escalation:
+          to: "supervisor"
+          timeout: "1h"
+          requireJustification: true
+      - condition: "true"
+        result: "deny"
+        reason: "Trust level insufficient for this operation"
+
+  # Time-based restriction
+  - id: "example-004"
+    name: "Business Hours Restriction"
+    description: "Restricts certain operations to business hours"
+    priority: 75
+    enabled: true
+    when:
+      intentType: "admin_operation"
+      conditions:
+        - field: "intent.context.requiresBusinessHours"
+          operator: "equals"
+          value: true
+    evaluate:
+      - condition: "environment.isBusinessHours"
+        result: "allow"
+        reason: "Within business hours"
+      - condition: "true"
+        result: "deny"
+        reason: "Operation restricted to business hours"
+
+  # Rate limiting rule
+  - id: "example-005"
+    name: "Operation Rate Limit"
+    description: "Prevents excessive operation frequency"
+    priority: 25
+    enabled: true
+    when:
+      intentType: "*"
+    evaluate:
+      - condition: "entity.attributes.operationsLastHour < 100"
+        result: "allow"
+        reason: "Within rate limit"
+      - condition: "entity.attributes.operationsLastHour < 200"
+        result: "limit"
+        reason: "Approaching rate limit, reduced priority"
+      - condition: "true"
+        result: "deny"
+        reason: "Rate limit exceeded"

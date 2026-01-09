@@ -1,0 +1,122 @@
+# Vorion Development Environment
+# docker-compose up -d
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # Vorion API
+  # ==========================================================================
+  vorion:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+      - "9090:9090"
+    environment:
+      - VORION_ENV=development
+      - VORION_LOG_LEVEL=debug
+      - VORION_DB_HOST=postgres
+      - VORION_DB_PORT=5432
+      - VORION_DB_NAME=vorion
+      - VORION_DB_USER=vorion
+      - VORION_DB_PASSWORD=vorion_dev_password
+      - VORION_REDIS_HOST=redis
+      - VORION_REDIS_PORT=6379
+      - VORION_JWT_SECRET=development-secret-change-in-production-min-32-chars
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data/proofs:/app/data/proofs
+    networks:
+      - vorion-network
+    restart: unless-stopped
+
+  # ==========================================================================
+  # PostgreSQL Database
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=vorion
+      - POSTGRES_PASSWORD=vorion_dev_password
+      - POSTGRES_DB=vorion
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vorion -d vorion"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vorion-network
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Redis Cache
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vorion-network
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Adminer (Database UI) - Development Only
+  # ==========================================================================
+  adminer:
+    image: adminer:latest
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - vorion-network
+    profiles:
+      - dev-tools
+
+  # ==========================================================================
+  # Redis Commander (Redis UI) - Development Only
+  # ==========================================================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    networks:
+      - vorion-network
+    profiles:
+      - dev-tools
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  vorion-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres-data:
+  redis-data:
