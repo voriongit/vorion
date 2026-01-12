@@ -1,0 +1,2 @@
+# Force LF line endings for env files
+.env* text eol=lf

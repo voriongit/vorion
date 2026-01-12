@@ -1,0 +1,231 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-neon-blue: #00f3ff;
+  --color-neon-purple: #bc13fe;
+  --color-neon-green: #0aff0a;
+  --color-neon-orange: #ff9e00;
+  --color-bg-dark: #05050a;
+  --color-bg-darker: #020203;
+  --color-glass-bg: rgba(15, 15, 20, 0.9);
+  --color-glass-border: rgba(255, 255, 255, 0.1);
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  :root {
+    --background: #05050a;
+    --foreground: #e0e0e0;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #333 #0a0a0a;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0a0a0a;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #444;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass {
+    background: var(--color-glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--color-glass-border);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+  }
+
+  .glass-hover:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .neon-text-blue {
+    color: var(--color-neon-blue);
+    text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+  }
+
+  .neon-text-purple {
+    color: var(--color-neon-purple);
+    text-shadow: 0 0 10px rgba(188, 19, 254, 0.5);
+  }
+
+  .neon-text-orange {
+    color: var(--color-neon-orange);
+    text-shadow: 0 0 10px rgba(255, 158, 0, 0.5);
+  }
+
+  .neon-text-green {
+    color: var(--color-neon-green);
+    text-shadow: 0 0 10px rgba(10, 255, 10, 0.5);
+  }
+
+  .user-bubble {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white;
+    border-radius: 12px 12px 2px 12px;
+  }
+
+  .agent-bubble {
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 12px 12px 12px 2px;
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(#333 1px, transparent 1px),
+      linear-gradient(90deg, #333 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Level badges */
+  .badge-novice {
+    @apply bg-cyan-900/30 text-cyan-400 border-cyan-500/30;
+  }
+
+  .badge-intermediate {
+    @apply bg-purple-900/30 text-purple-400 border-purple-500/30;
+  }
+
+  .badge-expert {
+    @apply bg-orange-900/30 text-orange-400 border-orange-500/30;
+  }
+
+  .badge-theoretical {
+    @apply bg-green-900/30 text-green-400 border-green-500/30;
+  }
+}
+
+@layer utilities {
+  .fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+    opacity: 0;
+  }
+
+  .pulse-node {
+    animation: pulseNode 2s infinite;
+  }
+
+  .spin-slow {
+    animation: rotateSlow 10s linear infinite;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseNode {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 243, 255, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(0, 243, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 243, 255, 0);
+  }
+}
+
+@keyframes rotateSlow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Prose styles for documentation */
+.prose-nexus {
+  @apply text-gray-300;
+}
+
+.prose-nexus h1 {
+  @apply text-3xl font-bold text-white mb-4;
+}
+
+.prose-nexus h2 {
+  @apply text-2xl font-bold text-white mt-8 mb-4;
+}
+
+.prose-nexus h3 {
+  @apply text-xl font-semibold text-white mt-6 mb-3;
+}
+
+.prose-nexus p {
+  @apply mb-4 leading-relaxed;
+}
+
+.prose-nexus code {
+  @apply bg-gray-800 px-1.5 py-0.5 rounded text-cyan-400 font-mono text-sm;
+}
+
+.prose-nexus pre {
+  @apply bg-gray-900 border border-gray-700 rounded-lg p-4 overflow-x-auto mb-4;
+}
+
+.prose-nexus pre code {
+  @apply bg-transparent p-0;
+}
+
+.prose-nexus a {
+  @apply text-cyan-400 hover:text-cyan-300 underline underline-offset-2;
+}
+
+.prose-nexus ul {
+  @apply list-disc list-inside mb-4 space-y-1;
+}
+
+.prose-nexus ol {
+  @apply list-decimal list-inside mb-4 space-y-1;
+}
+
+.prose-nexus blockquote {
+  @apply border-l-4 border-cyan-500 pl-4 italic text-gray-400 my-4;
+}
+
+.prose-nexus table {
+  @apply w-full border-collapse mb-4;
+}
+
+.prose-nexus th {
+  @apply bg-gray-800 border border-gray-700 px-4 py-2 text-left text-white;
+}
+
+.prose-nexus td {
+  @apply border border-gray-700 px-4 py-2;
+}

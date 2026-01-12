@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Lexicon collection - read by anyone, write requires future auth
+    match /lexicon/{termId} {
+      allow read: if true;
+      allow write: if true; // TODO: restrict to authenticated admins
+    }
+
+    // Submissions collection - anyone can submit, only admins can review
+    match /submissions/{submissionId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true; // TODO: restrict to authenticated admins
+    }
+
+    // Users collection - private
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
