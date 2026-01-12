@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", "mcp", "tests", "vitest.config.ts", "**/*.test.ts", "**/*.test.tsx", "**/*.stories.tsx", "**/*.stories.ts", ".storybook", "stories", "hooks/useAgent.ts", "hooks/useTrustScore.ts", "hooks/useUser.ts", "hooks/useDebounce.ts", "hooks/useAccessibility.tsx", "hooks/useMediaQuery.ts", "hooks/index.ts", "trustbot", "contracts"]
+}

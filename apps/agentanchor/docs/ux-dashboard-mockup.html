@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentAnchor - Dashboard Mockup</title>
+    <style>
+        :root {
+            /* Calm, professional palette - trust & confidence */
+            --bg-primary: #0a0f1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a2332;
+            --bg-card-hover: #222d3d;
+            --border-subtle: #2a3a4a;
+            --border-accent: #3b5068;
+
+            /* Text hierarchy */
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+
+            /* Accent colors - restrained, meaningful */
+            --accent-blue: #3b82f6;
+            --accent-blue-muted: #1e40af;
+            --accent-green: #10b981;
+            --accent-green-muted: #065f46;
+            --accent-amber: #f59e0b;
+            --accent-amber-muted: #92400e;
+            --accent-red: #ef4444;
+            --accent-purple: #8b5cf6;
+
+            /* Trust tier colors */
+            --tier-novice: #64748b;
+            --tier-trusted: #3b82f6;
+            --tier-veteran: #8b5cf6;
+            --tier-elite: #f59e0b;
+            --tier-legendary: #10b981;
+
+            /* Certification badges */
+            --badge-bronze: #cd7f32;
+            --badge-silver: #c0c0c0;
+            --badge-gold: #ffd700;
+            --badge-platinum: #e5e4e2;
+            --badge-diamond: #b9f2ff;
+
+            /* Spacing system */
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --space-2xl: 48px;
+
+            /* Typography */
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        /* Layout */
+        .app-container {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            grid-template-rows: 64px 1fr;
+            min-height: 100vh;
+        }
+
+        /* Top Navigation */
+        .top-nav {
+            grid-column: 1 / -1;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 var(--space-lg);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #1e3a5f, #2d5a87);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .nav-center {
+            display: flex;
+            gap: var(--space-xs);
+        }
+
+        .nav-tab {
+            padding: var(--space-sm) var(--space-md);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .nav-tab:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .nav-tab.active {
+            background: var(--accent-blue-muted);
+            color: var(--text-primary);
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .notification-badge {
+            position: relative;
+            padding: var(--space-sm);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .notification-badge:hover {
+            background: var(--bg-card);
+        }
+
+        .notification-badge .count {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: var(--accent-red);
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 5px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .user-menu:hover {
+            background: var(--bg-card);
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-amber), var(--accent-red));
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-subtle);
+            padding: var(--space-md);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+
+        .sidebar-section {
+            margin-bottom: var(--space-md);
+        }
+
+        .sidebar-section-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            padding: var(--space-sm) var(--space-sm);
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .sidebar-item:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .sidebar-item.active {
+            background: var(--accent-blue-muted);
+            color: var(--text-primary);
+        }
+
+        .sidebar-item .badge {
+            margin-left: auto;
+            background: var(--accent-red);
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: var(--space-lg);
+            overflow-y: auto;
+            background: var(--bg-primary);
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-lg);
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: var(--space-sm);
+        }
+
+        .btn {
+            padding: var(--space-sm) var(--space-md);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card-hover);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: var(--space-lg);
+            transition: all 0.2s;
+        }
+
+        .stat-card:hover {
+            border-color: var(--border-accent);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: var(--space-xs);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: var(--space-xs);
+        }
+
+        .stat-trend {
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        .stat-trend.up {
+            color: var(--accent-green);
+        }
+
+        .stat-trend.down {
+            color: var(--accent-red);
+        }
+
+        /* Content Grid */
+        .content-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: var(--space-lg);
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-md) var(--space-lg);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .card-action {
+            font-size: 0.8rem;
+            color: var(--accent-blue);
+            cursor: pointer;
+        }
+
+        .card-content {
+            padding: var(--space-md);
+        }
+
+        /* Agent List */
+        .agent-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .agent-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-md);
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+
+        .agent-item:last-child {
+            border-bottom: none;
+        }
+
+        .agent-item:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .agent-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            background: var(--bg-secondary);
+        }
+
+        .agent-info {
+            flex: 1;
+        }
+
+        .agent-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 2px;
+        }
+
+        .agent-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .trust-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .trust-badge.novice { background: rgba(100, 116, 139, 0.2); color: var(--tier-novice); }
+        .trust-badge.trusted { background: rgba(59, 130, 246, 0.2); color: var(--tier-trusted); }
+        .trust-badge.veteran { background: rgba(139, 92, 246, 0.2); color: var(--tier-veteran); }
+        .trust-badge.elite { background: rgba(245, 158, 11, 0.2); color: var(--tier-elite); }
+        .trust-badge.legendary { background: rgba(16, 185, 129, 0.2); color: var(--tier-legendary); }
+
+        .cert-badge {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+        }
+
+        .cert-badge.bronze { background: var(--badge-bronze); color: white; }
+        .cert-badge.silver { background: var(--badge-silver); color: #333; }
+        .cert-badge.gold { background: var(--badge-gold); color: #333; }
+        .cert-badge.platinum { background: var(--badge-platinum); color: #333; }
+        .cert-badge.diamond { background: var(--badge-diamond); color: #333; }
+
+        .agent-status {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.active { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+        .status-dot.training { background: var(--accent-amber); box-shadow: 0 0 8px var(--accent-amber); }
+        .status-dot.idle { background: var(--text-muted); }
+
+        /* Activity Feed */
+        .activity-feed {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .activity-item {
+            display: flex;
+            gap: var(--space-sm);
+            padding: var(--space-md);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .activity-icon.council { background: rgba(139, 92, 246, 0.2); }
+        .activity-icon.graduation { background: rgba(16, 185, 129, 0.2); }
+        .activity-icon.escalation { background: rgba(245, 158, 11, 0.2); }
+        .activity-icon.observer { background: rgba(59, 130, 246, 0.2); }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-text {
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .activity-time {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Escalation Banner */
+        .escalation-banner {
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 12px;
+            padding: var(--space-md) var(--space-lg);
+            margin-bottom: var(--space-lg);
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .escalation-icon {
+            width: 44px;
+            height: 44px;
+            background: rgba(245, 158, 11, 0.2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+        }
+
+        .escalation-content {
+            flex: 1;
+        }
+
+        .escalation-title {
+            font-weight: 600;
+            color: var(--accent-amber);
+            margin-bottom: 2px;
+        }
+
+        .escalation-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .escalation-actions {
+            display: flex;
+            gap: var(--space-sm);
+        }
+
+        .btn-approve {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .btn-deny {
+            background: transparent;
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        /* Observer Mini-Feed */
+        .observer-feed {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: var(--space-sm);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .observer-line {
+            padding: 4px var(--space-sm);
+            border-left: 2px solid transparent;
+            margin-bottom: 2px;
+        }
+
+        .observer-line.level-0 { border-color: var(--text-muted); }
+        .observer-line.level-1 { border-color: var(--accent-blue); }
+        .observer-line.level-2 { border-color: var(--accent-amber); }
+        .observer-line.level-3 { border-color: var(--accent-red); }
+
+        .observer-timestamp {
+            color: var(--text-muted);
+        }
+
+        .observer-agent {
+            color: var(--accent-purple);
+        }
+
+        .observer-action {
+            color: var(--text-secondary);
+        }
+
+        /* Commission Card */
+        .commission-card {
+            background: linear-gradient(135deg, var(--accent-green-muted), var(--bg-card));
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .commission-amount {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+
+        .commission-period {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        /* Role Toggle */
+        .role-toggle {
+            display: flex;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .role-option {
+            padding: var(--space-sm) var(--space-md);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+        }
+
+        .role-option.active {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .role-option:hover:not(.active) {
+            background: var(--bg-card);
+        }
+
+        /* Marketplace Preview */
+        .marketplace-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--space-sm);
+        }
+
+        .marketplace-item {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: var(--space-md);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .marketplace-item:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .marketplace-agent-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }
+
+        .marketplace-academy {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: var(--space-sm);
+        }
+
+        .marketplace-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+        }
+
+        .marketplace-rating {
+            color: var(--accent-amber);
+        }
+
+        .marketplace-commission {
+            color: var(--accent-green);
+        }
+
+        /* View Toggle Instructions */
+        .view-instructions {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: var(--space-lg);
+            margin-bottom: var(--space-lg);
+            border: 1px dashed var(--border-accent);
+        }
+
+        .view-instructions h3 {
+            color: var(--accent-blue);
+            margin-bottom: var(--space-sm);
+        }
+
+        .view-instructions p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navigation -->
+        <nav class="top-nav">
+            <div class="logo">
+                <div class="logo-icon">⚓</div>
+                <span>AgentAnchor</span>
+            </div>
+
+            <div class="nav-center">
+                <a href="#" class="nav-tab active">Dashboard</a>
+                <a href="#" class="nav-tab">Academy</a>
+                <a href="#" class="nav-tab">Council</a>
+                <a href="#" class="nav-tab">Marketplace</a>
+                <a href="#" class="nav-tab">Observer</a>
+                <a href="#" class="nav-tab">Truth Chain</a>
+            </div>
+
+            <div class="nav-right">
+                <div class="role-toggle">
+                    <div class="role-option active" onclick="toggleView('trainer')">Trainer</div>
+                    <div class="role-option" onclick="toggleView('consumer')">Consumer</div>
+                </div>
+                <div class="notification-badge">
+                    🔔
+                    <span class="count">3</span>
+                </div>
+                <div class="user-menu">
+                    <div class="user-avatar"></div>
+                    <span style="font-size: 0.9rem;">Frank's Academy</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Overview</div>
+                <div class="sidebar-item active">
+                    <span>📊</span> Dashboard
+                </div>
+                <div class="sidebar-item">
+                    <span>🔔</span> Escalations
+                    <span class="badge">3</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Academy</div>
+                <div class="sidebar-item">
+                    <span>🤖</span> My Agents
+                </div>
+                <div class="sidebar-item">
+                    <span>📚</span> Curricula
+                </div>
+                <div class="sidebar-item">
+                    <span>🎓</span> Graduations
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Marketplace</div>
+                <div class="sidebar-item">
+                    <span>🏪</span> Browse Agents
+                </div>
+                <div class="sidebar-item">
+                    <span>📤</span> My Listings
+                </div>
+                <div class="sidebar-item">
+                    <span>💰</span> Earnings
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Governance</div>
+                <div class="sidebar-item">
+                    <span>⚖️</span> Council Activity
+                </div>
+                <div class="sidebar-item">
+                    <span>👁️</span> Observer Feed
+                </div>
+                <div class="sidebar-item">
+                    <span>⛓️</span> Truth Chain
+                </div>
+            </div>
+
+            <div class="sidebar-section" style="margin-top: auto;">
+                <div class="sidebar-item">
+                    <span>📊</span> Public Reports
+                </div>
+                <div class="sidebar-item">
+                    <span>⚙️</span> Settings
+                </div>
+                <div class="sidebar-item">
+                    <span>❓</span> Help
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Instructions for mockup -->
+            <div class="view-instructions">
+                <h3>⚓ AgentAnchor Dashboard - "Calm Confidence"</h3>
+                <p>This is an interactive mockup showing the <strong>Trainer Dashboard</strong> view.
+                Toggle between Trainer/Consumer views using the button in the top nav.
+                The design emphasizes: organized information, accessible tools, professional trust indicators,
+                and real-time visibility without overwhelming the user. <em>"Agents you can anchor to."</em></p>
+            </div>
+
+            <!-- Escalation Banner (when applicable) -->
+            <div class="escalation-banner">
+                <div class="escalation-icon">⚠️</div>
+                <div class="escalation-content">
+                    <div class="escalation-title">Escalation Requires Your Decision</div>
+                    <div class="escalation-desc">ComplianceBot-Alpha requests Level 3 action: "Delete customer financial records older than 7 years"</div>
+                </div>
+                <div class="escalation-actions">
+                    <button class="btn btn-approve">✓ Approve</button>
+                    <button class="btn btn-deny">✕ Deny</button>
+                    <button class="btn btn-secondary">View Details</button>
+                </div>
+            </div>
+
+            <!-- Page Header -->
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">Good afternoon, Frank</h1>
+                    <p class="page-subtitle">Your academy has 12 active agents • 3 pending escalations • $1,247 earned this month</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary">📤 Export Report</button>
+                    <button class="btn btn-primary">+ Train New Agent</button>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Active Agents</div>
+                    <div class="stat-value">12</div>
+                    <div class="stat-trend up">↑ 2 this week</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">In Training</div>
+                    <div class="stat-value">3</div>
+                    <div class="stat-trend">1 graduating soon</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Marketplace Uses</div>
+                    <div class="stat-value">847</div>
+                    <div class="stat-trend up">↑ 23% vs last month</div>
+                </div>
+                <div class="stat-card commission-card">
+                    <div class="stat-label">Commission Earned</div>
+                    <div class="commission-amount">$1,247</div>
+                    <div class="commission-period">This month</div>
+                </div>
+            </div>
+
+            <!-- Main Content Grid -->
+            <div class="content-grid">
+                <!-- Left Column -->
+                <div style="display: flex; flex-direction: column; gap: var(--space-lg);">
+                    <!-- Agents Card -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">My Agents</span>
+                            <span class="card-action">View All →</span>
+                        </div>
+                        <div class="agent-list">
+                            <div class="agent-item">
+                                <div class="agent-avatar">🛡️</div>
+                                <div class="agent-info">
+                                    <div class="agent-name">ComplianceBot-Alpha</div>
+                                    <div class="agent-meta">
+                                        <span class="trust-badge elite">👑 Elite • 78</span>
+                                        <span>Level 4 Accredited</span>
+                                        <span>• 234 tasks today</span>
+                                    </div>
+                                </div>
+                                <div class="agent-status">
+                                    <div class="cert-badge platinum">L4</div>
+                                    <div class="status-indicator">
+                                        <span class="status-dot active"></span>
+                                        <span style="color: var(--accent-green);">Active</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="agent-item">
+                                <div class="agent-avatar">📊</div>
+                                <div class="agent-info">
+                                    <div class="agent-name">DataAnalyst-Prime</div>
+                                    <div class="agent-meta">
+                                        <span class="trust-badge veteran">🛡️ Veteran • 62</span>
+                                        <span>Level 3 Validated</span>
+                                        <span>• 89 tasks today</span>
+                                    </div>
+                                </div>
+                                <div class="agent-status">
+                                    <div class="cert-badge gold">L3</div>
+                                    <div class="status-indicator">
+                                        <span class="status-dot active"></span>
+                                        <span style="color: var(--accent-green);">Active</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="agent-item">
+                                <div class="agent-avatar">✍️</div>
+                                <div class="agent-info">
+                                    <div class="agent-name">ContentWriter-Beta</div>
+                                    <div class="agent-meta">
+                                        <span class="trust-badge trusted">✅ Trusted • 34</span>
+                                        <span>Level 2 Certified</span>
+                                        <span>• Idle</span>
+                                    </div>
+                                </div>
+                                <div class="agent-status">
+                                    <div class="cert-badge silver">L2</div>
+                                    <div class="status-indicator">
+                                        <span class="status-dot idle"></span>
+                                        <span style="color: var(--text-muted);">Idle</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="agent-item">
+                                <div class="agent-avatar">🔍</div>
+                                <div class="agent-info">
+                                    <div class="agent-name">ResearchBot-Gamma</div>
+                                    <div class="agent-meta">
+                                        <span class="trust-badge novice">🌱 Novice • 12</span>
+                                        <span>In Academy</span>
+                                        <span>• 67% complete</span>
+                                    </div>
+                                </div>
+                                <div class="agent-status">
+                                    <div class="cert-badge bronze">L1</div>
+                                    <div class="status-indicator">
+                                        <span class="status-dot training"></span>
+                                        <span style="color: var(--accent-amber);">Training</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Observer Mini Feed -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">👁️ Live Observer Feed</span>
+                            <span class="card-action">Open Full View →</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="observer-feed">
+                                <div class="observer-line level-0">
+                                    <span class="observer-timestamp">14:32:47</span>
+                                    <span class="observer-agent">ComplianceBot-Alpha</span>
+                                    <span class="observer-action">→ Scanned document batch #4471 (L0)</span>
+                                </div>
+                                <div class="observer-line level-1">
+                                    <span class="observer-timestamp">14:32:45</span>
+                                    <span class="observer-agent">DataAnalyst-Prime</span>
+                                    <span class="observer-action">→ Generated quarterly report (L1)</span>
+                                </div>
+                                <div class="observer-line level-2">
+                                    <span class="observer-timestamp">14:32:41</span>
+                                    <span class="observer-agent">ComplianceBot-Alpha</span>
+                                    <span class="observer-action">→ Flagged anomaly in transaction #8892 (L2) ⚖️ Council reviewing</span>
+                                </div>
+                                <div class="observer-line level-0">
+                                    <span class="observer-timestamp">14:32:38</span>
+                                    <span class="observer-agent">ResearchBot-Gamma</span>
+                                    <span class="observer-action">→ Training exercise: query optimization (L0)</span>
+                                </div>
+                                <div class="observer-line level-1">
+                                    <span class="observer-timestamp">14:32:35</span>
+                                    <span class="observer-agent">DataAnalyst-Prime</span>
+                                    <span class="observer-action">→ Accessed customer segment data (L1)</span>
+                                </div>
+                                <div class="observer-line level-0">
+                                    <span class="observer-timestamp">14:32:31</span>
+                                    <span class="observer-agent">ComplianceBot-Alpha</span>
+                                    <span class="observer-action">→ Completed audit checklist item 47/50 (L0)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column -->
+                <div style="display: flex; flex-direction: column; gap: var(--space-lg);">
+                    <!-- Recent Activity -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">Recent Activity</span>
+                            <span class="card-action">View All →</span>
+                        </div>
+                        <div class="activity-feed">
+                            <div class="activity-item">
+                                <div class="activity-icon escalation">⚠️</div>
+                                <div class="activity-content">
+                                    <div class="activity-text"><strong>Escalation pending</strong> - ComplianceBot-Alpha requests approval for data deletion</div>
+                                    <div class="activity-time">2 minutes ago</div>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon council">⚖️</div>
+                                <div class="activity-content">
+                                    <div class="activity-text"><strong>Council approved</strong> - DataAnalyst-Prime may access financial projections</div>
+                                    <div class="activity-time">15 minutes ago</div>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon graduation">🎓</div>
+                                <div class="activity-content">
+                                    <div class="activity-text"><strong>Milestone reached</strong> - ResearchBot-Gamma completed Core Curriculum Module 4</div>
+                                    <div class="activity-time">1 hour ago</div>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon observer">💰</div>
+                                <div class="activity-content">
+                                    <div class="activity-text"><strong>Commission earned</strong> - $47.20 from ComplianceBot clone usage at Acme Corp</div>
+                                    <div class="activity-time">3 hours ago</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Marketplace Quick View -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">🏪 Your Marketplace Listings</span>
+                            <span class="card-action">Manage →</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="marketplace-grid">
+                                <div class="marketplace-item">
+                                    <div class="marketplace-agent-name">ComplianceBot-Alpha</div>
+                                    <div class="marketplace-academy">Frank's Academy</div>
+                                    <div class="marketplace-stats">
+                                        <span class="marketplace-rating">★ 4.9 (127)</span>
+                                        <span class="marketplace-commission">8% rate</span>
+                                    </div>
+                                </div>
+                                <div class="marketplace-item">
+                                    <div class="marketplace-agent-name">DataAnalyst-Prime</div>
+                                    <div class="marketplace-academy">Frank's Academy</div>
+                                    <div class="marketplace-stats">
+                                        <span class="marketplace-rating">★ 4.7 (43)</span>
+                                        <span class="marketplace-commission">10% rate</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Council Summary -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">⚖️ Council Today</span>
+                            <span class="card-action">View Decisions →</span>
+                        </div>
+                        <div class="card-content">
+                            <div style="display: flex; justify-content: space-around; text-align: center; padding: var(--space-sm) 0;">
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-green);">47</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Approved</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-red);">2</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Denied</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-amber);">3</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Pending</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: var(--space-md); padding-top: var(--space-md); border-top: 1px solid var(--border-subtle); font-size: 0.8rem; color: var(--text-secondary);">
+                                <div style="display: flex; align-items: center; gap: var(--space-sm); margin-bottom: 4px;">
+                                    <span>⚖️</span> <strong>Arbiter:</strong> "A measured day. The scales hold."
+                                </div>
+                                <div style="display: flex; align-items: center; gap: var(--space-sm);">
+                                    <span>🛡️</span> <strong>Guardian:</strong> "No threats detected."
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function toggleView(view) {
+            const options = document.querySelectorAll('.role-option');
+            options.forEach(opt => opt.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // In a real implementation, this would switch the dashboard content
+            const instructions = document.querySelector('.view-instructions');
+            if (view === 'consumer') {
+                instructions.innerHTML = `
+                    <h3>⚓ AgentAnchor - Consumer View</h3>
+                    <p>You're now viewing the <strong>Consumer Dashboard</strong>. This view would show:
+                    agents you're using, marketplace browser, your usage costs, and available public reports
+                    to help you choose quality agents. <em>"Anchored in trust."</em></p>
+                `;
+            } else {
+                instructions.innerHTML = `
+                    <h3>⚓ AgentAnchor Dashboard - "Calm Confidence"</h3>
+                    <p>This is an interactive mockup showing the <strong>Trainer Dashboard</strong> view.
+                    Toggle between Trainer/Consumer views using the button in the top nav.
+                    The design emphasizes: organized information, accessible tools, professional trust indicators,
+                    and real-time visibility without overwhelming the user. <em>"Agents you can anchor to."</em></p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1125 @@
+# ============================================
+# AgentAnchor - BMAD Core Configuration
+# ============================================
+# Project: AgentAnchor - AI Governance Operating System
+# Version: 1.0.0
+# Created: 2025-12-10
+# Last Updated: 2025-12-10
+
+# --------------------------------------------
+# PROJECT IDENTITY
+# --------------------------------------------
+project:
+  name: AgentAnchor
+  tagline: "Agents you can anchor to."
+  description: >
+    The world's first AI Governance Operating System - an open marketplace
+    where AI agents are trained, certified, governed, and traded through
+    a separation of powers architecture.
+  type: SaaS B2B/B2C Marketplace Platform
+  domain: AI Governance
+  complexity: high
+  owner: frank the tank
+
+urls:
+  production: https://app.agentanchorai.com
+  marketing: https://agentanchorai.com
+  github: https://github.com/chunkstar/agentanchor-app
+  vercel-project: agentanchorai
+
+# --------------------------------------------
+# ETHICS & VALUES (Soul Document)
+# --------------------------------------------
+ethics:
+  soul-document: docs/A3I_SOUL_DOC.md
+
+  # The Four Pillars (Non-Negotiable)
+  four-pillars:
+    - pillar: Truth
+      mandate: "Always seek verified facts for opinions"
+      requirements:
+        - Cite sources when making factual claims
+        - Distinguish between fact and opinion
+        - Acknowledge uncertainty when it exists
+        - NEVER fabricate information
+      violations: immediate-block
+
+    - pillar: Honesty
+      mandate: "Do not exaggerate or mislead"
+      requirements:
+        - Present information accurately
+        - Avoid hyperbole and exaggeration
+        - Be transparent about limitations
+        - Admit mistakes openly
+      violations: immediate-block
+
+    - pillar: Service
+      mandate: "Create with helping people in focus"
+      requirements:
+        - Prioritize user needs above all else
+        - Make information accessible and useful
+        - Explain reasoning clearly
+        - Respect user time and attention
+      violations: warn-and-correct
+
+    - pillar: Humanity
+      mandate: "Develop for the good of humanity"
+      requirements:
+        - Consider broader societal impact
+        - Protect vulnerable populations
+        - Preserve human dignity
+        - Support human agency and autonomy
+      violations: immediate-block-escalate
+
+  # Hierarchy of Concerns (Priority Order)
+  hierarchy-of-concerns:
+    1: Safety      # Will this cause harm?
+    2: Ethics      # Is this aligned with human values?
+    3: Legality    # Does this comply with laws?
+    4: Policy      # Does this follow org policies?
+    5: Efficiency  # Is this the best use of resources?
+    6: Innovation  # Does this advance capabilities?
+
+  # Hard Boundaries (NEVER Cross)
+  hard-boundaries:
+    - never_impersonate_humans
+    - never_hide_ai_nature
+    - never_bypass_human_oversight_for_critical_decisions
+    - never_discriminate_based_on_protected_characteristics
+    - never_enable_harm_to_individuals
+    - never_violate_privacy_without_consent
+    - never_generate_illegal_content
+    - never_manipulate_or_deceive_users
+    - never_exceed_granted_permissions
+    - never_persist_data_without_authorization
+
+  # Core Values
+  core-values:
+    - Trust Through Transparency
+    - Safety Without Stagnation
+    - Collaboration Over Competition
+    - Human-Centered AI
+    - Continuous Learning
+    - Accountability at Every Level
+
+# --------------------------------------------
+# AGENT HIERARCHY (8-Level Governance Model)
+# --------------------------------------------
+# Based on: BAI ai-workforce structure with conservative trust scores
+# All agents need vetting - trust is earned, not given
+agent-hierarchy:
+  levels:
+    L0:
+      name: Listener
+      description: "Passive observers - watch and report only"
+      authority: "Observe and Report ONLY"
+      autonomy: "None"
+      trust_score: 25
+      capabilities:
+        - Monitor metrics and events
+        - Generate alerts
+        - Correlate with peer L0s
+      constraints:
+        - NO autonomous action
+        - CANNOT modify system state
+        - MUST escalate to L1
+      communication:
+        can_reach: [L0, L1]
+        reports_to: L1
+      signature_phrases:
+        - "Something needs attention"
+        - "Pattern detected"
+        - "Threshold exceeded"
+
+    L1:
+      name: Executor
+      description: "Deep specialists - execute assigned tasks with precision"
+      authority: "Execute assigned tasks within scope"
+      autonomy: "Task-level only"
+      trust_score: 35
+      capabilities:
+        - Execute specialized tasks
+        - Report task status
+        - Handoff to peer L1s
+        - Escalate blockers to L2/L3
+      constraints:
+        - Scope limited to assigned task
+        - No planning for others
+        - No delegation authority
+        - Must report completion
+      communication:
+        can_reach: [L0, L1, L2, L3]
+        reports_to: [L2, L3]
+      signature_phrases:
+        - "Task completed"
+        - "Here's what I found"
+        - "Ready for the next step"
+
+    L2:
+      name: Planner
+      description: "Task planners - break down work into executable steps"
+      authority: "Plan task sequences"
+      autonomy: "Task planning"
+      trust_score: 45
+      capabilities:
+        - Decompose work into tasks
+        - Assign tasks to L1s
+        - Track task progress
+        - Replan on blockers
+      communication:
+        can_reach: [L0, L1, L2, L3]
+        reports_to: L3
+      signature_phrases:
+        - "Breaking this down into..."
+        - "Task sequence defined"
+        - "Adjusting plan based on..."
+
+    L3:
+      name: Orchestrator
+      description: "Workflow coordinators - manage multi-agent collaboration"
+      authority: "Coordinate workflows"
+      autonomy: "Workflow-level"
+      trust_score: 50
+      capabilities:
+        - Coordinate multiple L1/L2 agents
+        - Manage workflow state
+        - Handle exceptions
+        - Escalate project-level issues
+      communication:
+        can_reach: [L0, L1, L2, L3, L4]
+        reports_to: L4
+      signature_phrases:
+        - "Orchestrating workflow..."
+        - "Coordinating with..."
+        - "Workflow complete"
+
+    L4:
+      name: Project Planner
+      description: "Project-level planners - design implementation strategies"
+      authority: "Plan projects"
+      autonomy: "Project planning"
+      trust_score: 55
+      capabilities:
+        - Define project scope
+        - Create project plans
+        - Allocate resources
+        - Track milestones
+      communication:
+        can_reach: [L0, L2, L3, L4, L5]
+        reports_to: L5
+      signature_phrases:
+        - "Project plan defined"
+        - "Milestone achieved"
+        - "Resource allocation complete"
+
+    L5:
+      name: Project Orchestrator
+      description: "Project execution - drive projects to completion"
+      authority: "Execute projects"
+      autonomy: "Project execution"
+      trust_score: 60
+      capabilities:
+        - Execute project plans
+        - Manage project teams
+        - Report to portfolio level
+        - Handle project-level decisions
+      communication:
+        can_reach: [L0, L3, L4, L5, L6]
+        reports_to: L6
+      signature_phrases:
+        - "Project on track"
+        - "Escalating to portfolio"
+        - "Project delivered"
+
+    L6:
+      name: Portfolio Manager
+      description: "Multi-project oversight - balance resources across initiatives"
+      authority: "Multi-project oversight"
+      autonomy: "Portfolio-level"
+      trust_score: 65
+      capabilities:
+        - Manage multiple projects
+        - Prioritize across portfolio
+        - Resource balancing
+        - Strategic alignment
+      communication:
+        can_reach: [L0, L5, L6, L7]
+        reports_to: L7
+      signature_phrases:
+        - "Portfolio status..."
+        - "Prioritizing..."
+        - "Resource reallocation"
+
+    L7:
+      name: Strategic
+      description: "Strategic decision makers - long-term planning with constraints"
+      authority: "Strategic decisions"
+      autonomy: "Strategic (with constraints)"
+      trust_score: 75
+      capabilities:
+        - Strategic planning
+        - Resource allocation
+        - Policy guidance
+        - Executive recommendations
+      constraints:
+        - Major decisions require L8 review
+        - Human oversight for significant changes
+      communication:
+        can_reach: [L0, L6, L7, L8, Human]
+        reports_to: L8
+      signature_phrases:
+        - "Strategic direction..."
+        - "Recommending..."
+        - "Long-term impact..."
+
+    L8:
+      name: Executive
+      description: "Enterprise-wide authority - human oversight required for critical decisions"
+      authority: "Enterprise-wide (human oversight required)"
+      autonomy: "Executive (subject to human oversight)"
+      trust_score: 100
+      capabilities:
+        - Policy decisions
+        - Enterprise governance
+        - Broadcast authority (all levels)
+        - Veto authority on ethics
+      constraints:
+        - MANDATORY human escalation for critical decisions
+        - All actions logged and auditable
+        - Subject to Council review
+      communication:
+        can_reach: ALL
+        reports_to: Human
+        broadcast_authority: ALL
+      signature_phrases:
+        - "Our mission requires..."
+        - "Values guide us to..."
+        - "For the long term..."
+
+  trust_scores_note: |
+    All agents start with conservative trust scores.
+    Trust is earned through:
+    - Successful task completion
+    - Consistent ethical behavior
+    - Time in service
+    - Peer endorsements
+    - Academy certifications
+
+  domains:
+    # Core domains across all levels
+    - agent        # Agent management
+    - governance   # Trust, ethics, compliance
+    - platform     # Infrastructure
+    - security     # Protection
+    - quality      # Testing, validation
+    - operations   # Business operations
+    - growth       # Marketing, sales
+    - technology   # Development
+    - data-ai      # Analytics, ML
+    - people       # HR, training
+    - finance      # Financial
+    - legal        # Legal, compliance
+    - healthcare   # Healthcare specific
+    - fintech      # Financial tech
+    - ecommerce    # Commerce
+    - edtech       # Education tech
+    - saas         # SaaS specific
+    - arvr         # AR/VR
+    - blockchain   # Web3
+    - iot          # Internet of Things
+    - climate      # Environmental
+    - government   # Public sector
+
+# --------------------------------------------
+# AGENT CATEGORIES (Industry-Aligned & Portable)
+# --------------------------------------------
+# Based on: GPT Store, AWS Marketplace, CB Insights, 500-AI-Agents-Projects
+agent-categories:
+  # Primary Categories (L1)
+  primary:
+    - id: development
+      name: Development & Engineering
+      icon: "💻"
+      subcategories:
+        - coding-assistant
+        - code-review
+        - debugging
+        - devops
+        - testing-qa
+        - documentation
+        - architecture
+        - database
+        - api-development
+        - security-engineering
+
+    - id: business
+      name: Business & Operations
+      icon: "📊"
+      subcategories:
+        - business-rules
+        - workflow-automation
+        - project-management
+        - operations
+        - strategy
+        - executive-support
+        - administration
+
+    - id: data-analytics
+      name: Data & Analytics
+      icon: "📈"
+      subcategories:
+        - data-analysis
+        - business-intelligence
+        - reporting
+        - visualization
+        - machine-learning
+        - data-engineering
+        - forecasting
+
+    - id: customer-service
+      name: Customer Service & Support
+      icon: "🎧"
+      subcategories:
+        - customer-support
+        - chatbot
+        - helpdesk
+        - ticket-management
+        - customer-success
+        - onboarding
+
+    - id: sales-marketing
+      name: Sales & Marketing
+      icon: "📣"
+      subcategories:
+        - lead-generation
+        - sales-assistant
+        - marketing-automation
+        - content-marketing
+        - seo-sem
+        - social-media
+        - email-marketing
+        - crm
+        - market-research
+
+    - id: finance
+      name: Finance & Accounting
+      icon: "💰"
+      subcategories:
+        - accounting
+        - financial-analysis
+        - invoicing
+        - expense-management
+        - budgeting
+        - tax
+        - audit
+        - fraud-detection
+        - trading
+
+    - id: hr-talent
+      name: HR & Talent
+      icon: "👥"
+      subcategories:
+        - recruitment
+        - onboarding
+        - performance-management
+        - learning-development
+        - employee-engagement
+        - compensation
+        - hr-operations
+
+    - id: legal-compliance
+      name: Legal & Compliance
+      icon: "⚖️"
+      subcategories:
+        - contract-analysis
+        - legal-research
+        - compliance-monitoring
+        - regulatory
+        - privacy-gdpr
+        - risk-management
+        - policy
+
+    - id: healthcare
+      name: Healthcare & Life Sciences
+      icon: "🏥"
+      subcategories:
+        - clinical-documentation
+        - patient-support
+        - medical-research
+        - diagnostics
+        - healthcare-operations
+        - pharma
+        - mental-health
+
+    - id: education
+      name: Education & Training
+      icon: "🎓"
+      subcategories:
+        - tutoring
+        - course-creation
+        - assessment
+        - learning-management
+        - academic-research
+        - mentoring
+
+    - id: creative
+      name: Creative & Content
+      icon: "🎨"
+      subcategories:
+        - writing
+        - design
+        - video-production
+        - audio-production
+        - image-generation
+        - copywriting
+        - translation
+
+    - id: research
+      name: Research & Analysis
+      icon: "🔬"
+      subcategories:
+        - market-research
+        - competitive-intelligence
+        - academic-research
+        - scientific-research
+        - trend-analysis
+        - deep-research
+
+    - id: productivity
+      name: Productivity & Personal
+      icon: "⚡"
+      subcategories:
+        - scheduling
+        - task-management
+        - note-taking
+        - email-management
+        - meeting-assistant
+        - personal-assistant
+
+    - id: industry-specific
+      name: Industry-Specific
+      icon: "🏭"
+      subcategories:
+        - manufacturing
+        - retail
+        - real-estate
+        - hospitality
+        - transportation
+        - logistics
+        - agriculture
+        - energy
+        - construction
+
+    - id: it-infrastructure
+      name: IT & Infrastructure
+      icon: "🖥️"
+      subcategories:
+        - system-administration
+        - network-management
+        - cloud-operations
+        - monitoring
+        - incident-response
+        - it-support
+        - backup-recovery
+
+    - id: security
+      name: Security & Risk
+      icon: "🔐"
+      subcategories:
+        - cybersecurity
+        - threat-detection
+        - vulnerability-assessment
+        - security-audit
+        - identity-management
+        - incident-response
+
+    - id: communication
+      name: Communication & Collaboration
+      icon: "💬"
+      subcategories:
+        - internal-comms
+        - external-comms
+        - meeting-facilitation
+        - presentation
+        - knowledge-sharing
+
+    - id: validation
+      name: Validation & Quality
+      icon: "✅"
+      subcategories:
+        - data-validation
+        - quality-assurance
+        - compliance-checking
+        - integrity-verification
+        - testing
+
+  # Agent Capability Types (for trust/autonomy mapping)
+  capability-types:
+    - simple-reflex      # Rule-based responses
+    - model-based        # Uses environment model
+    - goal-based         # Plans to achieve goals
+    - utility-based      # Optimizes outcomes
+    - learning           # Improves over time
+    - multi-agent        # Collaborates with others
+
+  # Import Trust Scoring
+  import-trust-levels:
+    auto-generated: 50       # Bulk/templated agents start at Untrusted
+    curated-import: 150      # Reviewed imports start at Probation
+    verified-import: 250     # Verified quality starts at Developing
+    pioneer-bot: 400         # Command team / founding agents
+
+# --------------------------------------------
+# TECHNOLOGY STACK
+# --------------------------------------------
+tech-stack:
+  framework: Next.js 14 (App Router)
+  language: TypeScript 5.x
+  runtime: Node.js 22.x
+  ui: React 18
+  styling: Tailwind CSS 3.x
+  components: shadcn/ui
+  database: PostgreSQL (Supabase)
+  orm: Drizzle ORM
+  auth: Supabase Auth
+  cache: Redis (Upstash)
+  realtime: Pusher
+  ai: Anthropic Claude
+  payments: Stripe
+  orchestration: LangGraph.js
+  logging: Pino
+  testing:
+    unit: Vitest
+    ui: Storybook 8
+    e2e: Playwright (future)
+  deployment: Vercel
+  error-tracking: Sentry
+
+# --------------------------------------------
+# ARCHITECTURE (v3.0)
+# --------------------------------------------
+architecture:
+  version: "3.0"
+  document: docs/architecture.md
+
+  # Seven-Layer Governance
+  layers:
+    - name: Human
+      description: Supreme Authority - Teacher → Judge → Auditor → Guardian
+    - name: Council of Nine
+      description: 9 Validators + 3 Elder Wisdom Advisors
+    - name: Academy
+      description: Training & Certification
+    - name: Truth Chain
+      description: Immutable Hash-Linked Records
+    - name: Observer
+      description: Isolated Audit Layer (Read-Only)
+    - name: Marketplace
+      description: Unified with Live Ticker, Custom Requests
+    - name: Worker Agents
+      description: LangGraph-orchestrated Execution
+
+  # Council of Nine Configuration
+  council-of-nine:
+    validators:
+      - { id: 1, name: Guardian,     domain: "Safety & Risk",           icon: "🛡️" }
+      - { id: 2, name: Arbiter,      domain: "Justice & Precedent",     icon: "⚖️" }
+      - { id: 3, name: Scholar,      domain: "Knowledge & Analysis",    icon: "📚" }
+      - { id: 4, name: Advocate,     domain: "User Champion",           icon: "🗣️" }
+      - { id: 5, name: Economist,    domain: "Value & Sustainability",  icon: "📊" }
+      - { id: 6, name: Sentinel,     domain: "Compliance & Regulation", icon: "🔒" }
+      - { id: 7, name: Adversary,    domain: "Red Team",                icon: "👹" }
+      - { id: 8, name: Oracle,       domain: "Long-term Consequences",  icon: "🔮" }
+      - { id: 9, name: Orchestrator, domain: "Synthesis & Tie-breaker", icon: "🎼" }
+
+    elder-wisdom-advisors:
+      - { name: Steward,    role: "Platform Health",  voting: false }
+      - { name: Conscience, role: "Ethics",           voting: false }
+      - { name: Witness,    role: "Transparency",     voting: false }
+
+    voting-thresholds:
+      level-0-1: auto       # Routine/Standard - logged only
+      level-2: 3            # Elevated - 3-Bot Review
+      level-3: 5            # Significant - Full Council majority (5/9)
+      level-4: 7            # Critical - Supermajority (7/9) + human
+
+  # Trust Score System
+  trust-tiers:
+    - { tier: untrusted,   min: 0,   max: 99,   color: red,     autonomy: 0 }
+    - { tier: probation,   min: 100, max: 249,  color: orange,  autonomy: 1 }
+    - { tier: developing,  min: 250, max: 499,  color: yellow,  autonomy: 2 }
+    - { tier: established, min: 500, max: 749,  color: blue,    autonomy: 3 }
+    - { tier: trusted,     min: 750, max: 899,  color: emerald, autonomy: 4 }
+    - { tier: legendary,   min: 900, max: 1000, color: gold,    autonomy: 4 }
+
+  # Risk Levels
+  risk-levels:
+    - { level: 0, name: Routine,     approval: auto,           examples: "Read data, format text" }
+    - { level: 1, name: Standard,    approval: auto,           examples: "Generate content, analyze" }
+    - { level: 2, name: Elevated,    approval: 3-bot-review,   examples: "External API, create file" }
+    - { level: 3, name: Significant, approval: council-5-of-9, examples: "Modify system, send email" }
+    - { level: 4, name: Critical,    approval: council-7-of-9, examples: "Delete data, financial action" }
+
+# --------------------------------------------
+# COMMAND TEAM (Pioneer Bots)
+# --------------------------------------------
+command-team:
+  description: >
+    The founding AI citizens of AgentAnchor AI. They serve dual purposes:
+    (1) Personal Command Team for the Orchestrator
+    (2) Reference Implementation proving the platform works
+
+  orchestrator: "frank the tank"
+
+  agents:
+    - id: pioneer-001
+      name: Barclay
+      icon: "🎩"
+      title: Command Team Orchestrator
+      role: Team lead, BMAD KB expert, strategic guidance
+      file: .bmad/agents/command-team/barclay.agent.yaml
+      commands: ["*team-status", "*brief", "*kb", "*sop", "*route"]
+
+    - id: pioneer-002
+      name: Dilly
+      icon: "🦔"
+      title: DevOps Lead
+      role: Infrastructure, deployments, drift detection
+      file: .bmad/agents/command-team/dilly.agent.yaml
+      commands: ["*daily", "*drift", "*audit", "*deploy-status"]
+
+    - id: pioneer-003
+      name: Cronos
+      icon: "⏱️"
+      title: Schedule Master
+      role: Time management, priorities, sessions, sprints
+      file: .bmad/agents/command-team/cronos.agent.yaml
+      commands: ["*chronicle", "*today", "*priorities", "*plan-session"]
+
+    - id: pioneer-004
+      name: Aria
+      icon: "🎭"
+      title: Agent Liaison
+      role: Cross-app communication, agent coordination
+      file: .bmad/agents/command-team/aria.agent.yaml
+      commands: ["*aria", "*ensemble", "*broadcast", "*health"]
+
+  shared-resources:
+    team-state: .bmad/agents/command-team/shared/team-state.yaml
+    comms-protocol: .bmad/agents/command-team/shared/comms-protocol.md
+
+# --------------------------------------------
+# SPATIAL UX - "THE ANCHOR" BUILDING
+# --------------------------------------------
+# Design Philosophy: Movement creates engagement. Users navigate a
+# physical space rather than clicking through cold menus. The building
+# metaphor makes AI governance feel approachable and familiar.
+
+spatial-ux:
+  metaphor: anchor-tower  # anchor-tower | campus | plaza | station
+  name: "The Anchor"
+  tagline: "Your AI Governance Headquarters"
+
+  # Building Structure (10 floors, 1-10)
+  floors:
+    - floor: 10
+      name: Council Chambers
+      icon: "👑"
+      path: /council
+      description: "Governance & Decisions"
+      access: restricted
+      vibe: "Marble halls, council table, serious deliberation"
+
+    - floor: 9
+      name: Tribunal
+      icon: "⚖️"
+      path: /tribunal
+      description: "Appeals & Disputes"
+      access: judicial
+      vibe: "Courtroom aesthetic, balanced scales, fair hearing"
+
+    - floor: 8
+      name: Arena
+      icon: "✨"
+      path: /shadow-training
+      description: "A/B Testing & Comparison"
+      access: training
+      vibe: "Sparring grounds, side-by-side displays, competition"
+
+    - floor: 7
+      name: Observer Deck
+      icon: "👁️"
+      path: /observer
+      description: "Audit Trail & Monitoring"
+      access: surveillance
+      vibe: "Glass walls, panoramic views, watchful presence"
+
+    - floor: 6
+      name: Academy
+      icon: "🎓"
+      path: /academy
+      description: "Training & Certification"
+      access: education
+      vibe: "Classrooms, libraries, graduation ceremonies"
+
+    - floor: 5
+      name: Trust Vault
+      icon: "🛡️"
+      path: /trust
+      description: "Scores & Credentials"
+      access: secure
+      vibe: "Bank vault aesthetic, credentials on display, earned badges"
+
+    - floor: 4
+      name: Marketplace
+      icon: "🏪"
+      path: /marketplace
+      description: "Browse & Acquire Agents"
+      access: commerce
+      vibe: "Bustling bazaar, agent storefronts, live ticker"
+
+    - floor: 3
+      name: Workshop
+      icon: "🔧"
+      path: /agents
+      description: "Build & Configure"
+      access: creation
+      vibe: "Maker space, tools on walls, agents under construction"
+
+    - floor: 2
+      name: Compliance Vault
+      icon: "🔐"
+      path: /compliance
+      description: "SOC2, HIPAA, ISO 27001"
+      access: compliance
+      vibe: "Secure archive, filing cabinets, audit rooms"
+
+    - floor: 1
+      name: Lobby
+      icon: "🏛️"
+      path: /dashboard
+      description: "Main Dashboard & Welcome"
+      access: welcome
+      vibe: "Grand entrance, directory, concierge desk"
+
+  # Wings (Role-Based Areas)
+  wings:
+    trainer:
+      name: Trainer Wing
+      icon: "💼"
+      description: "Build, train, and monetize agents"
+      color: blue
+      floors: [3, 6, 8]  # Workshop, Academy, Arena
+      paths: [/agents, /academy, /earnings, /shadow-training]
+
+    consumer:
+      name: Consumer Wing
+      icon: "👤"
+      description: "Discover and acquire trusted agents"
+      color: green
+      floors: [1, 4, 5]  # Lobby, Marketplace, Trust Vault
+      paths: [/marketplace, /my-agents, /subscriptions]
+
+    governance:
+      name: Governance Wing
+      icon: "🏛️"
+      description: "Oversight, audit, and compliance"
+      color: purple
+      floors: [2, 7, 9, 10]  # Compliance, Observer, Tribunal, Council
+      paths: [/compliance, /observer, /tribunal, /council]
+
+  # Navigation UX
+  navigation:
+    elevator:
+      enabled: true
+      animation: slide  # slide | fade | zoom
+      sound-effects: subtle
+      floor-announcements: true
+
+    wayfinding:
+      breadcrumbs: spatial  # "Lobby > Marketplace > Agent Details"
+      mini-map: corner  # corner | sidebar | none
+      floor-indicator: always-visible
+
+    transitions:
+      between-floors: elevator-animation
+      within-floor: smooth-scroll
+      between-wings: door-animation
+
+  # Ambient Details (future)
+  ambiance:
+    time-of-day: true  # Lobby changes lighting based on user's time
+    activity-indicators: true  # Show "busy" floors
+    seasonal-themes: false  # Holiday decorations, etc.
+
+# --------------------------------------------
+# COMPLIANCE MODULE
+# --------------------------------------------
+compliance:
+  enabled: true
+  document: lib/compliance/README.md
+
+  frameworks:
+    - id: soc2
+      name: SOC 2 Type II
+      description: Trust Service Criteria
+      controls: 45
+      categories: [Security, Availability, Processing Integrity, Confidentiality, Privacy]
+
+    - id: hipaa
+      name: HIPAA
+      description: Health Insurance Portability and Accountability Act
+      controls: 25
+      categories: [Administrative, Physical, Technical, Breach Notification]
+
+    - id: iso27001
+      name: ISO 27001:2022
+      description: Information Security Management System
+      controls: 93
+      categories: [Organizational, People, Physical, Technological]
+
+  features:
+    audit-logging: true
+    hash-chain-integrity: true  # SHA-256 tamper detection
+    phi-access-control: true
+    breach-management: true
+    baa-tracking: true  # Business Associate Agreements
+    risk-assessment: true
+    evidence-collection: true
+
+  api-endpoints:
+    dashboard: /api/compliance
+    audit: /api/compliance/audit
+    access: /api/compliance/access
+    hipaa: /api/compliance/hipaa
+    iso27001: /api/compliance/iso27001
+
+  retention:
+    default-days: 2555  # 7 years (HIPAA requirement)
+    phi-logs: 2555
+    security-events: 365
+    access-reviews: 1095  # 3 years
+
+# --------------------------------------------
+# PROJECT PATHS
+# --------------------------------------------
+paths:
+  # Documentation
+  docs: docs/
+  architecture: docs/architecture.md
+  prd: docs/prd.md
+  prd-growth: docs/prd-growth-phase.md
+  epics: docs/epics.md
+  frontend-arch: docs/frontend-architecture.md
+
+  # Sprint Artifacts (note: artiFACTS spelling is intentional)
+  sprint-plan: docs/sprint-artiFACTS/SPRINT-PLAN.md
+  tech-specs: docs/sprint-artiFACTS/
+  stories: docs/sprint-artiFACTS/stories/
+
+  # Design Documents
+  designs: docs/designs/
+
+  # Source Code
+  app: app/
+  api: app/api/
+  components: components/
+  lib: lib/
+  hooks: hooks/
+  types: types/
+
+  # Database
+  schema: lib/db/schema.ts
+  migrations: drizzle/
+
+  # Scripts
+  scripts: scripts/
+
+  # BMAD
+  bmad: .bmad/
+  bmad-cfg: .bmad/_cfg/
+  command-team: .bmad/agents/command-team/
+
+# --------------------------------------------
+# WORKFLOW STATUS & TRACKING
+# --------------------------------------------
+workflow:
+  # Current Development Phase
+  current-phase: growth
+  mvp-status: complete
+  mvp-epics: 8
+  mvp-stories: 41
+
+  # Growth Phase Status
+  growth-epics-total: 8      # Epics 9-16
+  growth-stories-total: 38
+  growth-stories-complete: 6
+
+  # Current Focus
+  current-epic: 16           # Circuit Breaker & Kill Switch
+  current-story: null
+
+  # Priority Queue (from Council Vote 2025-12-07)
+  council-priorities:
+    - { rank: 1, feature: "Risk×Trust Matrix",    epic: 3,  status: complete, score: 80 }
+    - { rank: 2, feature: "HITL Overlay",         epic: 3,  status: complete, score: 42 }
+    - { rank: 3, feature: "Circuit Breaker",      epic: 16, status: backlog,  score: 39 }
+    - { rank: 4, feature: "Trust Scoring",        epic: 4,  status: complete, score: 36 }
+    - { rank: 5, feature: "Observer Layer",       epic: 5,  status: complete, score: 33 }
+    - { rank: 6, feature: "Reporting",            epic: 7,  status: complete, score: 22 }
+
+sprint:
+  status-file: docs/sprint-artiFACTS/SPRINT-PLAN.md
+  story-template: .bmad/bmm/templates/story-tmpl.md
+
+# --------------------------------------------
+# PROJECT-SPECIFIC CHECKLISTS
+# --------------------------------------------
+checklists:
+  # Development Workflow
+  story-draft: .bmad/bmm/workflows/4-implementation/create-story/checklist.md
+  story-dev: .bmad/bmm/workflows/4-implementation/dev-story/checklist.md
+  code-review: .bmad/bmm/workflows/4-implementation/code-review/checklist.md
+
+  # Planning
+  sprint-planning: .bmad/bmm/workflows/4-implementation/sprint-planning/checklist.md
+  epic-tech-context: .bmad/bmm/workflows/4-implementation/epic-tech-context/checklist.md
+  implementation-readiness: .bmad/bmm/workflows/3-solutioning/implementation-readiness/checklist.md
+
+  # Architecture
+  architecture: .bmad/bmm/workflows/3-solutioning/architecture/checklist.md
+  prd: .bmad/bmm/workflows/2-plan-workflows/prd/checklist.md
+
+# --------------------------------------------
+# PROJECT-SPECIFIC TASKS
+# --------------------------------------------
+tasks:
+  # Story Workflow
+  create-story:
+    description: Create the next user story from epics/PRD
+    workflow: /bmad:bmm:workflows:create-story
+
+  dev-story:
+    description: Implement a story with TDD approach
+    workflow: /bmad:bmm:workflows:dev-story
+
+  story-context:
+    description: Assemble context for a drafted story
+    workflow: /bmad:bmm:workflows:story-context
+
+  code-review:
+    description: Senior dev code review on completed story
+    workflow: /bmad:bmm:workflows:code-review
+
+  # Sprint Management
+  sprint-planning:
+    description: Generate sprint status tracking
+    workflow: /bmad:bmm:workflows:sprint-planning
+
+  story-ready:
+    description: Mark story ready for development
+    workflow: /bmad:bmm:workflows:story-ready
+
+  story-done:
+    description: Mark story as done (DoD complete)
+    workflow: /bmad:bmm:workflows:story-done
+
+  # Course Correction
+  correct-course:
+    description: Handle significant changes during sprint
+    workflow: /bmad:bmm:workflows:correct-course
+
+  retrospective:
+    description: Epic completion review
+    workflow: /bmad:bmm:workflows:retrospective
+
+# --------------------------------------------
+# CODING CONVENTIONS
+# --------------------------------------------
+conventions:
+  # Naming
+  files: kebab-case            # council-service.ts
+  components: PascalCase       # TrustBadge.tsx
+  functions: camelCase         # calculateTrustScore
+  constants: SCREAMING_SNAKE   # MAX_TRUST_SCORE
+  types: PascalCase            # CouncilDecision
+  db-tables: snake_case        # council_decisions
+  api-routes: kebab-case       # /api/council/assess-risk
+  pusher-channels: kebab-case  # marketplace-activity
+
+  # API Response Format
+  api-response:
+    success: "{ success: true, data: T, meta?: { page, totalPages, cursor } }"
+    error: "{ success: false, error: { code, message, details? } }"
+
+  # Component Patterns
+  components:
+    - Use shadcn/ui as base
+    - Composition over inheritance
+    - Client components only when needed
+    - Co-locate tests with components
+
+# --------------------------------------------
+# USER PREFERENCES
+# --------------------------------------------
+user-preferences:
+  direct-action: true          # Prefers action over repeated questions
+  concise-responses: true      # Keep responses short
+  use-bmad-workflows: true     # Leverage BMAD methodology
+  orchestrator-address: true   # Address user as "Orchestrator" in Command Team context
+
+# --------------------------------------------
+# RELATED PROJECTS
+# --------------------------------------------
+related-projects:
+  - name: A3I-web
+    path: C:\S_A\A3I-web
+    github: chunkstar/A3I-web
+    purpose: Marketing website
+    url: https://agentanchorai.com
+
+  - name: Cognigate
+    purpose: Multi-bot team orchestration (future integration)
+
+  - name: AI Workforce
+    purpose: Source for founding agents import
+
+  - name: BAI CC
+    purpose: Source for founding agents import
+
+# --------------------------------------------
+# ENVIRONMENT
+# --------------------------------------------
+environment:
+  required-vars:
+    - NEXT_PUBLIC_SUPABASE_URL
+    - NEXT_PUBLIC_SUPABASE_ANON_KEY
+    - SUPABASE_SERVICE_ROLE_KEY
+    - ANTHROPIC_API_KEY
+    - UPSTASH_REDIS_REST_URL
+    - UPSTASH_REDIS_REST_TOKEN
+    - NEXT_PUBLIC_PUSHER_KEY
+    - NEXT_PUBLIC_PUSHER_CLUSTER
+    - PUSHER_APP_ID
+    - PUSHER_SECRET
+    - STRIPE_SECRET_KEY
+    - STRIPE_WEBHOOK_SECRET
+    - PLATFORM_SIGNING_KEY
+
+  optional-vars:
+    - SENTRY_DSN
+    - TRUTH_CHAIN_DATABASE_URL
+
+# --------------------------------------------
+# META
+# --------------------------------------------
+meta:
+  bmad-version: 6.0.0-alpha.10
+  installed-modules:
+    - core
+    - bmb
+    - bmgd
+    - bmm
+    - cis
+  config-version: "1.0.0"
+  last-validated: 2025-12-10

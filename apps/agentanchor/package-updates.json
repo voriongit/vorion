@@ -1,0 +1,23 @@
+{
+  "description": "Add these dependencies to package.json",
+  "dependencies": {
+    "recharts": "^2.10.0",
+    "d3": "^7.8.5",
+    "ws": "^8.14.2",
+    "crypto-js": "^4.2.0",
+    "@types/crypto-js": "^4.2.1"
+  },
+  "devDependencies": {
+    "msw": "^2.0.11",
+    "@types/ws": "^8.5.10"
+  },
+  "scripts_to_add": {
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed": "node scripts/seed.js",
+    "db:reset": "node scripts/reset-db.js",
+    "test:trust": "vitest run tests/unit/bot-trust",
+    "test:integration": "vitest run tests/integration",
+    "generate:types": "npx supabase gen types typescript --local > lib/database.types.ts",
+    "ws:dev": "node scripts/ws-server.js"
+  }
+}

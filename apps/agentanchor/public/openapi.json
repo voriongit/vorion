@@ -1,0 +1,1079 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AgentAnchor API",
+    "version": "1.0.0",
+    "description": "AI Governance Operating System API - Manage agents, trust scores, marketplace, and governance with complete audit trails.",
+    "contact": {
+      "name": "AgentAnchor Support",
+      "url": "https://agentanchorai.com"
+    },
+    "license": {
+      "name": "Proprietary",
+      "url": "https://agentanchorai.com/terms"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://app.agentanchorai.com/api/v1",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:3000/api/v1",
+      "description": "Development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Agents",
+      "description": "Create, manage, and query AI agents"
+    },
+    {
+      "name": "Trust",
+      "description": "Trust score management and history"
+    },
+    {
+      "name": "Council",
+      "description": "Governance council decisions and precedents"
+    },
+    {
+      "name": "Marketplace",
+      "description": "Agent listings, acquisitions, and feedback"
+    },
+    {
+      "name": "Truth Chain",
+      "description": "Immutable governance records and verification"
+    },
+    {
+      "name": "Observer",
+      "description": "Audit trail and anomaly detection"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Event subscriptions and delivery"
+    },
+    {
+      "name": "Notifications",
+      "description": "User notification management"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API Key authentication. Get your key from Settings > API Keys."
+      }
+    },
+    "schemas": {
+      "Agent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique agent identifier"
+          },
+          "name": {
+            "type": "string",
+            "description": "Agent display name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Agent description"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "training", "active", "suspended", "archived"],
+            "description": "Current agent status"
+          },
+          "trust_score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000,
+            "description": "Current trust score (0-1000)"
+          },
+          "trust_tier": {
+            "type": "string",
+            "enum": ["untrusted", "novice", "proven", "trusted", "elite", "legendary"],
+            "description": "Trust tier based on score"
+          },
+          "certification_level": {
+            "type": "string",
+            "enum": ["none", "basic", "standard", "advanced", "expert"],
+            "description": "Council certification level"
+          },
+          "published": {
+            "type": "boolean",
+            "description": "Whether agent is listed on marketplace"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of agent capabilities"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp"
+          }
+        }
+      },
+      "TrustChange": {
+        "type": "object",
+        "required": ["agent_id", "change_amount", "reason", "category"],
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "change_amount": {
+            "type": "integer",
+            "minimum": -100,
+            "maximum": 100,
+            "description": "Amount to adjust trust score"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Human-readable reason for change"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["council_decision", "human_override", "task_completion", "violation", "decay", "bonus"],
+            "description": "Category of trust change"
+          },
+          "reference_id": {
+            "type": "string",
+            "description": "Optional reference to related record"
+          }
+        }
+      },
+      "TrustHistory": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "agent_id": { "type": "string", "format": "uuid" },
+          "previous_score": { "type": "integer" },
+          "new_score": { "type": "integer" },
+          "change_amount": { "type": "integer" },
+          "previous_tier": { "type": "string" },
+          "new_tier": { "type": "string" },
+          "reason": { "type": "string" },
+          "category": { "type": "string" },
+          "recorded_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TruthChainRecord": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "sequence": { "type": "integer", "description": "Position in chain" },
+          "record_type": {
+            "type": "string",
+            "enum": ["council_decision", "certification", "human_override", "ownership_change", "marketplace_listing", "acquisition"]
+          },
+          "agent_id": { "type": "string", "format": "uuid" },
+          "hash": { "type": "string", "description": "SHA-256 hash of record" },
+          "previous_hash": { "type": "string", "description": "Hash of previous record" },
+          "data": { "type": "object", "description": "Record payload" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      },
+      "VerificationResult": {
+        "type": "object",
+        "properties": {
+          "verified": { "type": "boolean" },
+          "chain_valid": { "type": "boolean", "description": "Whether chain integrity is intact" },
+          "record": { "$ref": "#/components/schemas/TruthChainRecord" },
+          "verification_url": { "type": "string", "format": "uri" }
+        }
+      },
+      "MarketplaceListing": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "agent_id": { "type": "string", "format": "uuid" },
+          "trainer_id": { "type": "string", "format": "uuid" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "price_type": {
+            "type": "string",
+            "enum": ["free", "one_time", "subscription", "commission"]
+          },
+          "price_amount": { "type": "number" },
+          "commission_rate": { "type": "number", "description": "Commission percentage (0-100)" },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "published", "suspended", "archived"]
+          },
+          "avg_rating": { "type": "number" },
+          "total_acquisitions": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Acquisition": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "listing_id": { "type": "string", "format": "uuid" },
+          "consumer_id": { "type": "string", "format": "uuid" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "active", "cancelled", "expired"]
+          },
+          "acquired_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Webhook": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "url": { "type": "string", "format": "uri" },
+          "events": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Event types to subscribe to"
+          },
+          "secret": { "type": "string", "description": "HMAC signing secret" },
+          "active": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ObserverEvent": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "event_type": { "type": "string" },
+          "agent_id": { "type": "string", "format": "uuid" },
+          "severity": {
+            "type": "string",
+            "enum": ["info", "warning", "error", "critical"]
+          },
+          "data": { "type": "object" },
+          "hash": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": { "type": "string" },
+              "code": { "type": "string" }
+            }
+          }
+        }
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "total": { "type": "integer" },
+          "has_more": { "type": "boolean" }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Invalid or missing API key",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate limit exceeded",
+        "headers": {
+          "X-RateLimit-Limit": { "schema": { "type": "integer" } },
+          "X-RateLimit-Remaining": { "schema": { "type": "integer" } },
+          "X-RateLimit-Reset": { "schema": { "type": "string", "format": "date-time" } }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    { "BearerAuth": [] }
+  ],
+  "paths": {
+    "/agents": {
+      "get": {
+        "tags": ["Agents"],
+        "summary": "List agents",
+        "description": "Retrieve a paginated list of agents. Returns user's agents if authenticated, otherwise public marketplace agents.",
+        "operationId": "listAgents",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["draft", "training", "active", "suspended", "archived"] }
+          },
+          {
+            "name": "published",
+            "in": "query",
+            "schema": { "type": "boolean" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of agents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Agent" }
+                    },
+                    "meta": { "$ref": "#/components/schemas/PaginationMeta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/agents/{id}": {
+      "get": {
+        "tags": ["Agents"],
+        "summary": "Get agent details",
+        "description": "Retrieve detailed information about a specific agent.",
+        "operationId": "getAgent",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Agent" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/agents/{id}/trust": {
+      "get": {
+        "tags": ["Trust"],
+        "summary": "Get trust history",
+        "description": "Retrieve trust score change history for an agent.",
+        "operationId": "getTrustHistory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 50 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trust history records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/TrustHistory" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "post": {
+        "tags": ["Trust"],
+        "summary": "Apply trust change",
+        "description": "Apply a trust score change to an agent. Requires write scope.",
+        "operationId": "applyTrustChange",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TrustChange" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated trust information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "previous_score": { "type": "integer" },
+                    "new_score": { "type": "integer" },
+                    "previous_tier": { "type": "string" },
+                    "new_tier": { "type": "string" },
+                    "tier_changed": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/truth-chain": {
+      "get": {
+        "tags": ["Truth Chain"],
+        "summary": "List truth chain records",
+        "description": "Retrieve immutable governance records from the truth chain.",
+        "operationId": "listTruthChainRecords",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "record_type",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 50 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of truth chain records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/TruthChainRecord" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["Truth Chain"],
+        "summary": "Create truth chain record",
+        "description": "Create a new immutable record on the truth chain. Requires admin scope.",
+        "operationId": "createTruthChainRecord",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["record_type", "data"],
+                "properties": {
+                  "record_type": { "type": "string" },
+                  "agent_id": { "type": "string", "format": "uuid" },
+                  "data": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/TruthChainRecord" },
+                    "verification_url": { "type": "string", "format": "uri" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/truth-chain/verify/{hash}": {
+      "get": {
+        "tags": ["Truth Chain"],
+        "summary": "Verify record",
+        "description": "Verify the authenticity and chain integrity of a truth chain record. This endpoint is public.",
+        "operationId": "verifyTruthChainRecord",
+        "security": [],
+        "parameters": [
+          {
+            "name": "hash",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "SHA-256 hash of the record"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/VerificationResult" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/marketplace/listings": {
+      "get": {
+        "tags": ["Marketplace"],
+        "summary": "Browse listings",
+        "description": "Search and filter marketplace agent listings.",
+        "operationId": "listMarketplaceListings",
+        "security": [],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Search query"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "min_trust",
+            "in": "query",
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "price_type",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["free", "one_time", "subscription", "commission"] }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["newest", "popular", "rating", "trust"] }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of marketplace listings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/MarketplaceListing" }
+                    },
+                    "meta": { "$ref": "#/components/schemas/PaginationMeta" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Marketplace"],
+        "summary": "Create listing",
+        "description": "Create a new marketplace listing for an agent.",
+        "operationId": "createMarketplaceListing",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["agent_id", "title", "price_type"],
+                "properties": {
+                  "agent_id": { "type": "string", "format": "uuid" },
+                  "title": { "type": "string" },
+                  "description": { "type": "string" },
+                  "price_type": { "type": "string", "enum": ["free", "one_time", "subscription", "commission"] },
+                  "price_amount": { "type": "number" },
+                  "commission_rate": { "type": "number" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created listing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MarketplaceListing" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/marketplace/acquisitions": {
+      "get": {
+        "tags": ["Marketplace"],
+        "summary": "List acquisitions",
+        "description": "List agent acquisitions for the authenticated user.",
+        "operationId": "listAcquisitions",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["pending", "active", "cancelled", "expired"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of acquisitions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Acquisition" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["Marketplace"],
+        "summary": "Acquire agent",
+        "description": "Acquire an agent from the marketplace.",
+        "operationId": "acquireAgent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["listing_id"],
+                "properties": {
+                  "listing_id": { "type": "string", "format": "uuid" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Acquisition created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Acquisition" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/observer/events": {
+      "get": {
+        "tags": ["Observer"],
+        "summary": "Query events",
+        "description": "Query the append-only observer event log.",
+        "operationId": "queryObserverEvents",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "event_type",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["info", "warning", "error", "critical"] }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "schema": { "type": "string", "format": "date-time" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 100 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of observer events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ObserverEvent" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/observer/anomalies": {
+      "get": {
+        "tags": ["Observer"],
+        "summary": "List anomalies",
+        "description": "List detected anomalies and behavioral deviations.",
+        "operationId": "listAnomalies",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["open", "investigating", "resolved", "dismissed"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of anomalies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "type": "object" } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/webhooks": {
+      "get": {
+        "tags": ["Webhooks"],
+        "summary": "List webhooks",
+        "description": "List webhook subscriptions for the authenticated user.",
+        "operationId": "listWebhooks",
+        "responses": {
+          "200": {
+            "description": "List of webhooks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Webhook" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["Webhooks"],
+        "summary": "Create webhook",
+        "description": "Create a new webhook subscription.",
+        "operationId": "createWebhook",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url", "events"],
+                "properties": {
+                  "url": { "type": "string", "format": "uri" },
+                  "events": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Event types: agent.created, agent.updated, trust.changed, council.decision, acquisition.completed"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created webhook with signing secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Webhook" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/webhooks/{id}": {
+      "get": {
+        "tags": ["Webhooks"],
+        "summary": "Get webhook",
+        "operationId": "getWebhook",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Webhook" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "tags": ["Webhooks"],
+        "summary": "Update webhook",
+        "operationId": "updateWebhook",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": { "type": "string", "format": "uri" },
+                  "events": { "type": "array", "items": { "type": "string" } },
+                  "active": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated webhook" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "tags": ["Webhooks"],
+        "summary": "Delete webhook",
+        "operationId": "deleteWebhook",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "204": { "description": "Webhook deleted" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/webhooks/{id}/test": {
+      "post": {
+        "tags": ["Webhooks"],
+        "summary": "Test webhook",
+        "description": "Send a test event to the webhook endpoint.",
+        "operationId": "testWebhook",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "status_code": { "type": "integer" },
+                    "response_time_ms": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "List notifications",
+        "description": "Get notifications for the authenticated user.",
+        "operationId": "listNotifications",
+        "parameters": [
+          { "name": "unread_only", "in": "query", "schema": { "type": "boolean" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of notifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "type": "object" } },
+                    "unread_count": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark notifications read",
+        "operationId": "markNotificationsRead",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notification_ids": { "type": "array", "items": { "type": "string" } },
+                  "mark_all": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Notifications updated" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Base layout and typography for a mobile-first approach */
+  body {
+    @apply bg-gray-100 text-gray-800 font-sans;
+  }
+  
+  h1, h2, h3 {
+    @apply font-bold;
+  }
+
+  h1 { @apply text-3xl sm:text-4xl; }
+  h2 { @apply text-2xl sm:text-3xl; }
+  h3 { @apply text-xl sm:text-2xl; }
+}
+
+@layer components {
+  /* A consistent container for our main content blocks */
+  .card {
+    @apply bg-white p-4 sm:p-6 lg:p-8 rounded-2xl shadow-md;
+  }
+
+  /* Button styles with mobile-friendly touch targets */
+  .btn {
+    @apply px-5 py-3 rounded-lg font-semibold text-white shadow-md transition-all duration-200 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+
+  .btn-green { @apply bg-green-600 hover:bg-green-700 focus:ring-green-500; }
+  .btn-gray { @apply bg-gray-600 hover:bg-gray-700 focus:ring-gray-500; }
+  .btn-indigo { @apply bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500; }
+  .btn-blue { @apply bg-blue-600 hover:bg-blue-700 focus:ring-blue-500; }
+  .btn-red { @apply bg-red-600 hover:bg-red-700 focus:ring-red-500; }
+
+  /* Form input styles for better readability on mobile */
+  .input-field {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 transition-shadow;
+  }
+
+  /* Tab styles for the editor */
+  .tab-btn {
+    @apply px-4 py-2 text-sm font-medium border-b-2;
+  }
+
+  .tab-btn.active {
+    @apply text-green-600 border-green-600;
+  }
+  .tab-btn:not(.active) {
+    @apply text-gray-500 border-transparent hover:bg-gray-100;
+  }
+}

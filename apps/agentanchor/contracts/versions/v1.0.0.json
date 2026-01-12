@@ -1,0 +1,109 @@
+{
+  "version": "1.0.0",
+  "released": "2026-01-06",
+  "status": "stable",
+  "description": "Initial Agent Anchor Contract Schemas",
+  "breaking": false,
+  "schemas": {
+    "common": {
+      "version": "1.0.0",
+      "description": "Shared primitives and types",
+      "exports": [
+        "UUID", "SemVer", "Timestamp", "Hash", "CorrelationId",
+        "ActorType", "Actor", "AutonomyLevel", "DecisionOutcome",
+        "ExecutionOutcome", "Severity", "RiskLevel", "Scope", "Provenance"
+      ]
+    },
+    "intent-package": {
+      "version": "1.0.0",
+      "description": "Intent from strategic layer (AURYN)",
+      "exports": [
+        "IntentType", "IntentStatus", "IntentTarget", "IntentParameters",
+        "IntentConstraints", "IntentContext", "IntentPackage", "IntentValidationResult"
+      ],
+      "dependencies": ["common"]
+    },
+    "policy-set": {
+      "version": "1.0.0",
+      "description": "Declarative policies for enforcement",
+      "exports": [
+        "PolicyType", "PolicyStatus", "EnforcementMode", "PolicyApplicability",
+        "ComparisonOperator", "LogicalOperator", "RuleCondition", "RuleAction",
+        "PolicyRule", "PolicyProvenance", "PolicySet", "RuleEvaluationResult",
+        "PolicyEvaluationResult"
+      ],
+      "dependencies": ["common"]
+    },
+    "authorization-decision": {
+      "version": "1.0.0",
+      "description": "Output from Authorization & Constraint Engine (ACE)",
+      "exports": [
+        "EscalationType", "EscalationRequirement", "ExecutionConstraints",
+        "DecisionReasonCode", "AuthorizationDecision", "DecisionSummary"
+      ],
+      "dependencies": ["common", "policy-set"]
+    },
+    "execution-event": {
+      "version": "1.0.0",
+      "description": "Telemetry from execution observation",
+      "exports": [
+        "ExecutionEventType", "ToolInvocation", "ErrorDetails", "ResourceAccess",
+        "ExecutionMetrics", "ExecutionEvent", "ExecutionTrace"
+      ],
+      "dependencies": ["common"]
+    },
+    "proof-pack": {
+      "version": "1.0.0",
+      "description": "Cryptographic audit bundles",
+      "exports": [
+        "AuditRecordType", "AuditRecord", "MerkleNode", "MerkleProof",
+        "ChainVerificationResult", "RedactionPolicy", "ExportFormat",
+        "ProofPack", "ProofPackRequest"
+      ],
+      "dependencies": ["common", "intent-package", "policy-set", "authorization-decision", "execution-event"]
+    },
+    "trust-signal": {
+      "version": "1.0.0",
+      "description": "Trust and accountability signals",
+      "exports": [
+        "TrustSignalType", "TrustImpactDirection", "TrustScoreDelta",
+        "ViolationRecord", "EscalationRecord", "AutonomyChange",
+        "TrustSignal", "TrustProfile"
+      ],
+      "dependencies": ["common"]
+    },
+    "entitlement": {
+      "version": "1.0.0",
+      "description": "Commercial and operational boundaries",
+      "exports": [
+        "PlanTier", "FeatureDefinition", "FeatureEntitlement", "UsageEvent",
+        "UsageSummary", "BudgetAllocation", "BudgetCheckResult", "ReceiptLineItem",
+        "UsageReceipt", "EntitlementSet", "EntitlementCheckRequest", "EntitlementCheckResult"
+      ],
+      "dependencies": ["common"]
+    }
+  },
+  "changelog": [
+    {
+      "type": "added",
+      "description": "Initial schema definitions for Agent Anchor Trust Validation System"
+    },
+    {
+      "type": "added",
+      "description": "8 schema modules covering the complete authorization lifecycle"
+    }
+  ],
+  "specAlignment": {
+    "document": "Agent Anchor CLI Architecture and Build Specs",
+    "subsystems": {
+      "PINL": "policy-set",
+      "Intent Validation": "intent-package",
+      "ACE": "authorization-decision",
+      "Autonomy Controller": "authorization-decision.EscalationRequirement",
+      "Observation Layer": "execution-event",
+      "Audit & Proof Plane": "proof-pack",
+      "Trust Signals": "trust-signal",
+      "Entitlements": "entitlement"
+    }
+  }
+}

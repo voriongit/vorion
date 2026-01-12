@@ -1,0 +1,83 @@
+{
+  "name": "@vorion/agentanchor-contracts",
+  "version": "1.0.0",
+  "description": "Canonical contract schemas for the AgentAnchor Trust Validation System",
+  "type": "module",
+  "main": "./dist/schemas/index.js",
+  "types": "./dist/schemas/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/schemas/index.js",
+      "types": "./dist/schemas/index.d.ts"
+    },
+    "./common": {
+      "import": "./dist/schemas/common.js",
+      "types": "./dist/schemas/common.d.ts"
+    },
+    "./intent": {
+      "import": "./dist/schemas/intent-package.js",
+      "types": "./dist/schemas/intent-package.d.ts"
+    },
+    "./policy": {
+      "import": "./dist/schemas/policy-set.js",
+      "types": "./dist/schemas/policy-set.d.ts"
+    },
+    "./decision": {
+      "import": "./dist/schemas/authorization-decision.js",
+      "types": "./dist/schemas/authorization-decision.d.ts"
+    },
+    "./event": {
+      "import": "./dist/schemas/execution-event.js",
+      "types": "./dist/schemas/execution-event.d.ts"
+    },
+    "./proof": {
+      "import": "./dist/schemas/proof-pack.js",
+      "types": "./dist/schemas/proof-pack.d.ts"
+    },
+    "./trust": {
+      "import": "./dist/schemas/trust-signal.js",
+      "types": "./dist/schemas/trust-signal.d.ts"
+    },
+    "./entitlement": {
+      "import": "./dist/schemas/entitlement.js",
+      "types": "./dist/schemas/entitlement.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "versions"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "peerDependencies": {
+    "zod": "^3.23.0"
+  },
+  "keywords": [
+    "agent-anchor",
+    "trust",
+    "authorization",
+    "contracts",
+    "schemas",
+    "zod"
+  ],
+  "author": "Agent Anchor Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/voriongit/vorion.git",
+    "directory": "apps/agentanchor/contracts"
+  }
+}

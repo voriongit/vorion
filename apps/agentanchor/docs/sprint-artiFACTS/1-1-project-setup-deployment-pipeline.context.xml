@@ -1,0 +1,194 @@
+<story-context id="1-1-project-setup-deployment-pipeline" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>1</storyId>
+    <title>Project Setup &amp; Deployment Pipeline</title>
+    <status>ready-for-dev</status>
+    <generatedAt>2025-11-28</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artiFACTS/1-1-project-setup-deployment-pipeline.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>the project scaffolded with a CI/CD pipeline</iWant>
+    <soThat>code changes automatically deploy to staging/production environments</soThat>
+    <tasks>
+      <task id="1" ac="1,2">Verify and update project structure
+        <subtask id="1.1">Audit existing Next.js 14 setup in codebase</subtask>
+        <subtask id="1.2">Ensure App Router structure is correct (app/ directory)</subtask>
+        <subtask id="1.3">Verify TypeScript strict mode is enabled in tsconfig.json</subtask>
+        <subtask id="1.4">Confirm Tailwind CSS + PostCSS configuration</subtask>
+        <subtask id="1.5">Verify shadcn/ui is properly configured</subtask>
+      </task>
+      <task id="2" ac="6">Configure environment variables
+        <subtask id="2.1">Create/update .env.example with all required variables</subtask>
+        <subtask id="2.2">Document required Supabase variables</subtask>
+        <subtask id="2.3">Document Upstash variables</subtask>
+        <subtask id="2.4">Document Sentry variables</subtask>
+        <subtask id="2.5">Create lib/config.ts for type-safe env access with validation</subtask>
+      </task>
+      <task id="3" ac="3">Set up GitHub Actions CI
+        <subtask id="3.1">Create .github/workflows/ci.yml workflow</subtask>
+        <subtask id="3.2">Add lint step (npm run lint)</subtask>
+        <subtask id="3.3">Add type-check step (npx tsc --noEmit)</subtask>
+        <subtask id="3.4">Add test step (npm test)</subtask>
+        <subtask id="3.5">Add build step (npm run build)</subtask>
+        <subtask id="3.6">Configure caching for node_modules</subtask>
+      </task>
+      <task id="4" ac="4,5">Configure Vercel deployment
+        <subtask id="4.1">Verify Vercel project is connected to repository</subtask>
+        <subtask id="4.2">Configure preview deployments for PRs</subtask>
+        <subtask id="4.3">Configure production deployment on main branch</subtask>
+        <subtask id="4.4">Set environment variables in Vercel dashboard</subtask>
+        <subtask id="4.5">Verify build settings (Next.js framework preset)</subtask>
+      </task>
+      <task id="5" ac="7">Configure Sentry error tracking
+        <subtask id="5.1">Verify @sentry/nextjs is installed</subtask>
+        <subtask id="5.2">Update sentry.client.config.ts with proper DSN</subtask>
+        <subtask id="5.3">Update sentry.server.config.ts with proper DSN</subtask>
+        <subtask id="5.4">Update sentry.edge.config.ts with proper DSN</subtask>
+        <subtask id="5.5">Configure source maps upload in CI</subtask>
+        <subtask id="5.6">Test error capture with intentional error</subtask>
+      </task>
+      <task id="6" ac="1,4,5">Create basic health check endpoint
+        <subtask id="6.1">Create app/api/health/route.ts returning status + version</subtask>
+        <subtask id="6.2">Add response with status, version, timestamp</subtask>
+        <subtask id="6.3">Use for deployment verification</subtask>
+      </task>
+      <task id="7" ac="all">Validate complete setup
+        <subtask id="7.1">Run full local build and verify</subtask>
+        <subtask id="7.2">Push to feature branch, verify preview deployment</subtask>
+        <subtask id="7.3">Merge to main, verify production deployment</subtask>
+        <subtask id="7.4">Trigger intentional error, verify Sentry capture</subtask>
+        <subtask id="7.5">Document any deviations or issues</subtask>
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1" testable="true">Fresh clone builds successfully - npm install &amp;&amp; npm run build completes without errors</criterion>
+    <criterion id="AC2" testable="true">Local development works - npm run dev starts on port 3000</criterion>
+    <criterion id="AC3" testable="true">GitHub Actions CI pipeline - lint, type-check, tests run on push</criterion>
+    <criterion id="AC4" testable="true">Preview deployments work - feature branch gets Vercel preview URL</criterion>
+    <criterion id="AC5" testable="true">Production deployment works - merge to main deploys to production</criterion>
+    <criterion id="AC6" testable="true">Environment variables configured - all required vars accessible</criterion>
+    <criterion id="AC7" testable="true">Error tracking operational - errors appear in Sentry dashboard</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/sprint-artiFACTS/tech-spec-epic-1.md" title="Epic 1 Tech Spec" section="Dependencies and Integrations">
+        Lists all NPM dependencies including next@14.1.0, @sentry/nextjs@8.0.0, vitest for testing. External services: Supabase, Vercel, GitHub, Upstash, Sentry.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture" section="Section 2.1-2.3">
+        Tech stack: Next.js 14 App Router, TypeScript 5.x strict, Tailwind + shadcn/ui. Backend: Supabase. Hosting: Vercel Edge.
+      </doc>
+      <doc path="docs/epics.md" title="Epics" section="Story 1.1">
+        Story definition with acceptance criteria for project setup and deployment pipeline.
+      </doc>
+    </docs>
+
+    <code>
+      <file path="package.json" kind="manifest" reason="NPM dependencies and scripts - already has all required deps">
+        <notes>Contains: next@14.1.0, @sentry/nextjs@8.0.0, vitest, @supabase/supabase-js, @upstash/ratelimit</notes>
+      </file>
+      <file path="tsconfig.json" kind="config" reason="TypeScript configuration - strict mode already enabled">
+        <notes>strict: true already set. Target: ES2017. Module: esnext with bundler resolution.</notes>
+      </file>
+      <file path="next.config.js" kind="config" reason="Next.js configuration - basic setup exists">
+        <notes>Minimal config with images remotePatterns. May need Sentry plugin integration.</notes>
+      </file>
+      <file path="lib/config.ts" kind="service" reason="Environment config with Zod validation - ALREADY EXISTS">
+        <notes>Complete implementation with Supabase, Anthropic, Upstash, Sentry config. Uses Zod for validation. Task 2.5 may be DONE.</notes>
+      </file>
+      <file path=".env.example" kind="config" reason="Environment template - ALREADY EXISTS">
+        <notes>Contains all required vars: Supabase, Anthropic, Upstash, Sentry, feature flags. Tasks 2.1-2.4 may be DONE.</notes>
+      </file>
+      <file path="sentry.client.config.ts" kind="config" reason="Sentry client config - ALREADY EXISTS">
+        <notes>Full implementation with replay integration, error filtering, beforeSend hook. Uses lib/config.ts.</notes>
+      </file>
+      <file path="sentry.server.config.ts" kind="config" reason="Sentry server config - EXISTS">
+        <notes>Needs verification of DSN configuration.</notes>
+      </file>
+      <file path="sentry.edge.config.ts" kind="config" reason="Sentry edge config - EXISTS">
+        <notes>Needs verification of DSN configuration.</notes>
+      </file>
+      <file path="tailwind.config.js" kind="config" reason="Tailwind CSS configuration">
+        <notes>Exists - verify shadcn/ui integration.</notes>
+      </file>
+      <file path="postcss.config.js" kind="config" reason="PostCSS configuration">
+        <notes>Exists - verify Tailwind plugin configured.</notes>
+      </file>
+    </code>
+
+    <dependencies ecosystem="node">
+      <package name="next" version="^14.1.0" />
+      <package name="react" version="^18.2.0" />
+      <package name="typescript" version="^5" />
+      <package name="@sentry/nextjs" version="^8.0.0" />
+      <package name="@supabase/supabase-js" version="^2.39.1" />
+      <package name="@upstash/ratelimit" version="^1.0.0" />
+      <package name="@upstash/redis" version="^1.28.0" />
+      <package name="zod" version="^3.22.4" />
+      <package name="vitest" version="^1.0.4" dev="true" />
+      <package name="tailwindcss" version="^3.4.1" dev="true" />
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="architecture">Next.js 14 App Router required (not Pages Router)</constraint>
+    <constraint type="typescript">Strict mode must be enabled</constraint>
+    <constraint type="security">No secrets in client-side code (NEXT_PUBLIC_ prefix rules)</constraint>
+    <constraint type="testing">Vitest for unit/integration tests</constraint>
+    <constraint type="deployment">Vercel for hosting, GitHub Actions for CI</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="Health Check API" kind="REST endpoint">
+      <signature>GET /api/health</signature>
+      <response>{ status: 'ok', version: string, timestamp: number }</response>
+      <path>app/api/health/route.ts (TO CREATE)</path>
+    </interface>
+    <interface name="Config Service" kind="module">
+      <signature>import { config, isProduction, isFeatureEnabled } from '@/lib/config'</signature>
+      <path>lib/config.ts (EXISTS)</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Vitest for unit and integration tests. Testing Library for React components.
+      MSW for API mocking. Tests located in tests/ directory with .test.ts/.test.tsx extensions.
+      Run with: npm test, npm run test:ui, npm run test:coverage
+    </standards>
+    <locations>
+      <location>tests/unit/</location>
+      <location>tests/integration/</location>
+      <location>**/*.test.ts</location>
+      <location>**/*.test.tsx</location>
+    </locations>
+    <ideas>
+      <idea ac="AC1">Smoke test: npm run build exits with code 0</idea>
+      <idea ac="AC2">Dev server test: npm run dev starts and responds on :3000</idea>
+      <idea ac="AC6">Config test: lib/config.ts validates required env vars</idea>
+      <idea ac="AC7">Health endpoint test: GET /api/health returns 200 with expected shape</idea>
+    </ideas>
+  </tests>
+
+  <existingWork>
+    <note type="important">
+      SIGNIFICANT WORK ALREADY EXISTS - Many subtasks may already be complete:
+      - lib/config.ts: Complete Zod-validated config (Task 2.5 DONE)
+      - .env.example: All variables documented (Tasks 2.1-2.4 likely DONE)
+      - sentry.*.config.ts: All three files exist with implementation (Task 5.1-5.4 partially DONE)
+      - tsconfig.json: Strict mode enabled (Task 1.3 DONE)
+      - Tailwind + PostCSS configured (Task 1.4 likely DONE)
+
+      NEEDS TO BE CREATED:
+      - .github/workflows/ci.yml (Task 3 - CI pipeline)
+      - app/api/health/route.ts (Task 6 - health endpoint)
+      - Vercel configuration verification (Task 4)
+    </note>
+  </existingWork>
+</story-context>

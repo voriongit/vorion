@@ -1,0 +1,46 @@
+# Workflow Status Template
+
+# This tracks progress through BMM methodology Analysis, Planning, and Solutioning phases.
+# Implementation phase is tracked separately in sprint-status.yaml
+
+# STATUS DEFINITIONS:
+# ==================
+# Initial Status (before completion):
+#   - required: Must be completed to progress
+#   - optional: Can be completed but not required
+#   - recommended: Strongly suggested but not required
+#   - conditional: Required only if certain conditions met (e.g., if_has_ui)
+#
+# Completion Status:
+#   - {file-path}: File created/found (e.g., "docs/product-brief.md")
+#   - skipped: Optional/conditional workflow that was skipped
+
+generated: "2025-11-17"
+project: "AI Bot Builder"
+project_type: "greenfield"
+selected_track: "bmad-method"
+field_type: "greenfield"
+workflow_path: ".bmad/bmm/workflows/workflow-status/paths/method-greenfield.yaml"
+
+workflow_status:
+  # Phase 0: Discovery (Optional)
+  brainstorm-project: "completed-in-party-mode"
+  research: "docs/research-market-2025-12-04.md"
+  product-brief: "docs/product-brief-agentanchor-2025-12-04.md"
+
+  # Phase 1: Planning
+  prd: "docs/prd.md"
+  validate-prd: "optional"
+  create-epics-and-stories: "optional"
+  create-design: "conditional"
+  create-epics-and-stories-after-ux: "optional"
+
+  # Phase 2: Solutioning
+  create-architecture: "docs/architecture.md"  # v3.0 - Council of Nine, LangGraph.js, Unified Marketplace
+  create-epics-and-stories-final: "docs/epics.md"  # 8 Epics, 41 Stories, 95 FRs (MVP)
+  test-design: "recommended"
+  validate-architecture: "optional"
+  implementation-readiness: "docs/implementation-readiness-report-2025-12-05.md"  # READY - GO decision
+
+  # Phase 3: Implementation
+  sprint-planning: "required"

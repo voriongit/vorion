@@ -1,0 +1,88 @@
+# AgentAnchor Component Library
+
+Welcome to the AgentAnchor Storybook - the component documentation for the world's first AI Governance Operating System.
+
+## Overview
+
+This Storybook documents all UI components used in the AgentAnchor platform, organized by domain:
+
+- **Agents** - Agent management, trust badges, certification displays
+- **Academy** - Training curriculum, progress indicators
+- **Council** - Decision cards, voting panels, escalation displays
+- **Marketplace** - Listing cards, acquisition flows
+- **Observer** - Event feeds, anomaly displays
+- **Trust Chain** - Verification badges, chain viewers
+- **Navigation** - App shell, sidebar, header
+- **Shared** - Reusable utilities, error boundaries
+
+## Design Principles
+
+### Visual Identity
+
+AgentAnchor uses a **dignified, professional** aesthetic:
+
+- Clean typography with Inter font family
+- Subtle animations that convey state changes without distraction
+- Trust tier colors that are instantly recognizable
+- Accessible color contrast (WCAG 2.1 AA)
+
+### Trust Tier Colors
+
+| Tier | Score Range | Color | Emoji |
+|------|-------------|-------|-------|
+| Untrusted | 0-199 | Gray | ⚠️ |
+| Novice | 200-399 | Yellow | 🌱 |
+| Proven | 400-599 | Blue | ✅ |
+| Trusted | 600-799 | Green | 🛡️ |
+| Elite | 800-899 | Purple | 👑 |
+| Legendary | 900-1000 | Gold | 🌟 |
+
+## Getting Started
+
+### Running Storybook
+
+```bash
+npm run storybook
+```
+
+### Writing Stories
+
+Each component should have a `.stories.tsx` file that demonstrates:
+
+1. **Default state** - The most common usage
+2. **Variants** - All visual variations
+3. **States** - Loading, error, empty states
+4. **Accessibility** - Keyboard navigation, screen reader support
+
+### Example
+
+```tsx
+import type { Meta, StoryObj } from '@storybook/react'
+import { TrustBadge } from '@/components/agents/TrustBadge'
+
+const meta: Meta<typeof TrustBadge> = {
+  title: 'Agents/TrustBadge',
+  component: TrustBadge,
+  tags: ['autodocs'],
+}
+
+export default meta
+
+export const Default: StoryObj<typeof TrustBadge> = {
+  args: {
+    score: 750,
+    tier: 'trusted',
+  },
+}
+```
+
+## Accessibility
+
+All components are built with accessibility in mind:
+
+- **Keyboard Navigation** - All interactive elements are focusable
+- **Screen Readers** - ARIA labels and live regions
+- **Color Contrast** - 4.5:1 minimum for text
+- **Motion** - Respects `prefers-reduced-motion`
+
+Use the **Accessibility** addon in the sidebar to run automated checks on each story.

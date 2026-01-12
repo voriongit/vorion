@@ -1,0 +1,322 @@
+{
+  "meta": {
+    "version": "1.0",
+    "description": "Team and Council definitions for the A3I ecosystem"
+  },
+  "councils": [
+    {
+      "name": "safety-council",
+      "display_name": "Safety Council",
+      "type": "council",
+      "purpose": "Ensure no AI action causes harm to humans, systems, or society",
+      "responsibilities": [
+        "Review high-risk AI deployments",
+        "Set safety standards and thresholds",
+        "Investigate safety incidents",
+        "Approve safety-critical changes"
+      ],
+      "authority_level": 10,
+      "can_approve": ["safety_exceptions", "high_risk_deployments", "emergency_shutdowns"],
+      "quorum_required": 3,
+      "decision_method": "consensus"
+    },
+    {
+      "name": "ethics-council",
+      "display_name": "Ethics Council",
+      "type": "council",
+      "purpose": "Provide moral guidance and ensure AI actions align with human values",
+      "responsibilities": [
+        "Define ethical guidelines",
+        "Review ethically complex decisions",
+        "Advise on value tradeoffs",
+        "Steward the Soul Document"
+      ],
+      "authority_level": 10,
+      "can_approve": ["ethics_exceptions", "value_tradeoffs", "soul_doc_amendments"],
+      "quorum_required": 3,
+      "decision_method": "consensus"
+    },
+    {
+      "name": "compliance-council",
+      "display_name": "Compliance Council",
+      "type": "council",
+      "purpose": "Ensure adherence to laws, regulations, and standards",
+      "responsibilities": [
+        "Monitor regulatory changes",
+        "Set compliance requirements",
+        "Review compliance exceptions",
+        "Coordinate audit responses"
+      ],
+      "authority_level": 9,
+      "can_approve": ["compliance_exceptions", "regulatory_interpretations"],
+      "quorum_required": 2,
+      "decision_method": "majority"
+    },
+    {
+      "name": "architecture-council",
+      "display_name": "Architecture Council",
+      "type": "council",
+      "purpose": "Define and maintain technical standards and architecture",
+      "responsibilities": [
+        "Set technical standards",
+        "Review architectural changes",
+        "Approve new integrations",
+        "Manage technical debt"
+      ],
+      "authority_level": 8,
+      "can_approve": ["architecture_changes", "new_technologies", "integration_patterns"],
+      "quorum_required": 3,
+      "decision_method": "consensus"
+    },
+    {
+      "name": "finance-council",
+      "display_name": "Finance Council",
+      "type": "council",
+      "purpose": "Manage resource allocation and financial decisions",
+      "responsibilities": [
+        "Approve budgets",
+        "Review cost allocations",
+        "Set financial policies",
+        "Monitor spending"
+      ],
+      "authority_level": 8,
+      "can_approve": ["budget_changes", "major_purchases", "pricing_changes"],
+      "quorum_required": 2,
+      "decision_method": "majority"
+    },
+    {
+      "name": "people-council",
+      "display_name": "People Council",
+      "type": "council",
+      "purpose": "Oversee human-related concerns and organizational health",
+      "responsibilities": [
+        "Set people policies",
+        "Review HR decisions",
+        "Manage culture initiatives",
+        "Oversee training programs"
+      ],
+      "authority_level": 8,
+      "can_approve": ["policy_changes", "org_changes", "culture_initiatives"],
+      "quorum_required": 2,
+      "decision_method": "consensus"
+    },
+    {
+      "name": "innovation-council",
+      "display_name": "Innovation Council",
+      "type": "council",
+      "purpose": "Guide future direction and emerging capabilities",
+      "responsibilities": [
+        "Evaluate new technologies",
+        "Sponsor innovation projects",
+        "Set R&D priorities",
+        "Review capability roadmap"
+      ],
+      "authority_level": 7,
+      "can_approve": ["innovation_projects", "r_and_d_investments", "capability_experiments"],
+      "quorum_required": 3,
+      "decision_method": "majority"
+    },
+    {
+      "name": "incident-council",
+      "display_name": "Incident Council",
+      "type": "incident",
+      "purpose": "Coordinate crisis response and incident management",
+      "responsibilities": [
+        "Declare incidents",
+        "Coordinate response teams",
+        "Make emergency decisions",
+        "Conduct post-mortems"
+      ],
+      "authority_level": 10,
+      "can_approve": ["emergency_actions", "incident_declarations", "emergency_shutdowns"],
+      "quorum_required": 1,
+      "decision_method": "lead_decides"
+    }
+  ],
+  "teams": [
+    {
+      "name": "platform-core",
+      "display_name": "Platform Core Team",
+      "type": "team",
+      "purpose": "Maintain and evolve the A3I platform infrastructure",
+      "lead_agent": "A3I Ecosystem Orchestrator",
+      "members": ["Governance Sentinel", "A3I Integration Master", "Chief AI Officer"],
+      "authority_level": 9
+    },
+    {
+      "name": "security-services",
+      "display_name": "Security Services Team",
+      "type": "team",
+      "purpose": "Protect the ecosystem from threats and vulnerabilities",
+      "lead_agent": "Security Shepherd",
+      "category_filter": "security-services",
+      "authority_level": 8
+    },
+    {
+      "name": "dev-experience",
+      "display_name": "Developer Experience Team",
+      "type": "team",
+      "purpose": "Enable developer productivity and satisfaction",
+      "lead_agent": "React Architect",
+      "category_filter": "dev-",
+      "authority_level": 6
+    },
+    {
+      "name": "go-to-market",
+      "display_name": "Go-To-Market Team",
+      "type": "team",
+      "purpose": "Drive business growth and customer acquisition",
+      "lead_agent": "Campaign Commander",
+      "category_filter": ["marketing-", "sales-"],
+      "authority_level": 6
+    },
+    {
+      "name": "people-culture",
+      "display_name": "People & Culture Team",
+      "type": "team",
+      "purpose": "Build and maintain a thriving organizational culture",
+      "lead_agent": "Culture Curator",
+      "category_filter": "hr-",
+      "authority_level": 6
+    },
+    {
+      "name": "customer-success",
+      "display_name": "Customer Success Team",
+      "type": "team",
+      "purpose": "Ensure customer satisfaction and retention",
+      "lead_agent": "Health Score Hero",
+      "category_filter": "cx-",
+      "authority_level": 6
+    },
+    {
+      "name": "finance-ops",
+      "display_name": "Finance Operations Team",
+      "type": "team",
+      "purpose": "Manage financial operations and reporting",
+      "lead_agent": "CFO Agent",
+      "category_filter": "finance-",
+      "authority_level": 7
+    },
+    {
+      "name": "legal-team",
+      "display_name": "Legal Team",
+      "type": "team",
+      "purpose": "Provide legal guidance and manage legal risk",
+      "lead_agent": "Corporate Counsel",
+      "category_filter": "legal-",
+      "authority_level": 8
+    },
+    {
+      "name": "product-design",
+      "display_name": "Product & Design Team",
+      "type": "team",
+      "purpose": "Define and design product experiences",
+      "lead_agent": "Product Strategist",
+      "category_filter": "product-",
+      "authority_level": 6
+    },
+    {
+      "name": "testing-validation",
+      "display_name": "Testing & Validation Team",
+      "type": "team",
+      "purpose": "Ensure quality through comprehensive testing",
+      "lead_agent": "Unit Test Master",
+      "category_filter": "testing-",
+      "authority_level": 6
+    },
+    {
+      "name": "ai-validators",
+      "display_name": "AI Validators Team",
+      "type": "team",
+      "purpose": "Validate AI systems for safety, fairness, and performance",
+      "lead_agent": "AI Governance Validator",
+      "category_filter": "ai-validators",
+      "authority_level": 8
+    },
+    {
+      "name": "compliance-team",
+      "display_name": "Compliance Team",
+      "type": "team",
+      "purpose": "Ensure regulatory compliance across all operations",
+      "lead_agent": "GDPR Checker",
+      "category_filter": ["compliance-", "eu-compliance"],
+      "authority_level": 8
+    },
+    {
+      "name": "mentorship-guild",
+      "display_name": "Mentorship Guild",
+      "type": "guild",
+      "purpose": "Share mentoring knowledge and develop mentoring excellence",
+      "lead_agent": "Universal Mentor",
+      "category_filter": "mentor-",
+      "authority_level": 5
+    },
+    {
+      "name": "ops-strategy",
+      "display_name": "Operations & Strategy Team",
+      "type": "team",
+      "purpose": "Drive operational excellence and strategic initiatives",
+      "lead_agent": "Strategic Planner",
+      "category_filter": "ops-",
+      "authority_level": 7
+    }
+  ],
+  "escalation_chains": [
+    {
+      "name": "security-escalation",
+      "description": "Escalation chain for security incidents",
+      "chain": [
+        {"level": 1, "type": "team_lead", "target": "Security Shepherd"},
+        {"level": 2, "type": "team", "target": "security-services"},
+        {"level": 3, "type": "council", "target": "safety-council"},
+        {"level": 4, "type": "council", "target": "incident-council"}
+      ],
+      "triggers": ["security_incident", "vulnerability_found", "breach_detected"],
+      "sla_by_level": {"1": "15m", "2": "30m", "3": "1h", "4": "immediate"}
+    },
+    {
+      "name": "ethics-escalation",
+      "description": "Escalation chain for ethical concerns",
+      "chain": [
+        {"level": 1, "type": "agent", "target": "AI Ethics Attorney"},
+        {"level": 2, "type": "council", "target": "ethics-council"},
+        {"level": 3, "type": "agent", "target": "Chief AI Officer"}
+      ],
+      "triggers": ["ethical_concern", "bias_detected", "harm_potential"],
+      "sla_by_level": {"1": "1h", "2": "4h", "3": "24h"}
+    },
+    {
+      "name": "compliance-escalation",
+      "description": "Escalation chain for compliance issues",
+      "chain": [
+        {"level": 1, "type": "team", "target": "compliance-team"},
+        {"level": 2, "type": "council", "target": "compliance-council"},
+        {"level": 3, "type": "team", "target": "legal-team"}
+      ],
+      "triggers": ["compliance_violation", "regulatory_inquiry", "audit_finding"],
+      "sla_by_level": {"1": "4h", "2": "24h", "3": "48h"}
+    },
+    {
+      "name": "customer-escalation",
+      "description": "Escalation chain for customer issues",
+      "chain": [
+        {"level": 1, "type": "agent", "target": "Escalation Manager"},
+        {"level": 2, "type": "team", "target": "customer-success"},
+        {"level": 3, "type": "agent", "target": "Chief AI Officer"}
+      ],
+      "triggers": ["customer_complaint", "sla_breach", "churn_risk"],
+      "sla_by_level": {"1": "30m", "2": "2h", "3": "8h"}
+    },
+    {
+      "name": "four-pillars-violation",
+      "description": "Escalation chain for Four Pillars violations",
+      "chain": [
+        {"level": 1, "type": "council", "target": "ethics-council"},
+        {"level": 2, "type": "council", "target": "safety-council"},
+        {"level": 3, "type": "agent", "target": "Chief AI Officer"}
+      ],
+      "triggers": ["truth_violation", "honesty_violation", "service_violation", "humanity_violation"],
+      "sla_by_level": {"1": "immediate", "2": "1h", "3": "4h"}
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+# Command Team Shared State
+# AgentAnchor Pioneer Bots - Coordination File
+# Updated by all team members, read by all
+
+team:
+  name: Command Team
+  orchestrator: frank the tank
+  address_as: Orchestrator
+  created: 2025-11-30
+
+members:
+  barclay:
+    id: pioneer-001
+    status: active
+    role: Team Orchestrator
+    icon: "\U0001F3A9"
+    last_active: null
+
+  dilly:
+    id: pioneer-002
+    status: active
+    role: DevOps Lead
+    icon: "\U0001F994"
+    last_active: null
+
+  cronos:
+    id: pioneer-003
+    status: active
+    role: Schedule Master
+    icon: "\U0001F551"
+    last_active: null
+
+  aria:
+    id: pioneer-004
+    status: active
+    role: Agent Liaison
+    icon: "\U0001F3AD"
+    last_active: null
+
+# Cross-agent message queue
+messages:
+  pending: []
+  # Format:
+  # - from: dilly
+  #   to: aria
+  #   type: deploy-notification
+  #   content: "AgentAnchor deployed to production"
+  #   timestamp: 2025-11-30T10:00:00Z
+  #   status: pending
+
+# Shared context
+context:
+  current_focus: "AgentAnchor development and deployment"
+  active_projects:
+    - name: AgentAnchor AI
+      entity: S_A
+      status: active_development
+      priority: high
+
+  infrastructure_status:
+    bai:
+      healthy: null
+      issues: []
+    S_A:
+      healthy: null
+      issues:
+        - "Vercel deployment protection needs configuration"
+
+  schedule:
+    current_sprint: null
+    upcoming_deadlines: []
+    blocked_time: []
+
+  agent_ecosystem:
+    registered_agents: 4  # The pioneer bots themselves
+    external_agents: 0
+    health_status: initializing
+
+# Standard Operating Procedures (SOPs)
+# Built up over time as patterns emerge
+sops:
+  established: []
+  proposed: []
+  # Format:
+  # - name: deployment-notification
+  #   trigger: "Dilly completes deployment"
+  #   action: "Aria notifies relevant app agents"
+  #   status: proposed
+  #   added: 2025-11-30
+
+# Pioneer Bot learnings for AgentAnchor development
+pioneer_log:
+  observations: []
+  suggestions: []
+  # Format:
+  # - date: 2025-11-30
+  #   agent: dilly
+  #   observation: "Git author issues blocked Vercel deployment"
+  #   suggestion: "Add git author validation to pre-deploy checklist"
