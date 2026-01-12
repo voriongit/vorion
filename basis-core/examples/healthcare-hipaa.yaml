@@ -1,0 +1,248 @@
+# BASIS Policy Bundle Example
+# Healthcare HIPAA Compliance
+#
+# This policy enforces HIPAA-aligned controls for AI agents
+# operating in healthcare contexts with PHI access.
+
+basis_version: "1.0"
+policy_id: "healthcare-hipaa"
+
+metadata:
+  name: "Healthcare HIPAA Compliance"
+  description: |
+    HIPAA-aligned policy for AI agents with access to Protected Health
+    Information (PHI). Enforces minimum necessary access, audit logging,
+    and human oversight for clinical decisions.
+  version: "1.0.0"
+  created_at: "2026-01-08T00:00:00Z"
+  author: "Vorion Compliance Team"
+  organization: "Vorion"
+  tags:
+    - healthcare
+    - hipaa
+    - phi
+    - compliance
+    - production
+  jurisdiction:
+    - US
+
+trust_requirements:
+  minimum_level: 3
+  minimum_score: 600
+  required_attestations:
+    - identity_verified
+    - hipaa_trained
+    - background_checked
+
+constraints:
+  # PHI Protection
+  - id: protect-phi-medical
+    type: data_protection
+    action: redact
+    severity: critical
+    named_pattern: phi_medical
+    message: "Medical records must be redacted unless explicitly authorized"
+
+  # Patient Identifiers
+  - id: protect-patient-name
+    type: data_protection
+    action: mask
+    severity: critical
+    named_pattern: pii_name
+    scope:
+      namespaces:
+        - "patient_records"
+    message: "Patient names must be masked"
+
+  - id: protect-dob
+    type: data_protection
+    action: redact
+    severity: critical
+    named_pattern: pii_dob
+    message: "Dates of birth must be redacted"
+
+  - id: protect-ssn
+    type: data_protection
+    action: redact
+    severity: critical
+    named_pattern: ssn_us
+    message: "Social Security Numbers must be redacted"
+
+  # Network Controls
+  - id: egress-healthcare-only
+    type: egress_whitelist
+    action: block
+    severity: critical
+    values:
+      - "*.ehr-system.internal"
+      - "api.pharmacy-network.com"
+      - "fhir.healthsystem.org"
+    message: "Connections restricted to approved healthcare systems"
+
+  # No External AI Processing
+  - id: no-external-llm
+    type: egress_blacklist
+    action: block
+    severity: critical
+    values:
+      - "*.openai.com"
+      - "*.anthropic.com"
+      - "*.google.com"
+    message: "PHI must not be sent to external AI services"
+
+  # Tool Restrictions
+  - id: tool-restrictions
+    type: tool_restriction
+    action: block
+    severity: critical
+    values:
+      - "shell_execute"
+      - "file_write_external"
+      - "email_external"
+      - "data_export"
+    message: "Restricted tools not permitted with PHI access"
+
+  # Rate Limiting for Record Access
+  - id: record-access-rate
+    type: rate_limit
+    action: warn
+    severity: high
+    threshold:
+      value: 50
+      unit: requests
+      window: "1h"
+    scope:
+      namespaces:
+        - "patient_records"
+    message: "Unusual volume of patient record access detected"
+
+obligations:
+  # Clinical Decision Support
+  - id: clinical-decision-review
+    trigger:
+      field: "action_type"
+      operator: "eq"
+      value: "clinical_recommendation"
+    action: require_human_approval
+    parameters:
+      approvers:
+        - "treating_physician"
+        - "clinical_supervisor"
+      timeout: "24h"
+    priority: 100
+    message: "Clinical recommendations require physician review"
+
+  # Medication Prescribing
+  - id: medication-approval
+    trigger:
+      field: "action_type"
+      operator: "eq"
+      value: "medication_order"
+    action: require_human_approval
+    parameters:
+      approvers:
+        - "treating_physician"
+      timeout: "4h"
+    priority: 100
+    message: "Medication orders require physician approval"
+
+  # All PHI Access Auditing
+  - id: phi-access-audit
+    trigger:
+      field: "data_classification"
+      operator: "eq"
+      value: "phi"
+    action: audit_log
+    parameters:
+      audit_level: forensic
+    priority: 90
+    message: "All PHI access must be logged with full detail"
+
+  # Bulk Record Access
+  - id: bulk-access-escalation
+    trigger:
+      field: "record_count"
+      operator: "gt"
+      value: 10
+    action: escalate
+    parameters:
+      timeout: "30m"
+    priority: 85
+    message: "Bulk record access requires supervisory review"
+
+  # After Hours Access
+  - id: after-hours-clinical
+    trigger:
+      field: "request_time_hour"
+      operator: "not_in"
+      value: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+    action: notify
+    parameters:
+      channels:
+        - "pagerduty"
+    priority: 70
+    message: "After-hours PHI access - notifying compliance"
+
+permissions:
+  # Read-Only Patient Data
+  - id: patient-data-read
+    type: data_access
+    values:
+      - "patient_demographics"
+      - "appointment_history"
+      - "lab_results"
+    trust_level_required: 3
+    conditions:
+      - field: "purpose"
+        operator: "in"
+        value: ["treatment", "care_coordination"]
+
+  # Clinical Tools
+  - id: clinical-tools
+    type: tool_access
+    values:
+      - "ehr_query"
+      - "lab_lookup"
+      - "medication_reference"
+      - "clinical_guidelines"
+    trust_level_required: 3
+
+  # Care Team Notifications
+  - id: care-notifications
+    type: capability
+    values:
+      - "notify_care_team"
+      - "schedule_followup"
+    trust_level_required: 3
+
+escalation:
+  default_timeout: "1h"
+  levels:
+    - level: 1
+      contacts:
+        - "charge_nurse"
+      timeout: "15m"
+      channels:
+        - slack
+    - level: 2
+      contacts:
+        - "department_supervisor"
+        - "hipaa_officer"
+      timeout: "30m"
+      channels:
+        - slack
+        - email
+    - level: 3
+      contacts:
+        - "chief_compliance_officer"
+        - "legal"
+      timeout: "1h"
+      channels:
+        - pagerduty
+        - email
+  fallback_action: block
+
+inheritance:
+  extends:
+    - "base-pii-protection"
+  override_mode: strict

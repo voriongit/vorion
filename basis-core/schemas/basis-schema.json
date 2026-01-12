@@ -1,0 +1,522 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://basis.vorion.org/schemas/v1/policy-bundle.json",
+  "title": "BASIS Policy Bundle",
+  "description": "A machine-readable governance artifact defining operational boundaries for autonomous agents under the BASIS standard.",
+  "type": "object",
+  "required": ["basis_version", "policy_id", "metadata"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Reference to the BASIS schema version"
+    },
+    "basis_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "The BASIS specification version this bundle conforms to",
+      "examples": ["1.0", "1.1"]
+    },
+    "policy_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+      "minLength": 3,
+      "maxLength": 64,
+      "description": "Unique identifier for this policy bundle (lowercase, hyphenated)",
+      "examples": ["corp-finance-limited", "healthcare-hipaa-strict"]
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "trust_requirements": {
+      "$ref": "#/$defs/TrustRequirements"
+    },
+    "constraints": {
+      "type": "array",
+      "description": "Rules that BLOCK or LIMIT agent actions",
+      "items": {
+        "$ref": "#/$defs/Constraint"
+      },
+      "default": []
+    },
+    "obligations": {
+      "type": "array",
+      "description": "Rules that REQUIRE specific actions under certain conditions",
+      "items": {
+        "$ref": "#/$defs/Obligation"
+      },
+      "default": []
+    },
+    "permissions": {
+      "type": "array",
+      "description": "Rules that explicitly ALLOW actions (whitelist)",
+      "items": {
+        "$ref": "#/$defs/Permission"
+      },
+      "default": []
+    },
+    "escalation": {
+      "$ref": "#/$defs/EscalationPolicy"
+    },
+    "inheritance": {
+      "$ref": "#/$defs/InheritanceConfig"
+    }
+  },
+  "$defs": {
+    "Metadata": {
+      "type": "object",
+      "required": ["name", "version", "created_at"],
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Human-readable name for this policy",
+          "examples": ["Corporate Finance - Limited Access"]
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1024,
+          "description": "Detailed description of the policy's purpose and scope"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9]+)?$",
+          "description": "Semantic version of this policy bundle",
+          "examples": ["1.0.0", "2.1.0-beta"]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when this policy was created"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of last modification"
+        },
+        "author": {
+          "type": "string",
+          "description": "Entity or person who authored this policy"
+        },
+        "organization": {
+          "type": "string",
+          "description": "Organization this policy belongs to"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "uniqueItems": true,
+          "description": "Categorization tags for discovery and filtering",
+          "examples": [["finance", "pci-dss", "production"]]
+        },
+        "jurisdiction": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}(-[A-Z0-9]+)?$"
+          },
+          "description": "ISO 3166 country/region codes where this policy applies",
+          "examples": [["US", "EU", "US-CA"]]
+        }
+      }
+    },
+    "TrustRequirements": {
+      "type": "object",
+      "description": "Minimum trust level requirements for policy application",
+      "additionalProperties": false,
+      "properties": {
+        "minimum_level": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4,
+          "description": "Minimum trust level (L0-L4) required to operate under this policy"
+        },
+        "minimum_score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Minimum trust score (0-1000) required"
+        },
+        "required_attestations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of attestation types the agent must possess",
+          "examples": [["identity_verified", "org_approved", "compliance_trained"]]
+        }
+      }
+    },
+    "Constraint": {
+      "type": "object",
+      "required": ["type", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Unique identifier for this constraint within the bundle"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "egress_whitelist",
+            "egress_blacklist",
+            "ingress_whitelist",
+            "ingress_blacklist",
+            "data_protection",
+            "tool_restriction",
+            "resource_limit",
+            "time_window",
+            "rate_limit",
+            "content_filter",
+            "scope_boundary",
+            "custom"
+          ],
+          "description": "The category of constraint"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["block", "redact", "mask", "truncate", "warn", "log"],
+          "description": "Action to take when constraint is violated"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"],
+          "default": "medium",
+          "description": "Severity level of this constraint"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of values for list-based constraints (domains, tools, etc.)"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern or named pattern identifier for matching"
+        },
+        "named_pattern": {
+          "type": "string",
+          "enum": [
+            "ssn_us",
+            "ssn_uk",
+            "credit_card",
+            "email",
+            "phone_us",
+            "phone_intl",
+            "ip_address",
+            "api_key",
+            "jwt_token",
+            "password",
+            "pii_name",
+            "pii_address",
+            "pii_dob",
+            "phi_medical",
+            "financial_account"
+          ],
+          "description": "Pre-defined pattern identifier for common sensitive data types"
+        },
+        "threshold": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "description": "Numeric threshold value"
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["count", "bytes", "kb", "mb", "gb", "ms", "seconds", "minutes", "hours", "requests", "tokens"],
+              "description": "Unit of measurement for the threshold"
+            },
+            "window": {
+              "type": "string",
+              "pattern": "^[0-9]+[smhd]$",
+              "description": "Time window for rate-based thresholds (e.g., '1h', '30m')"
+            }
+          }
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "namespaces": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Namespaces this constraint applies to"
+            },
+            "tools": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Specific tools this constraint applies to"
+            },
+            "trust_levels": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4
+              },
+              "description": "Trust levels this constraint applies to"
+            }
+          },
+          "description": "Scope limiters for when this constraint applies"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable message when constraint is triggered"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this constraint is active"
+        }
+      }
+    },
+    "Obligation": {
+      "type": "object",
+      "required": ["trigger", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Unique identifier for this obligation"
+        },
+        "trigger": {
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Simple expression trigger (e.g., 'transaction_value > 1000')"
+            },
+            {
+              "$ref": "#/$defs/TriggerCondition"
+            }
+          ],
+          "description": "Condition that activates this obligation"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "require_human_approval",
+            "require_mfa",
+            "require_attestation",
+            "notify",
+            "audit_log",
+            "escalate",
+            "delay",
+            "checkpoint",
+            "custom"
+          ],
+          "description": "Required action when trigger condition is met"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Action-specific parameters",
+          "properties": {
+            "approvers": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "List of approver identifiers for approval actions"
+            },
+            "timeout": {
+              "type": "string",
+              "pattern": "^[0-9]+[smhd]$",
+              "description": "Timeout duration for time-sensitive obligations"
+            },
+            "channels": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Notification channels for notify actions"
+            },
+            "audit_level": {
+              "type": "string",
+              "enum": ["minimal", "standard", "detailed", "forensic"],
+              "description": "Level of detail for audit logging"
+            },
+            "delay_duration": {
+              "type": "string",
+              "pattern": "^[0-9]+[smh]$",
+              "description": "Delay duration before action proceeds"
+            },
+            "custom_handler": {
+              "type": "string",
+              "description": "Identifier for custom obligation handler"
+            }
+          }
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 50,
+          "description": "Priority when multiple obligations trigger (higher = more important)"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable description of this obligation"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "TriggerCondition": {
+      "type": "object",
+      "required": ["field", "operator", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "The field/property to evaluate"
+        },
+        "operator": {
+          "type": "string",
+          "enum": ["eq", "neq", "gt", "gte", "lt", "lte", "contains", "not_contains", "matches", "in", "not_in"],
+          "description": "Comparison operator"
+        },
+        "value": {
+          "description": "Value to compare against"
+        },
+        "and": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TriggerCondition" },
+          "description": "Additional conditions that must ALL be true"
+        },
+        "or": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TriggerCondition" },
+          "description": "Alternative conditions where ANY can be true"
+        }
+      }
+    },
+    "Permission": {
+      "type": "object",
+      "required": ["type", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "tool_access",
+            "endpoint_access",
+            "data_access",
+            "resource_access",
+            "namespace_access",
+            "capability"
+          ],
+          "description": "Type of permission being granted"
+        },
+        "values": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Specific resources/capabilities being permitted"
+        },
+        "conditions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TriggerCondition" },
+          "description": "Conditions that must be met for permission to apply"
+        },
+        "trust_level_required": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4,
+          "description": "Minimum trust level required for this permission"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this permission expires (if temporary)"
+        },
+        "message": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "EscalationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default_timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+[smhd]$",
+          "default": "1h",
+          "description": "Default timeout before escalation"
+        },
+        "levels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["level", "contacts"],
+            "properties": {
+              "level": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Escalation level (1 = first, higher = more senior)"
+              },
+              "contacts": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Contact identifiers for this escalation level"
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^[0-9]+[smhd]$",
+                "description": "Time before escalating to next level"
+              },
+              "channels": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["email", "sms", "slack", "pagerduty", "webhook"]
+                }
+              }
+            }
+          }
+        },
+        "fallback_action": {
+          "type": "string",
+          "enum": ["block", "allow_with_audit", "queue"],
+          "default": "block",
+          "description": "Action if all escalation levels timeout"
+        }
+      }
+    },
+    "InheritanceConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "extends": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Policy IDs this bundle inherits from (applied in order)"
+        },
+        "override_mode": {
+          "type": "string",
+          "enum": ["merge", "replace", "strict"],
+          "default": "merge",
+          "description": "How inherited rules are combined with local rules"
+        }
+      }
+    }
+  }
+}

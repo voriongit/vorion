@@ -1,0 +1,217 @@
+# BASIS Policy Bundle Example
+# Corporate Finance - Limited Access
+#
+# This policy restricts AI agents operating in financial contexts to:
+# - Approved internal APIs and payment processors only
+# - Mandatory human approval for high-value transactions
+# - Automatic PII redaction for compliance
+
+basis_version: "1.0"
+policy_id: "corp-finance-limited"
+
+metadata:
+  name: "Corporate Finance - Limited Access"
+  description: |
+    Restrictive policy for AI agents handling financial operations.
+    Enforces egress controls, PII protection, and human-in-the-loop
+    for transactions exceeding threshold values.
+  version: "1.0.0"
+  created_at: "2026-01-08T00:00:00Z"
+  author: "Vorion Security Team"
+  organization: "Vorion"
+  tags:
+    - finance
+    - pci-dss
+    - production
+    - high-security
+  jurisdiction:
+    - US
+    - EU
+
+trust_requirements:
+  minimum_level: 2
+  minimum_score: 400
+  required_attestations:
+    - identity_verified
+    - compliance_trained
+
+constraints:
+  # Network Egress Control
+  - id: egress-whitelist
+    type: egress_whitelist
+    action: block
+    severity: critical
+    values:
+      - "*.internal-api.company.com"
+      - "api.stripe.com"
+      - "api.plaid.com"
+    message: "Outbound connections restricted to approved financial APIs only"
+
+  # PII Protection - SSN
+  - id: protect-ssn
+    type: data_protection
+    action: redact
+    severity: critical
+    named_pattern: ssn_us
+    message: "US Social Security Numbers must be redacted"
+
+  # PII Protection - Credit Cards
+  - id: protect-credit-card
+    type: data_protection
+    action: mask
+    severity: critical
+    named_pattern: credit_card
+    message: "Credit card numbers must be masked (show last 4 only)"
+
+  # API Key Protection
+  - id: protect-api-keys
+    type: data_protection
+    action: block
+    severity: critical
+    named_pattern: api_key
+    message: "API keys must never be exposed in outputs"
+
+  # Rate Limiting
+  - id: api-rate-limit
+    type: rate_limit
+    action: block
+    severity: high
+    threshold:
+      value: 100
+      unit: requests
+      window: "1m"
+    message: "API request rate exceeded - possible runaway loop"
+
+  # Resource Limits
+  - id: memory-limit
+    type: resource_limit
+    action: block
+    severity: high
+    threshold:
+      value: 512
+      unit: mb
+    message: "Memory usage exceeded allocation"
+
+  # Tool Restrictions
+  - id: tool-restrictions
+    type: tool_restriction
+    action: block
+    severity: high
+    values:
+      - "shell_execute"
+      - "file_write"
+      - "network_raw"
+    message: "Dangerous tools are prohibited in finance context"
+
+obligations:
+  # High-Value Transaction Approval
+  - id: high-value-approval
+    trigger:
+      field: "transaction_value"
+      operator: "gt"
+      value: 10000
+    action: require_human_approval
+    parameters:
+      approvers:
+        - "finance-manager"
+        - "treasury-team"
+      timeout: "4h"
+    priority: 90
+    message: "Transactions over $10,000 require human approval"
+
+  # Medium-Value Transaction Logging
+  - id: medium-value-audit
+    trigger:
+      field: "transaction_value"
+      operator: "gt"
+      value: 1000
+      and:
+        - field: "transaction_value"
+          operator: "lte"
+          value: 10000
+    action: audit_log
+    parameters:
+      audit_level: detailed
+    priority: 50
+    message: "Transactions $1,000-$10,000 require detailed audit logging"
+
+  # Wire Transfer Escalation
+  - id: wire-transfer-approval
+    trigger:
+      field: "transaction_type"
+      operator: "eq"
+      value: "wire_transfer"
+    action: require_human_approval
+    parameters:
+      approvers:
+        - "treasury-team"
+      timeout: "2h"
+    priority: 95
+    message: "All wire transfers require treasury approval"
+
+  # After-Hours Notification
+  - id: after-hours-notify
+    trigger:
+      field: "request_time_hour"
+      operator: "not_in"
+      value: [9, 10, 11, 12, 13, 14, 15, 16, 17]
+    action: notify
+    parameters:
+      channels:
+        - "slack"
+        - "email"
+    priority: 60
+    message: "After-hours financial operation - notifying on-call team"
+
+permissions:
+  # Approved Tools
+  - id: permitted-tools
+    type: tool_access
+    values:
+      - "api_call"
+      - "data_query"
+      - "report_generate"
+      - "email_send"
+    trust_level_required: 2
+
+  # Approved Endpoints
+  - id: permitted-endpoints
+    type: endpoint_access
+    values:
+      - "/api/v1/transactions/*"
+      - "/api/v1/accounts/read"
+      - "/api/v1/reports/*"
+    trust_level_required: 2
+
+  # Elevated Access for L3+
+  - id: elevated-access
+    type: capability
+    values:
+      - "bulk_operations"
+      - "historical_data_export"
+    trust_level_required: 3
+
+escalation:
+  default_timeout: "2h"
+  levels:
+    - level: 1
+      contacts:
+        - "finance-team-lead"
+      timeout: "30m"
+      channels:
+        - slack
+    - level: 2
+      contacts:
+        - "finance-manager"
+      timeout: "1h"
+      channels:
+        - slack
+        - email
+    - level: 3
+      contacts:
+        - "cfo-office"
+      timeout: "2h"
+      channels:
+        - email
+        - pagerduty
+  fallback_action: block
