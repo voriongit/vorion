@@ -10,9 +10,9 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.9",
+    "@ai-sdk/anthropic": "^3.0.11",
     "@ai-sdk/google": "^3.0.6",
-    "ai": "^6.0.23",
+    "ai": "^6.0.29",
     "clsx": "^2.1.1",
     "firebase": "^12.7.0",
     "gray-matter": "^4.0.3",
