@@ -99,7 +99,7 @@ jobs:
         run: npx turbo build --filter="./packages/*"
 
       - name: Upload package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: packages-dist
           path: packages/*/dist
