@@ -1,0 +1,215 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Is this a prerelease?'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  NODE_VERSION: '20'
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate version format
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "Invalid version format: $version"
+            exit 1
+          fi
+          echo "Version $version is valid"
+
+  build:
+    name: Build All
+    runs-on: ubuntu-latest
+    needs: [validate]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Cache Turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build all packages
+        run: npx turbo build --filter="./packages/*"
+
+      - name: Run all tests
+        run: npx turbo test --filter="./packages/*"
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-dist
+          path: packages/*/dist
+          retention-days: 7
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate, build]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            COMMITS=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMITS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.validate.outputs.version }}
+          name: Release v${{ needs.validate.outputs.version }}
+          body: |
+            ## What's Changed
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## Packages
+
+            - @vorion/contracts
+            - @vorion/proof-plane
+            - @vorion/a3i
+
+            ## Apps
+
+            - AgentAnchor (app.agentanchorai.com)
+            - AgentAnchor WWW (agentanchorai.com)
+            - Omniscience (learn.vorion.org)
+            - Omniscience Docs (docs.omniscience.vorion.org)
+            - Vorion WWW (vorion.org)
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          generate_release_notes: true
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [validate, build, create-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - name: agentanchor
+            path: apps/agentanchor
+            project_id_secret: VERCEL_AGENTANCHOR_PROJECT_ID
+          - name: agentanchor-www
+            path: apps/agentanchor-www
+            project_id_secret: VERCEL_AGENTANCHOR_WWW_PROJECT_ID
+          - name: omniscience
+            path: omniscience
+            project_id_secret: VERCEL_OMNISCIENCE_PROJECT_ID
+          - name: omniscience-docs
+            path: omniscience-docs
+            project_id_secret: VERCEL_OMNISCIENCE_DOCS_PROJECT_ID
+          - name: vorion-www
+            path: vorion-www
+            project_id_secret: VERCEL_VORION_WWW_PROJECT_ID
+    environment:
+      name: ${{ matrix.app.name }}-production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-dist
+          path: packages
+        continue-on-error: true
+
+      - name: Deploy to Production
+        run: |
+          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: ${{ matrix.app.path }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets[matrix.app.project_id_secret] }}
+
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [validate, deploy-production]
+    if: always()
+    steps:
+      - name: Notify on success
+        if: needs.deploy-production.result == 'success'
+        run: |
+          echo "Release v${{ needs.validate.outputs.version }} deployed successfully!"
+          # Add Slack/Discord notification here if needed
+
+      - name: Notify on failure
+        if: needs.deploy-production.result == 'failure'
+        run: |
+          echo "Release v${{ needs.validate.outputs.version }} deployment failed!"
+          exit 1

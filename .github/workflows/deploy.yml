@@ -1,0 +1,360 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'App to deploy'
+        required: true
+        type: choice
+        options:
+          - all
+          - agentanchor
+          - agentanchor-www
+          - omniscience
+          - omniscience-docs
+          - vorion-www
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        default: 'production'
+        options:
+          - preview
+          - production
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      agentanchor: ${{ steps.filter.outputs.agentanchor }}
+      agentanchor-www: ${{ steps.filter.outputs.agentanchor-www }}
+      omniscience: ${{ steps.filter.outputs.omniscience }}
+      omniscience-docs: ${{ steps.filter.outputs.omniscience-docs }}
+      vorion-www: ${{ steps.filter.outputs.vorion-www }}
+      packages: ${{ steps.filter.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            agentanchor:
+              - 'apps/agentanchor/**'
+              - 'packages/**'
+            agentanchor-www:
+              - 'apps/agentanchor-www/**'
+            omniscience:
+              - 'omniscience/**'
+              - 'packages/**'
+            omniscience-docs:
+              - 'omniscience-docs/**'
+            vorion-www:
+              - 'vorion-www/**'
+            packages:
+              - 'packages/**'
+
+  build-packages:
+    name: Build Packages
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.packages == 'true' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Cache Turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build packages
+        run: npx turbo build --filter="./packages/*"
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-dist
+          path: packages/*/dist
+          retention-days: 1
+
+  deploy-agentanchor:
+    name: Deploy AgentAnchor
+    runs-on: ubuntu-latest
+    needs: [changes, build-packages]
+    if: |
+      always() &&
+      (needs.changes.outputs.agentanchor == 'true' ||
+       github.event.inputs.app == 'agentanchor' ||
+       github.event.inputs.app == 'all')
+    environment:
+      name: agentanchor-${{ github.event.inputs.environment || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-dist
+          path: packages
+        continue-on-error: true
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=${{ github.event.inputs.environment || 'production' }} --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/agentanchor
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_AGENTANCHOR_PROJECT_ID }}
+
+      - name: Build with Vercel
+        run: vercel build ${{ github.event.inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/agentanchor
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_AGENTANCHOR_PROJECT_ID }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt ${{ github.event.inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+        working-directory: apps/agentanchor
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_AGENTANCHOR_PROJECT_ID }}
+
+  deploy-agentanchor-www:
+    name: Deploy AgentAnchor WWW
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.outputs.agentanchor-www == 'true' ||
+       github.event.inputs.app == 'agentanchor-www' ||
+       github.event.inputs.app == 'all')
+    environment:
+      name: agentanchor-www-${{ github.event.inputs.environment || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=${{ github.event.inputs.environment || 'production' }} --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/agentanchor-www
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_AGENTANCHOR_WWW_PROJECT_ID }}
+
+      - name: Build with Vercel
+        run: vercel build ${{ github.event.inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/agentanchor-www
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_AGENTANCHOR_WWW_PROJECT_ID }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt ${{ github.event.inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+        working-directory: apps/agentanchor-www
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_AGENTANCHOR_WWW_PROJECT_ID }}
+
+  deploy-omniscience:
+    name: Deploy Omniscience
+    runs-on: ubuntu-latest
+    needs: [changes, build-packages]
+    if: |
+      always() &&
+      (needs.changes.outputs.omniscience == 'true' ||
+       github.event.inputs.app == 'omniscience' ||
+       github.event.inputs.app == 'all')
+    environment:
+      name: omniscience-${{ github.event.inputs.environment || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-dist
+          path: packages
+        continue-on-error: true
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=${{ github.event.inputs.environment || 'production' }} --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: omniscience
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_OMNISCIENCE_PROJECT_ID }}
+
+      - name: Build with Vercel
+        run: vercel build ${{ github.event.inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: omniscience
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_OMNISCIENCE_PROJECT_ID }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt ${{ github.event.inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+        working-directory: omniscience
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_OMNISCIENCE_PROJECT_ID }}
+
+  deploy-omniscience-docs:
+    name: Deploy Omniscience Docs
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.outputs.omniscience-docs == 'true' ||
+       github.event.inputs.app == 'omniscience-docs' ||
+       github.event.inputs.app == 'all')
+    environment:
+      name: omniscience-docs-${{ github.event.inputs.environment || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=${{ github.event.inputs.environment || 'production' }} --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: omniscience-docs
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_OMNISCIENCE_DOCS_PROJECT_ID }}
+
+      - name: Build with Vercel
+        run: vercel build ${{ github.event.inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: omniscience-docs
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_OMNISCIENCE_DOCS_PROJECT_ID }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt ${{ github.event.inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+        working-directory: omniscience-docs
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_OMNISCIENCE_DOCS_PROJECT_ID }}
+
+  deploy-vorion-www:
+    name: Deploy Vorion WWW
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.outputs.vorion-www == 'true' ||
+       github.event.inputs.app == 'vorion-www' ||
+       github.event.inputs.app == 'all')
+    environment:
+      name: vorion-www-${{ github.event.inputs.environment || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=${{ github.event.inputs.environment || 'production' }} --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: vorion-www
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_VORION_WWW_PROJECT_ID }}
+
+      - name: Build with Vercel
+        run: vercel build ${{ github.event.inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: vorion-www
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_VORION_WWW_PROJECT_ID }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt ${{ github.event.inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+        working-directory: vorion-www
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_VORION_WWW_PROJECT_ID }}
