@@ -1,0 +1,109 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atsf"
+version = "3.4.0"
+description = "Agentic Trust Scoring Framework - AI agent safety and governance"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "ATSF Development Team", email = "team@agentanchor.ai"}
+]
+maintainers = [
+    {name = "ATSF Development Team", email = "team@agentanchor.ai"}
+]
+keywords = [
+    "ai-safety",
+    "trust-scoring",
+    "agent-governance",
+    "ai-trism",
+    "stpa",
+    "security",
+    "llm",
+    "agents"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "python-multipart>=0.0.6",
+]
+
+[project.optional-dependencies]
+ml = [
+    "sentence-transformers>=2.2.0",
+    "numpy>=1.24.0",
+]
+full = [
+    "sentence-transformers>=2.2.0",
+    "numpy>=1.24.0",
+    "pyyaml>=6.0",
+    "prometheus-client>=0.17.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.0.280",
+    "mypy>=1.4.0",
+]
+
+[project.scripts]
+atsf = "atsf.cli:main"
+atsf-server = "atsf.api:run_server"
+
+[project.urls]
+Homepage = "https://github.com/agentanchor/atsf"
+Documentation = "https://docs.agentanchor.ai/atsf"
+Repository = "https://github.com/agentanchor/atsf"
+Issues = "https://github.com/agentanchor/atsf/issues"
+Changelog = "https://github.com/agentanchor/atsf/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+atsf = ["py.typed", "*.yaml", "*.json"]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --cov=atsf --cov-report=term-missing"

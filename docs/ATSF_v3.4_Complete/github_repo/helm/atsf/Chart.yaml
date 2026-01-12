@@ -1,0 +1,29 @@
+apiVersion: v2
+name: atsf
+description: Agentic Trust Scoring Framework - Production-grade AI agent safety
+type: application
+version: 1.0.0
+appVersion: "3.4.0"
+
+keywords:
+  - ai
+  - trust
+  - safety
+  - agent
+  - llm
+  - governance
+
+home: https://github.com/agentanchor/atsf
+sources:
+  - https://github.com/agentanchor/atsf
+
+maintainers:
+  - name: AgentAnchor
+    email: ops@agentanchor.ai
+    url: https://agentanchor.ai
+
+dependencies:
+  - name: redis
+    version: "18.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

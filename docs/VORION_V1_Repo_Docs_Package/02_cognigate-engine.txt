@@ -1,0 +1,78 @@
+REPOSITORY: cognigate-engine
+VISIBILITY: Private
+OWNER: Joint (Vorion)
+PRIMARY WEBSITE SURFACE:
+- cognigate.dev (API docs, guides, sandbox — docs only)
+
+ROLE:
+cognigate-engine is the proprietary runtime that operationalizes BASIS.
+It contains the INTENT and ENFORCE services.
+
+This is the execution brain and enforcement gate.
+This is core IP.
+
+CONTENTS (CANONICAL):
+
+/README.md
+  - Architecture overview
+  - Runtime responsibilities
+
+/VERSION_PINNING.md
+  - Explicit pins to basis-core versions
+
+/contracts/
+  /openapi/
+    /intent.openapi.yaml
+    /enforce.openapi.yaml
+    /proof.openapi.yaml
+
+/intent/
+  /service/
+    - intent ingestion APIs
+    - normalization pipelines
+  /adapters/
+    - text, json, webhook adapters
+  /risk/
+    - uncertainty + risk surfacing (non-legal)
+
+/enforce/
+  /service/
+    - policy evaluation engine
+  /policy_resolution/
+    - conflict handling (most restrictive wins)
+  /approvals/
+    - human-in-the-loop workflows
+  /gates/
+    - execution allow/deny/escalate logic
+
+/runtime/
+  /connectors/
+    - execution adapters (infra, messaging, etc.)
+  /queue/
+    - durable task queues
+  /authz/
+    - tenant isolation + authorization
+  /residency/
+    - policy-driven region routing
+
+/observability/
+  /metrics/
+  /tracing/
+  /alerts/
+
+/ci/
+  /lint/
+  /unit/
+  /integration/
+  /security_scans/
+
+/docs-export/
+  /public_docs/
+    - generated docs pushed to cognigate.dev
+
+RULES:
+- No BASIS schemas are modified here
+- No audit artifacts are stored here
+- Enforcement decisions MUST be reproducible via PROOF
+
+END REPOSITORY DEFINITION

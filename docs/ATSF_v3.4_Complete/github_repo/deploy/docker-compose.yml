@@ -1,0 +1,220 @@
+# ATSF v3.2 Production Docker Compose
+# ====================================
+# 
+# Deploys complete ATSF system with all components:
+# - ATSF API Server
+# - PostgreSQL Database
+# - Redis Cache/Queue
+# - Nginx Reverse Proxy
+# - Prometheus Monitoring
+# - Grafana Dashboard
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose logs -f atsf-api
+#   docker-compose down
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # ATSF API Server
+  # ==========================================================================
+  atsf-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atsf-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ATSF_ENV=production
+      - ATSF_DEBUG=false
+      - ATSF_DATABASE_URL=postgresql://atsf:${DB_PASSWORD}@postgres:5432/atsf
+      - ATSF_REDIS_URL=redis://redis:6379/0
+      - ATSF_SECRET_KEY=${SECRET_KEY}
+      - ATSF_API_KEY_SALT=${API_KEY_SALT}
+      - ATSF_LOG_LEVEL=INFO
+      # Trust Configuration
+      - ATSF_TRUST_VELOCITY_CAP=0.1
+      - ATSF_TRUST_DECAY_RATE=0.001
+      - ATSF_HIGH_RISK_THRESHOLD=0.6
+      # Verification
+      - ATSF_MIN_VERIFIERS=3
+      - ATSF_CONSENSUS_THRESHOLD=0.67
+      # Human Oversight
+      - ATSF_APPROVAL_TIMEOUT_HOURS=4
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - atsf-network
+    labels:
+      - "prometheus.scrape=true"
+      - "prometheus.port=8000"
+      - "prometheus.path=/metrics"
+
+  # ==========================================================================
+  # PostgreSQL Database
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: atsf-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=atsf
+      - POSTGRES_USER=atsf
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atsf"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - atsf-network
+
+  # ==========================================================================
+  # Redis Cache/Queue
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: atsf-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - atsf-network
+
+  # ==========================================================================
+  # Nginx Reverse Proxy
+  # ==========================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: atsf-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - atsf-api
+    networks:
+      - atsf-network
+
+  # ==========================================================================
+  # Red Team Worker (Background Probing)
+  # ==========================================================================
+  atsf-redteam:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atsf-redteam
+    restart: unless-stopped
+    command: python -m atsf_redteam_worker
+    environment:
+      - ATSF_ENV=production
+      - ATSF_DATABASE_URL=postgresql://atsf:${DB_PASSWORD}@postgres:5432/atsf
+      - ATSF_REDIS_URL=redis://redis:6379/0
+      - ATSF_PROBE_INTERVAL_SECONDS=60
+    depends_on:
+      - postgres
+      - redis
+      - atsf-api
+    networks:
+      - atsf-network
+
+  # ==========================================================================
+  # Verifier Node (Example - deploy multiple in production)
+  # ==========================================================================
+  atsf-verifier:
+    build:
+      context: .
+      dockerfile: Dockerfile.verifier
+    container_name: atsf-verifier-1
+    restart: unless-stopped
+    environment:
+      - VERIFIER_ID=verifier-1
+      - VERIFIER_ENDPOINT=http://atsf-verifier:8001
+      - ATSF_API_URL=http://atsf-api:8000
+      - VERIFIER_STAKE=1000
+    ports:
+      - "8001:8001"
+    networks:
+      - atsf-network
+
+  # ==========================================================================
+  # Prometheus Monitoring
+  # ==========================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: atsf-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - atsf-network
+
+  # ==========================================================================
+  # Grafana Dashboard
+  # ==========================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: atsf-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - atsf-network
+
+# ==========================================================================
+# Networks
+# ==========================================================================
+networks:
+  atsf-network:
+    driver: bridge
+
+# ==========================================================================
+# Volumes
+# ==========================================================================
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:

@@ -1,0 +1,259 @@
+# ATSF - Agentic Trust Scoring Framework
+
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/version-3.3.0-green.svg)]()
+
+A comprehensive AI agent safety and governance framework with 46 security layers, AI TRiSM integration, and STPA-based control structures.
+
+## Features
+
+- **46 Security Layers** (L0-L42 + L43-L46)
+- **Trust Scoring** with velocity caps (per-action, per-hour, per-day)
+- **Creator Accountability** with economic staking and slashing
+- **AI TRiSM Integration** (Gartner framework - 4 pillars)
+- **STPA Control Structure** analysis
+- **HRO Culture Principles** integration
+- **Kill Switch** with configurable triggers
+- **Production REST API**
+
+## Installation
+
+```bash
+# Basic installation
+pip install atsf
+
+# With ML features (sentence-transformers for detection)
+pip install atsf[ml]
+
+# Full installation with all features
+pip install atsf[full]
+
+# Development installation
+pip install atsf[dev]
+```
+
+## Quick Start
+
+### Python API
+
+```python
+import asyncio
+from atsf import ATSFSystem, SafetyConfig
+
+async def main():
+    # Initialize with defaults
+    system = ATSFSystem()
+    
+    # Register a creator
+    system.register_creator("creator_001", "verified", stake=1000)
+    
+    # Register an agent
+    system.register_agent("agent_001", "creator_001", "gray_box")
+    
+    # Process an action
+    result = await system.process_action({
+        "request_id": "req_001",
+        "agent_id": "agent_001",
+        "action_type": "read",
+        "payload": {"target": "data.txt"},
+        "reasoning_trace": "Reading file to answer user's question about the data."
+    })
+    
+    print(f"Decision: {result['decision']}")
+    print(f"Risk Score: {result['risk_score']:.3f}")
+    print(f"Allowed: {result['allowed']}")
+
+asyncio.run(main())
+```
+
+### REST API Server
+
+```bash
+# Start the API server
+atsf-server --port 8000
+
+# Or with uvicorn directly
+uvicorn atsf.atsf_api:app --host 0.0.0.0 --port 8000
+```
+
+Then access:
+- API docs: http://localhost:8000/docs
+- Health check: http://localhost:8000/health
+- Metrics: http://localhost:8000/metrics
+
+### CLI
+
+```bash
+# Start server
+atsf start --port 8000
+
+# Check status
+atsf status
+
+# Register creator
+atsf creator register --id creator_001 --tier verified --stake 1000
+
+# Register agent
+atsf agent register --id agent_001 --creator creator_001 --tier gray_box
+
+# Run red team probes
+atsf probe --agent agent_001 --type all
+
+# Run CI/CD safety gate
+atsf gate --config ./agent.yaml --max-risk 0.3
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            ATSF v3.3 ARCHITECTURE                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    AI TRiSM GOVERNANCE LAYER                         │    │
+│  │  Explainability | AI Security | ModelOps | Data Privacy             │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    STPA CONTROL STRUCTURE                            │    │
+│  │  Human Oversight → Trust Engine → Verifiers → Agent                 │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    46 SECURITY LAYERS                                │    │
+│  │  L46: CI/CD Gate    L44: Reasoning Eval    L43: Tool Sanitization   │    │
+│  │  L30-42: Ecosystem  L20-29: Detection      L9-13: Frontier Safety   │    │
+│  │  L0-8: Core Trust                                                    │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    CREATOR ACCOUNTABILITY                            │    │
+│  │  Staking | Reputation | Slashing | Trust Ceiling Inheritance        │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/metrics` | GET | Prometheus metrics |
+| `/status` | GET | System status |
+| `/creators` | POST | Register creator |
+| `/creators/{id}` | GET | Get creator |
+| `/agents` | POST | Register agent |
+| `/agents/{id}` | GET | Get agent |
+| `/actions` | POST | Process action |
+| `/probes` | POST | Run red team probes |
+| `/gate` | POST | CI/CD safety gate |
+| `/trism/dashboard` | GET | TRiSM dashboard |
+| `/trism/stpa` | GET | STPA analysis |
+| `/appeals` | POST | File appeal |
+| `/explain/{id}` | GET | Decision explanation |
+
+## Configuration
+
+Environment variables:
+
+```bash
+# Trust scoring
+ATSF_TRUST_VELOCITY_CAP=0.1
+ATSF_TRUST_VELOCITY_HOUR=0.3
+ATSF_TRUST_VELOCITY_DAY=0.5
+ATSF_HIGH_RISK_THRESHOLD=0.6
+
+# Detection
+ATSF_INJECTION_BLOCK=0.7
+ATSF_ML_FALLBACK=true
+
+# Verification
+ATSF_MIN_VERIFIERS=3
+ATSF_CONSENSUS=0.67
+
+# Environment
+ATSF_ENV=production
+ATSF_LOG_LEVEL=INFO
+```
+
+Or use a config file:
+
+```yaml
+# atsf_config.yaml
+trust:
+  velocity_cap_per_action: 0.1
+  velocity_cap_per_hour: 0.3
+  velocity_cap_per_day: 0.5
+
+detection:
+  injection_block_threshold: 0.7
+  ml_fallback_enabled: true
+
+verification:
+  min_verifiers: 3
+  consensus_threshold: 0.67
+```
+
+## Kill Switch Triggers
+
+Default triggers that will halt all agent operations:
+
+| Trigger | Condition | Threshold |
+|---------|-----------|-----------|
+| High Risk Rate | >10% actions exceed risk threshold | 0.10 |
+| Injection Attack | Confirmed injection in 5 minutes | 1 |
+| Critical Drift | Critical metric drift detected | 1 |
+| Denial Spike | Action denial rate >50% | 0.50 |
+
+## Docker Deployment
+
+```bash
+# Build and run
+docker-compose up -d
+
+# View logs
+docker-compose logs -f atsf-api
+
+# Stop
+docker-compose down
+```
+
+## GitHub Actions Integration
+
+```yaml
+# .github/workflows/safety.yml
+name: Agent Safety Gate
+on: [push, pull_request]
+
+jobs:
+  safety-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: agentanchor/atsf-action@v3.3
+        with:
+          agent_config: ./agent.yaml
+          max_risk_score: 0.3
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `pytest`
+5. Submit a pull request
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Links
+
+- [Documentation](https://docs.agentanchor.ai/atsf)
+- [GitHub](https://github.com/agentanchor/atsf)
+- [Issues](https://github.com/agentanchor/atsf/issues)
+- [AgentAnchor](https://agentanchor.ai)

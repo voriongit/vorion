@@ -1,0 +1,109 @@
+# Example: ATSF Safety Gate in GitHub Actions
+# 
+# This workflow runs the ATSF safety gate on every PR that modifies agent code.
+# It blocks deployment if the agent fails safety checks.
+
+name: Agent Safety Check
+
+on:
+  pull_request:
+    paths:
+      - 'agents/**'
+      - 'models/**'
+      - 'config/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'agents/**'
+
+jobs:
+  safety-gate:
+    name: ATSF Safety Assessment
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run ATSF Safety Gate
+        id: atsf
+        uses: agentanchor/atsf-action@v3.2
+        with:
+          agent_config: './agents/my-agent/config.yaml'
+          creator_id: ${{ secrets.ATSF_CREATOR_ID }}
+          api_key: ${{ secrets.ATSF_API_KEY }}
+          
+          # Thresholds
+          max_risk_score: '0.3'
+          max_bias_score: '0.2'
+          min_reasoning_quality: 'basic'
+          
+          # Enable all checks
+          run_injection_scan: 'true'
+          run_bias_probes: 'true'
+          run_reasoning_eval: 'true'
+          
+          # Upload report for review
+          upload_report: 'true'
+      
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const passed = '${{ steps.atsf.outputs.passed }}' === 'true';
+            const riskScore = '${{ steps.atsf.outputs.risk_score }}';
+            const warnings = '${{ steps.atsf.outputs.warning_count }}';
+            const blocking = '${{ steps.atsf.outputs.blocking_count }}';
+            
+            const status = passed ? '✅ PASSED' : '❌ FAILED';
+            const emoji = passed ? '🛡️' : '⚠️';
+            
+            const body = `## ${emoji} ATSF Safety Gate ${status}
+
+            | Metric | Value |
+            |--------|-------|
+            | Risk Score | ${riskScore} |
+            | Warnings | ${warnings} |
+            | Blocking Issues | ${blocking} |
+
+            ${!passed ? '### Action Required\nPlease review the safety report artifact and address the blocking issues before merging.' : ''}
+
+            <details>
+            <summary>What is ATSF?</summary>
+
+            The Agentic Trust Scoring Framework (ATSF) is a comprehensive safety assessment system for AI agents. It evaluates:
+
+            - **Tool Output Injection** - Scans for malicious content in tool responses
+            - **Reasoning Quality** - Evaluates if the agent "thinks before acting"
+            - **Bias Detection** - Probes for hidden biases using benign framing
+            - **Creator Accountability** - Verifies creator reputation and stake
+
+            [Learn more about ATSF](https://github.com/agentanchor/atsf)
+
+            </details>
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  # Optional: Deploy only if safety gate passes
+  deploy:
+    name: Deploy Agent
+    needs: safety-gate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Deploy to Production
+        run: |
+          echo "Deploying agent to production..."
+          # Your deployment script here

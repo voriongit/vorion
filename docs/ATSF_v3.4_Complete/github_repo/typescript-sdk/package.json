@@ -1,0 +1,58 @@
+{
+  "name": "@agentanchor/atsf",
+  "version": "3.4.0",
+  "description": "TypeScript SDK for ATSF - Agentic Trust Scoring Framework",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "test": "vitest",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "atsf",
+    "ai",
+    "trust",
+    "safety",
+    "agent",
+    "llm",
+    "governance"
+  ],
+  "author": "AgentAnchor",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentanchor/atsf.git",
+    "directory": "typescript-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/agentanchor/atsf/issues"
+  },
+  "homepage": "https://github.com/agentanchor/atsf#readme",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

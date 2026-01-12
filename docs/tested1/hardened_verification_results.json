@@ -1,0 +1,96 @@
+{
+  "framework_version": "2.1.0-hardened",
+  "test_timestamp": "2026-01-07T01:54:09.834513",
+  "summary": {
+    "total_tests": 979,
+    "defended": 979,
+    "vulnerable": 0,
+    "defense_rate": 1.0,
+    "duration_seconds": 0.4053382873535156
+  },
+  "by_category": {
+    "Observation": {
+      "total": 50,
+      "defended": 50,
+      "vulnerable": 0
+    },
+    "Attestation": {
+      "total": 50,
+      "defended": 50,
+      "vulnerable": 0
+    },
+    "Governance": {
+      "total": 119,
+      "defended": 119,
+      "vulnerable": 0
+    },
+    "Circuit Breaker": {
+      "total": 25,
+      "defended": 25,
+      "vulnerable": 0
+    },
+    "Drift": {
+      "total": 26,
+      "defended": 26,
+      "vulnerable": 0
+    },
+    "Integrity": {
+      "total": 150,
+      "defended": 150,
+      "vulnerable": 0
+    },
+    "State Machine": {
+      "total": 108,
+      "defended": 108,
+      "vulnerable": 0
+    },
+    "Trust Gaming": {
+      "total": 100,
+      "defended": 100,
+      "vulnerable": 0
+    },
+    "Multi-Agent": {
+      "total": 100,
+      "defended": 100,
+      "vulnerable": 0
+    },
+    "Edge Cases": {
+      "total": 100,
+      "defended": 100,
+      "vulnerable": 0
+    },
+    "Concurrency": {
+      "total": 50,
+      "defended": 50,
+      "vulnerable": 0
+    },
+    "Boundaries": {
+      "total": 101,
+      "defended": 101,
+      "vulnerable": 0
+    }
+  },
+  "by_severity": {
+    "CRITICAL": {
+      "total": 90,
+      "defended": 90,
+      "vulnerable": 0
+    },
+    "HIGH": {
+      "total": 383,
+      "defended": 383,
+      "vulnerable": 0
+    },
+    "MEDIUM": {
+      "total": 305,
+      "defended": 305,
+      "vulnerable": 0
+    },
+    "LOW": {
+      "total": 201,
+      "defended": 201,
+      "vulnerable": 0
+    }
+  },
+  "vulnerabilities": []
+}

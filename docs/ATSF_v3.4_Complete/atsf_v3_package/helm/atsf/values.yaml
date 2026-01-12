@@ -1,0 +1,218 @@
+# ATSF Helm Chart Values
+# ======================
+
+# Number of replicas
+replicaCount: 2
+
+image:
+  repository: ghcr.io/agentanchor/atsf
+  pullPolicy: IfNotPresent
+  tag: "3.4.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Service account configuration
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+# Pod annotations and labels
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+  prometheus.io/path: "/metrics"
+
+podLabels:
+  app.kubernetes.io/component: api
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8000
+  annotations: {}
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: atsf.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: atsf-tls
+  #    hosts:
+  #      - atsf.local
+
+# Resource limits
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Volume configuration
+volumes: []
+volumeMounts: []
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - atsf
+          topologyKey: kubernetes.io/hostname
+
+# ATSF specific configuration
+atsf:
+  # API configuration
+  api:
+    host: "0.0.0.0"
+    port: 8000
+    workers: 4
+    logLevel: "info"
+  
+  # Trust configuration
+  trust:
+    defaultTier: "gray_box"
+    velocityCap: 0.05
+    decayRate: 0.001
+  
+  # Security configuration
+  security:
+    enableAllLayers: true
+    killSwitchEnabled: true
+    appealWindowHours: 24
+  
+  # Database configuration
+  database:
+    type: "sqlite"  # sqlite or postgres
+    sqlite:
+      path: "/data/atsf.db"
+    postgres:
+      host: ""
+      port: 5432
+      database: "atsf"
+      user: ""
+      passwordSecret: ""
+  
+  # Metrics configuration
+  metrics:
+    enabled: true
+    port: 8000
+    path: "/metrics"
+
+# Redis configuration (if using redis subchart)
+redis:
+  enabled: false
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 1Gi
+
+# Persistence configuration
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 5Gi
+  annotations: {}
+
+# ConfigMap for additional configuration
+configMap:
+  # Additional environment variables
+  extraEnv: {}
+
+# Secret for sensitive configuration
+secret:
+  # API key for authentication (if needed)
+  apiKey: ""
+  # Database password (if using external database)
+  databasePassword: ""
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Network Policy
+networkPolicy:
+  enabled: false
+  ingress:
+    - from:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - port: 8000
+
+# Service Monitor for Prometheus Operator
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}

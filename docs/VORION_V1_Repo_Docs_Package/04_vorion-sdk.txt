@@ -1,0 +1,51 @@
+REPOSITORY: vorion-sdk
+VISIBILITY: Public
+OWNER: Joint (Vorion)
+PRIMARY WEBSITE SURFACE:
+- cognigate.dev (SDK docs, examples, install guides)
+
+ROLE:
+vorion-sdk is the adoption layer.
+It lets developers integrate with Cognigate without knowing internals.
+
+CONTENTS (CANONICAL):
+
+/README.md
+  - SDK overview
+  - Supported runtimes
+
+/sdk-js/
+  /src/
+  /examples/
+  /README.md
+
+/sdk-python/
+  /src/
+  /examples/
+  /README.md
+
+/sdk-go/          # optional
+  /src/
+  /examples/
+  /README.md
+
+/examples/
+  /quickstart_intent_to_enforce/
+  /policy_bundle_apply/
+  /proof_export_demo/
+
+/cli/             # optional lightweight CLI
+  /src/
+  /README.md
+
+/docs/
+  /getting_started.md
+  /auth.md
+  /error_codes.md
+
+RULES:
+- SDKs expose stable contracts only
+- SDKs pin to published API versions
+- SDKs never bypass ENFORCE or PROOF
+
+END REPOSITORY DEFINITION

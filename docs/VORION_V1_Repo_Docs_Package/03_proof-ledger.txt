@@ -1,0 +1,68 @@
+REPOSITORY: proof-ledger
+VISIBILITY: Private
+OWNER: Joint (Vorion)
+PRIMARY WEBSITE SURFACE:
+- cognigate.dev (developer-facing proof APIs + dashboards)
+- vorion.org (high-level trust & audit narrative)
+
+ROLE:
+proof-ledger implements the PROOF layer.
+It is the immutable evidence system for everything that happens.
+
+This repo answers:
+“What actually happened, and can you prove it?”
+
+CONTENTS (CANONICAL):
+
+/README.md
+  - Proof model overview
+  - Audit philosophy
+
+/event-model/
+  /canonical_event_schema.json
+  /correlation_rules.md
+
+/storage/
+  /worm/
+    - write-once storage interfaces
+  /retention/
+    - retention + legal hold rules
+  /sealing/
+    - cryptographic sealing + signatures
+
+/replay/
+  /deterministic_replay_engine/
+    - reproduce decisions from stored artifacts
+
+/export/
+  /soc2/
+  /iso27001/
+  /nist80053/
+  /fedramp/
+  /gdpr_eu_ai_act/
+  /custom/
+
+/forensics/
+  /audit_pack_builder/
+    - acceptance packet generation
+  /verification_tools/
+    - verify seals + hashes
+
+/api/
+  /proof_ingest/
+  /proof_query/
+
+/dashboard-backend/
+  /admin_views/
+
+/ci/
+  /integrity_tests/
+  /tamper_tests/
+  /export_tests/
+
+RULES:
+- Proof artifacts are immutable once sealed
+- Internal proof schema NEVER changes
+- Only exporters adapt to external standards
+
+END REPOSITORY DEFINITION

@@ -1,0 +1,37 @@
+VORION V1 — REPOSITORY MAP (REPOS → WEBSITES)
+
+WEBSITES (PUBLIC ENTRY POINTS)
+- vorion.org        = Enterprise/Gov HQ + Trust + Stewardship
+- cognigate.dev     = Developer Hub + Docs + API + SDKs + Sandbox
+
+REPOSITORIES TO CREATE (GITHUB)
+
+1) basis-core  (PUBLIC)
+   PURPOSE:
+   - The BASIS standard itself (schemas, policy bundle formats, examples)
+   SURFACES ON:
+   - vorion.org  → “BASIS Standard” (overview + governance narrative)
+   - basis.vorion.org OR cognigate.dev/docs/basis → full developer-facing standard docs
+
+2) cognigate-engine  (PRIVATE)
+   PURPOSE:
+   - Operationalize BASIS (INTENT + ENFORCE runtime; IP)
+   SURFACES ON:
+   - cognigate.dev → API docs, quickstarts, sandbox (docs only; code stays private)
+   - vorion.org → high-level architecture descriptions (never source)
+
+3) proof-ledger  (PRIVATE)
+   PURPOSE:
+   - PROOF layer (immutable audit, deterministic replay, export tooling)
+   SURFACES ON:
+   - cognigate.dev → PROOF API + docs + developer dashboard docs
+   - vorion.org → Trust/Audit narrative + sanitized example acceptance packet
+
+4) vorion-sdk  (PUBLIC)
+   PURPOSE:
+   - Client SDKs (Python/JS/Go optional) + examples + optional CLI
+   SURFACES ON:
+   - cognigate.dev → SDK install guides, examples, code snippets
+   - vorion.org → “Developers” link routing to cognigate.dev
+
+END MAP

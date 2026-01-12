@@ -1,0 +1,407 @@
+# ATSF v3.0 - Kubernetes Deployment Manifests
+# =============================================
+#
+# Apply with: kubectl apply -f k8s/
+#
+# Prerequisites:
+# - Kubernetes 1.25+
+# - cert-manager (for TLS)
+# - ingress-nginx controller
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: atsf
+  labels:
+    app.kubernetes.io/name: atsf
+    app.kubernetes.io/version: "3.0.0"
+
+---
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atsf-config
+  namespace: atsf
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  API_WORKERS: "4"
+  METRICS_ENABLED: "true"
+  
+  # Trust Configuration
+  TRUST_CEILING_BLACK_BOX: "0.40"
+  TRUST_CEILING_GRAY_BOX: "0.55"
+  TRUST_CEILING_WHITE_BOX: "0.75"
+  TRUST_CEILING_ATTESTED: "0.90"
+  
+  # Velocity Caps
+  VELOCITY_CAP_PER_UPDATE: "0.10"
+  VELOCITY_CAP_PER_HOUR: "0.25"
+
+---
+# Secrets (use external secrets manager in production)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: atsf-secrets
+  namespace: atsf
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://atsf:CHANGE_ME@atsf-db:5432/atsf"
+  REDIS_URL: "redis://atsf-redis:6379/0"
+  JWT_SECRET: "CHANGE_ME_TO_LONG_RANDOM_STRING"
+
+---
+# API Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atsf-api
+  namespace: atsf
+  labels:
+    app: atsf-api
+    version: v3.0.0
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: atsf-api
+  template:
+    metadata:
+      labels:
+        app: atsf-api
+        version: v3.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: atsf-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: api
+          image: agentanchor/atsf-api:3.0.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: atsf-config
+            - secretRef:
+                name: atsf-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - atsf-api
+                topologyKey: kubernetes.io/hostname
+
+---
+# API Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: atsf-api
+  namespace: atsf
+  labels:
+    app: atsf-api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: atsf-api
+
+---
+# API HorizontalPodAutoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: atsf-api-hpa
+  namespace: atsf
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: atsf-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: atsf-api
+  namespace: atsf
+
+---
+# PostgreSQL StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: atsf-db
+  namespace: atsf
+spec:
+  serviceName: atsf-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: atsf-db
+  template:
+    metadata:
+      labels:
+        app: atsf-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: "atsf"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: atsf-secrets
+                  key: DB_PASSWORD
+            - name: POSTGRES_DB
+              value: "atsf"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - atsf
+            initialDelaySeconds: 30
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 10Gi
+
+---
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: atsf-db
+  namespace: atsf
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+  selector:
+    app: atsf-db
+
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atsf-redis
+  namespace: atsf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: atsf-redis
+  template:
+    metadata:
+      labels:
+        app: atsf-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: ["redis-server", "--appendonly", "yes"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: atsf-redis
+  namespace: atsf
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+  selector:
+    app: atsf-redis
+
+---
+# Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: atsf-ingress
+  namespace: atsf
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+    - hosts:
+        - atsf.example.com
+      secretName: atsf-tls
+  rules:
+    - host: atsf.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: atsf-api
+                port:
+                  number: 80
+
+---
+# NetworkPolicy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: atsf-network-policy
+  namespace: atsf
+spec:
+  podSelector:
+    matchLabels:
+      app: atsf-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: atsf-db
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app: atsf-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+---
+# PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: atsf-api-pdb
+  namespace: atsf
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: atsf-api

@@ -1,0 +1,68 @@
+REPOSITORY: basis-core
+VISIBILITY: Public
+OWNER: Joint (Vorion)
+PRIMARY WEBSITE SURFACE:
+- vorion.org (high-level standard overview)
+- basis.vorion.org OR cognigate.dev/docs/basis (full specification)
+
+ROLE:
+basis-core defines BASIS — the open, inspectable governance standard.
+This repository contains NO runtime logic, NO AI, and NO execution code.
+
+It defines:
+- what constraints look like
+- how policies are expressed
+- how proof artifacts are structured
+- how conformance is measured
+
+This repository is the “law,” not the “police.”
+
+CONTENTS (CANONICAL):
+
+/README.md
+  - What BASIS is
+  - Scope and non-goals
+  - Versioning rules
+
+/VERSIONING.md
+  - Semantic versioning rules
+  - Backward compatibility requirements
+
+/spec/
+  /basis-standard.md
+  /terminology.md
+  /conformance.md        # MUST / SHOULD / MAY language
+
+/schemas/
+  /basis.intent.schema.json
+  /basis.constraint.schema.json
+  /basis.policy_bundle.schema.json
+  /basis.proof.schema.json
+
+/policy-bundles/
+  /templates/
+    /jurisdiction.template.yaml
+    /industry.template.yaml
+    /organization.template.yaml
+    /contract.template.yaml
+  /examples/
+    /us_finance_example.yaml
+    /eu_privacy_example.yaml
+
+/compliance-maps/
+  /soc2_mapping.md
+  /iso27001_mapping.md
+  /nist80053_mapping.md
+  /fedramp_mapping.md
+  /gdpr_eu_ai_act_mapping.md
+
+/tests/
+  /schema_validation_tests/
+
+RULES:
+- This repo defines formats and requirements only
+- It NEVER interprets policy
+- It NEVER enforces policy
+- Any engine claiming BASIS compliance MUST conform to this repo
+
+END REPOSITORY DEFINITION

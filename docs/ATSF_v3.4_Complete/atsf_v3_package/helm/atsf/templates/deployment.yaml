@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "atsf.fullname" . }}
+  labels:
+    {{- include "atsf.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "atsf.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "atsf.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "atsf.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.atsf.api.port }}
+              protocol: TCP
+          env:
+            - name: ATSF_HOST
+              value: "{{ .Values.atsf.api.host }}"
+            - name: ATSF_PORT
+              value: "{{ .Values.atsf.api.port }}"
+            - name: ATSF_WORKERS
+              value: "{{ .Values.atsf.api.workers }}"
+            - name: ATSF_LOG_LEVEL
+              value: "{{ .Values.atsf.api.logLevel }}"
+            - name: ATSF_DEFAULT_TIER
+              value: "{{ .Values.atsf.trust.defaultTier }}"
+            - name: ATSF_VELOCITY_CAP
+              value: "{{ .Values.atsf.trust.velocityCap }}"
+            - name: ATSF_DECAY_RATE
+              value: "{{ .Values.atsf.trust.decayRate }}"
+            - name: ATSF_ENABLE_ALL_LAYERS
+              value: "{{ .Values.atsf.security.enableAllLayers }}"
+            - name: ATSF_KILL_SWITCH_ENABLED
+              value: "{{ .Values.atsf.security.killSwitchEnabled }}"
+            {{- if .Values.redis.enabled }}
+            - name: ATSF_REDIS_HOST
+              value: "{{ include "atsf.fullname" . }}-redis-master"
+            - name: ATSF_REDIS_PORT
+              value: "6379"
+            {{- end }}
+            {{- if .Values.persistence.enabled }}
+            - name: ATSF_DB_PATH
+              value: "{{ .Values.atsf.database.sqlite.path }}"
+            {{- end }}
+            {{- range $key, $value := .Values.configMap.extraEnv }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+          {{- if .Values.secret.apiKey }}
+          envFrom:
+            - secretRef:
+                name: {{ include "atsf.fullname" . }}-secret
+          {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: /data
+            {{- end }}
+            {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "atsf.fullname" . }}-data
+        {{- end }}
+        {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

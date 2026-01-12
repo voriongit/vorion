@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0a0a1a;
+  --foreground: #ffffff;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3730a3;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4f46e5;
+}
+
+/* Chat message animations */
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-enter {
+  animation: messageIn 0.3s ease-out;
+}
+
+/* Trust glow */
+.trust-glow {
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.2);
+}
+
+/* Typing indicator */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.typing-dot {
+  animation: blink 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Capability badges */
+.capability-badge {
+  @apply px-2 py-1 text-xs font-mono rounded;
+}
+
+.capability-allowed {
+  @apply bg-green-500/10 text-green-400 border border-green-500/20;
+}
+
+.capability-denied {
+  @apply bg-red-500/10 text-red-400 border border-red-500/20;
+}
+
+.capability-pending {
+  @apply bg-yellow-500/10 text-yellow-400 border border-yellow-500/20;
+}
