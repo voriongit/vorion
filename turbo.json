@@ -1,25 +1,120 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["**/.env.*local"],
+  "globalDependencies": [
+    "**/.env.*local",
+    ".env",
+    "tsconfig.base.json"
+  ],
+  "globalEnv": [
+    "NODE_ENV",
+    "VERCEL_ENV",
+    "CI"
+  ],
+  "ui": "tui",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": [
+        "dist/**",
+        ".next/**",
+        "!.next/cache/**",
+        "build/**",
+        ".docusaurus/**"
+      ],
+      "env": [
+        "NEXT_PUBLIC_*",
+        "SUPABASE_*",
+        "STRIPE_*",
+        "PUSHER_*",
+        "SENTRY_*"
+      ]
     },
     "dev": {
       "cache": false,
       "persistent": true
     },
+    "start": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["build"]
+    },
     "test": {
-      "dependsOn": ["build"],
-      "inputs": ["src/**/*.ts", "tests/**/*.ts"]
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "tests/**/*.ts",
+        "tests/**/*.tsx",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "vitest.config.*"
+      ]
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "test:coverage": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "test:unit": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "test:integration": {
+      "dependsOn": ["^build"],
+      "outputs": []
     },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputs": []
     },
-    "lint": {},
+    "lint": {
+      "outputs": [],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "app/**/*.ts",
+        "app/**/*.tsx",
+        "*.config.*",
+        ".eslintrc*"
+      ]
+    },
+    "lint:fix": {
+      "cache": false
+    },
+    "format": {
+      "cache": false
+    },
+    "format:check": {
+      "outputs": []
+    },
     "clean": {
       "cache": false
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:migrate": {
+      "cache": false
+    },
+    "db:push": {
+      "cache": false
+    },
+    "db:seed": {
+      "cache": false
+    },
+    "storybook": {
+      "cache": false,
+      "persistent": true
+    },
+    "build-storybook": {
+      "dependsOn": ["^build"],
+      "outputs": ["storybook-static/**"]
     }
   }
 }
