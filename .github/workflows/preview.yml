@@ -121,7 +121,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_AGENTANCHOR_PROJECT_ID }}
 
       - name: Comment PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             github.rest.issues.createComment({
@@ -161,7 +161,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_AGENTANCHOR_WWW_PROJECT_ID }}
 
       - name: Comment PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             github.rest.issues.createComment({
@@ -210,7 +210,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_OMNISCIENCE_PROJECT_ID }}
 
       - name: Comment PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             github.rest.issues.createComment({
@@ -250,7 +250,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_VORION_WWW_PROJECT_ID }}
 
       - name: Comment PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             github.rest.issues.createComment({
