@@ -8,8 +8,47 @@ export interface LexiconTerm {
   level: KnowledgeLevel;
   category?: string;
   tags?: string[];
+  relatedTerms?: string[];
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+// Learning Path Types
+export type PathDifficulty = 'beginner' | 'intermediate' | 'advanced' | 'expert';
+export type PathDuration = 'short' | 'medium' | 'long'; // ~30min, ~1-2hr, ~3-4hr
+
+export interface LearningPathModule {
+  id: string;
+  title: string;
+  description: string;
+  terms: string[]; // Term names to learn in order
+  objectives: string[]; // What you'll learn
+  estimatedMinutes: number;
+}
+
+export interface LearningPath {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  difficulty: PathDifficulty;
+  duration: PathDuration;
+  estimatedHours: number;
+  icon: string; // Lucide icon name
+  color: string; // Tailwind color
+  prerequisites?: string[]; // Other path slugs
+  modules: LearningPathModule[];
+  outcomes: string[]; // What you can do after completing
+  tags: string[];
+}
+
+export interface UserPathProgress {
+  pathId: string;
+  startedAt: Date;
+  completedModules: string[];
+  completedTerms: string[];
+  lastAccessedAt: Date;
+  completedAt?: Date;
 }
 
 // Chat Types

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Menu, X, Brain, BookOpen, Layers, Settings, FileCode, Github, MessageCircle } from 'lucide-react';
+import { Menu, X, Brain, BookOpen, Layers, Settings, FileCode, Github, MessageCircle, Route } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +12,7 @@ interface NavbarProps {
 
 const navItems = [
   { href: '/lexicon', label: 'Lexicon', icon: BookOpen },
+  { href: '/paths', label: 'Paths', icon: Route },
   { href: '/neural', label: 'Neural Link', icon: Layers },
   { href: '/docs', label: 'Docs', icon: FileCode },
   { href: '/cortex', label: 'Cortex', icon: Settings },

@@ -1431,3 +1431,11 @@ export function getLexiconStats() {
     totalTags: getTags().length,
   };
 }
+
+/**
+ * Get a specific term by name (case-insensitive)
+ */
+export function getLexiconTerm(termName: string): LexiconTerm | null {
+  const normalized = termName.toLowerCase();
+  return staticLexicon.find(item => item.term.toLowerCase() === normalized) || null;
+}
