@@ -12,12 +12,12 @@ import type {
   TrustWeights,
   TrustEvidence,
   ObservationTier,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 import {
   OBSERVATION_CEILINGS,
   DEFAULT_TRUST_WEIGHTS,
   DEFAULT_BANDING_CONFIG,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 import { createDimensions, INITIAL_DIMENSIONS } from './dimensions.js';
 import { createWeights } from './weights.js';
 import { getBand } from '../banding/bands.js';

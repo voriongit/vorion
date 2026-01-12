@@ -11,7 +11,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { Intent, Decision, TrustProfile, AuthorizationResponse } from '@orion/contracts';
+import type { Intent, Decision, TrustProfile, AuthorizationResponse } from '@vorion/contracts';
 import {
   AuthorizationEngine,
   type AuthorizationEngineConfig,

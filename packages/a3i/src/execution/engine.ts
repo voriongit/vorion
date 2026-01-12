@@ -13,7 +13,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { Intent, Decision, TrustProfile } from '@orion/contracts';
+import type { Intent, Decision, TrustProfile } from '@vorion/contracts';
 import {
   type HookManager,
   type HookExecutionSummary,

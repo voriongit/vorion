@@ -6,7 +6,7 @@
  * - Future: Supabase (for production)
  */
 
-import type { TrustProfile, TrustProfileSummary } from '@orion/contracts';
+import type { TrustProfile, TrustProfileSummary } from '@vorion/contracts';
 
 /**
  * Profile query options

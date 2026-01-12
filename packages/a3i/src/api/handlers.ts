@@ -11,7 +11,7 @@ import {
   TrustBand,
   intentSchema,
   trustCalculationRequestSchema,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 import {
   TrustProfileService,
   type ProfileQueryFilter,
@@ -21,7 +21,7 @@ import {
   AuthorizationEngine,
   type AuthorizeRequest,
 } from '../authorization/engine.js';
-import { DEFAULT_BANDING_CONFIG } from '@orion/contracts';
+import { DEFAULT_BANDING_CONFIG } from '@vorion/contracts';
 import { ValidationError } from './middleware.js';
 
 /**

@@ -9,7 +9,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { TrustBand, type BandingConfig, DEFAULT_BANDING_CONFIG } from '@orion/contracts';
+import { TrustBand, type BandingConfig, DEFAULT_BANDING_CONFIG } from '@vorion/contracts';
 import { getBand, getNextBand, getBandName } from './bands.js';
 import { HysteresisCalculator, type BandHistoryEntry } from './hysteresis.js';
 

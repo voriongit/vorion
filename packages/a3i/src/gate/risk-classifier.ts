@@ -15,7 +15,7 @@ import {
   RiskLevel,
   type ActionRiskFactors,
   type GateVerificationRequest,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 
 /**
  * Base risk scores for action types (0-100)

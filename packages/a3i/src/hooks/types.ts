@@ -10,7 +10,7 @@ import type {
   Decision,
   TrustProfile,
   ProofEvent,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 
 /**
  * Hook lifecycle phases

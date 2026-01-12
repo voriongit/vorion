@@ -6,7 +6,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { ObservationTier } from '@orion/contracts';
+import { ObservationTier } from '@vorion/contracts';
 
 /**
  * Types of cryptographic attestation

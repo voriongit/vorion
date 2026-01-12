@@ -10,7 +10,7 @@ import type {
   ProofEventFilter,
   ProofEventSummary,
   ProofEventType,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 
 /**
  * Query options for event retrieval

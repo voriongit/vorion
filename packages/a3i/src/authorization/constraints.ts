@@ -15,7 +15,7 @@ import {
   type ApprovalRequirement,
   type RateLimit,
   type Intent,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 
 /**
  * Constraint preset for a trust band

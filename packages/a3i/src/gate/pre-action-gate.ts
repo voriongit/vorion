@@ -22,7 +22,7 @@ import {
   GateStatus,
   TRUST_THRESHOLDS,
   DEFAULT_GATE_CONFIG,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 
 import { classifyRisk, explainRiskFactors } from './risk-classifier.js';
 

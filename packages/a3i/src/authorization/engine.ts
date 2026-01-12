@@ -26,7 +26,7 @@ import {
   type Decision,
   type TrustProfile,
   type AuthorizationResponse,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 import {
   generateConstraints,
   type ConstraintGenerationOptions,

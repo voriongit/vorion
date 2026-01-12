@@ -13,7 +13,7 @@ import {
   CanaryCategory,
   CanarySubcategory,
   ValidationMode,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 
 /**
  * Generate a unique probe ID

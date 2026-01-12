@@ -19,7 +19,7 @@ import {
   CanaryCategory,
   ValidationMode,
   DEFAULT_CANARY_CONFIG,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 
 import { TrustDynamicsEngine } from '../trust/trust-dynamics.js';
 import {

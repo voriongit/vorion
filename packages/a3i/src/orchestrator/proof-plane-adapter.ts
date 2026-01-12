@@ -6,7 +6,7 @@
  */
 
 import { createHash } from 'crypto';
-import type { Intent, Decision, ProofEvent } from '@orion/contracts';
+import type { Intent, Decision, ProofEvent } from '@vorion/contracts';
 import type { OrchestratorLogger } from './orchestrator.js';
 
 /**

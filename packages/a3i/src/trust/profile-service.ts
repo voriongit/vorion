@@ -20,7 +20,7 @@ import {
   type TrustProfileSummary,
   type TrustEvidence,
   type TrustWeights,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 import { TrustCalculator, type TrustCalculatorConfig } from './trust-calculator.js';
 import {
   type TrustProfileStore,

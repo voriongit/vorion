@@ -25,7 +25,7 @@ import {
   type ExecutionStartedPayload,
   type ExecutionCompletedPayload,
   type ExecutionFailedPayload,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 import {
   type ProofEventStore,
   type EventQueryOptions,

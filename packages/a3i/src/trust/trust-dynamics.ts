@@ -15,7 +15,7 @@ import {
   type TrustDynamicsState,
   type CooldownState,
   DEFAULT_TRUST_DYNAMICS,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 
 /**
  * Result of a trust update operation

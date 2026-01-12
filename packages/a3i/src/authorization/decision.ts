@@ -13,7 +13,7 @@ import {
   type DecisionConstraints,
   type Intent,
   type TrustProfile,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 
 /**
  * Options for building a decision

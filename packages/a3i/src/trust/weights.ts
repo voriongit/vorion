@@ -5,9 +5,9 @@
  * composite trust score. All weights must sum to 1.0.
  */
 
-import type { TrustWeights } from '@orion/contracts';
-import { DEFAULT_TRUST_WEIGHTS } from '@orion/contracts';
-import { trustWeightsSchema } from '@orion/contracts/validators';
+import type { TrustWeights } from '@vorion/contracts';
+import { DEFAULT_TRUST_WEIGHTS } from '@vorion/contracts';
+import { trustWeightsSchema } from '@vorion/contracts/validators';
 
 export { DEFAULT_TRUST_WEIGHTS };
 

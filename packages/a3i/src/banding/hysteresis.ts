@@ -6,7 +6,7 @@
  * hover near thresholds.
  */
 
-import { TrustBand, type BandingConfig, DEFAULT_BANDING_CONFIG } from '@orion/contracts';
+import { TrustBand, type BandingConfig, DEFAULT_BANDING_CONFIG } from '@vorion/contracts';
 import { getBand, getBandRange, getNextBand, getPreviousBand } from './bands.js';
 
 export { DEFAULT_BANDING_CONFIG };

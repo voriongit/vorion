@@ -5,7 +5,7 @@
  * automatically logging authorization decisions to the audit trail.
  */
 
-import type { Intent, Decision } from '@orion/contracts';
+import type { Intent, Decision } from '@vorion/contracts';
 import { ProofPlane } from './proof-plane.js';
 
 /**

@@ -11,7 +11,7 @@ import type {
   ProofEventPayload,
   ProofEventType,
   LogProofEventRequest,
-} from '@orion/contracts';
+} from '@vorion/contracts';
 import { type ProofEventStore, EventStoreError, EventStoreErrorCode } from './event-store.js';
 import { computeEventHash, getGenesisHash } from './hash-chain.js';
 

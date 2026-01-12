@@ -7,7 +7,7 @@
  * - Hardware root of trust via TEE attestation
  */
 
-import { ObservationTier, OBSERVATION_CEILINGS } from '@orion/contracts';
+import { ObservationTier, OBSERVATION_CEILINGS } from '@vorion/contracts';
 
 export { ObservationTier, OBSERVATION_CEILINGS };
 

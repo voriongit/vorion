@@ -10,7 +10,7 @@
  * - T5 (86-100): Mission Critical - Full autonomy for critical systems
  */
 
-import { TrustBand, type BandThresholds, DEFAULT_BAND_THRESHOLDS } from '@orion/contracts';
+import { TrustBand, type BandThresholds, DEFAULT_BAND_THRESHOLDS } from '@vorion/contracts';
 
 export { TrustBand, DEFAULT_BAND_THRESHOLDS };
 

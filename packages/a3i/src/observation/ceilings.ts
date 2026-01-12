@@ -5,7 +5,7 @@
  * API-accessed proprietary models are capped at 60% max trust.
  */
 
-import { ObservationTier, OBSERVATION_CEILINGS } from '@orion/contracts';
+import { ObservationTier, OBSERVATION_CEILINGS } from '@vorion/contracts';
 
 export { OBSERVATION_CEILINGS };
 

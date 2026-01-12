@@ -8,8 +8,8 @@
  * AC - Assurance Confidence: How confident are we in our assessment?
  */
 
-import type { TrustDimensions } from '@orion/contracts';
-import { trustDimensionsSchema } from '@orion/contracts/validators';
+import type { TrustDimensions } from '@vorion/contracts';
+import { trustDimensionsSchema } from '@vorion/contracts/validators';
 
 /** Initial trust dimensions for a new agent (neutral starting point) */
 export const INITIAL_DIMENSIONS: TrustDimensions = {

@@ -5,7 +5,7 @@
  * to the previous event's hash, forming an immutable chain.
  */
 
-import type { ProofEvent, ProofEventPayload } from '@orion/contracts';
+import type { ProofEvent, ProofEventPayload } from '@vorion/contracts';
 
 /**
  * Create a SHA-256 hash of the given data
