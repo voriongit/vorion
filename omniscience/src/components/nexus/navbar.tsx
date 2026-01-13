@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Menu, X, Brain, BookOpen, Layers, Settings, FileCode, Github, MessageCircle, Route } from 'lucide-react';
+import { Menu, X, Brain, BookOpen, Layers, Settings, FileCode, Github, MessageCircle, Route, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/neural', label: 'Neural Link', icon: Layers },
   { href: '/docs', label: 'Docs', icon: FileCode },
   { href: '/cortex', label: 'Cortex', icon: Settings },
+  { href: '/profile', label: 'Profile', icon: User },
 ];
 
 const externalLinks = [
