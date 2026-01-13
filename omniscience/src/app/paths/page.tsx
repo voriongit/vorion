@@ -23,6 +23,8 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { getAllPaths, getStarterPaths, getPathsByDifficulty, getPathTermCount } from '@/lib/learning-paths';
+import { useProgressContext } from '@/contexts';
+import { ProgressBar, StatsCard } from '@/components/progress';
 import type { LearningPath, PathDifficulty } from '@/types';
 
 // Icon mapping
@@ -82,19 +84,34 @@ function PathCard({ path }: { path: LearningPath }) {
   const iconClass = iconColorMap[path.color] || iconColorMap.cyan;
   const badge = difficultyBadge[path.difficulty];
   const termCount = getPathTermCount(path);
+  const { getPathCompletion, checkPathCompleted, isLoaded } = useProgressContext();
+
+  const completion = isLoaded ? getPathCompletion(path.slug, path.modules.length) : 0;
+  const isCompleted = isLoaded ? checkPathCompleted(path.slug) : false;
 
   return (
     <Link
       href={`/paths/${path.slug}`}
-      className={`block p-6 rounded-xl border bg-gradient-to-br ${colorClass} transition-all hover:scale-[1.02] group`}
+      className={`block p-6 rounded-xl border bg-gradient-to-br ${colorClass} transition-all hover:scale-[1.02] group relative`}
     >
+      {/* Completion badge */}
+      {isCompleted && (
+        <div className="absolute top-3 right-3">
+          <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+            <CheckCircle2 className="w-4 h-4 text-white" />
+          </div>
+        </div>
+      )}
+
       <div className="flex items-start justify-between mb-4">
         <div className={`p-3 rounded-lg bg-gray-800/50 ${iconClass}`}>
           <Icon className="w-6 h-6" />
         </div>
-        <span className={`text-xs px-2 py-1 rounded-full border ${badge.class}`}>
-          {badge.label}
-        </span>
+        {!isCompleted && (
+          <span className={`text-xs px-2 py-1 rounded-full border ${badge.class}`}>
+            {badge.label}
+          </span>
+        )}
       </div>
 
       <h3 className="text-lg font-bold text-white mb-2 group-hover:text-cyan-300 transition-colors">
@@ -104,6 +121,14 @@ function PathCard({ path }: { path: LearningPath }) {
       <p className="text-sm text-gray-400 mb-4 line-clamp-2">
         {path.description}
       </p>
+
+      {/* Progress bar */}
+      {completion > 0 && !isCompleted && (
+        <div className="mb-3">
+          <ProgressBar value={completion} size="sm" color="cyan" />
+          <p className="text-xs text-gray-500 mt-1">{completion}% complete</p>
+        </div>
+      )}
 
       <div className="flex items-center gap-4 text-xs text-gray-500">
         <div className="flex items-center gap-1">
@@ -193,8 +218,15 @@ export default function LearningPathsPage() {
           </p>
         </div>
 
-        {/* Start Here Section */}
-        <StartHereCard />
+        {/* User Progress & Start Here Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="lg:col-span-2">
+            <StartHereCard />
+          </div>
+          <div>
+            <StatsCard />
+          </div>
+        </div>
 
         {/* Filters */}
         <div className="flex flex-wrap gap-2 mb-6">

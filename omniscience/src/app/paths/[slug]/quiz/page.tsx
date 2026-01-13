@@ -20,9 +20,10 @@ import {
   Lock,
   FileCode,
 } from 'lucide-react';
-import { getPathBySlug } from '@/lib/learning-paths';
+import { getPathBySlug, getPathTerms } from '@/lib/learning-paths';
 import { generateModuleQuiz, generatePathQuiz, getQuizStats } from '@/lib/quiz-data';
-import type { Quiz as QuizType, PathDifficulty } from '@/types';
+import { useProgressContext } from '@/contexts';
+import type { Quiz as QuizType, QuizAttempt, PathDifficulty } from '@/types';
 
 // Icon mapping
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -70,9 +71,13 @@ export default function PathQuizPage() {
   const [quizKey, setQuizKey] = useState(0);
 
   const path = getPathBySlug(slug);
+  const { submitModuleQuiz, submitPathQuiz, beginPath } = useProgressContext();
 
   useEffect(() => {
     if (!path) return;
+
+    // Mark path as started when viewing quiz
+    beginPath(slug);
 
     // Generate the appropriate quiz
     let generatedQuiz: QuizType | null = null;
@@ -84,7 +89,7 @@ export default function PathQuizPage() {
     }
 
     setQuiz(generatedQuiz);
-  }, [slug, moduleId, path]);
+  }, [slug, moduleId, path, beginPath]);
 
   if (!path) {
     notFound();
@@ -97,6 +102,25 @@ export default function PathQuizPage() {
   const moduleName = moduleId
     ? path.modules.find(m => m.id === moduleId)?.title
     : null;
+
+  // Get terms for the quiz (for mastery tracking)
+  const getQuizTerms = (): string[] => {
+    if (moduleId) {
+      const module = path.modules.find(m => m.id === moduleId);
+      return module?.terms ?? [];
+    }
+    return getPathTerms(path);
+  };
+
+  const handleQuizComplete = (attempt: QuizAttempt) => {
+    const terms = getQuizTerms();
+
+    if (moduleId) {
+      submitModuleQuiz(slug, moduleId, attempt, terms);
+    } else {
+      submitPathQuiz(slug, attempt, terms);
+    }
+  };
 
   const handleRetry = () => {
     // Regenerate quiz on retry
@@ -148,7 +172,7 @@ export default function PathQuizPage() {
 
         {/* Quiz or No Questions Message */}
         {quiz && quiz.questions.length > 0 ? (
-          <Quiz key={quizKey} quiz={quiz} onRetry={handleRetry} />
+          <Quiz key={quizKey} quiz={quiz} onComplete={handleQuizComplete} onRetry={handleRetry} />
         ) : (
           <div className="max-w-2xl mx-auto text-center">
             <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-8">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Navbar } from '@/components/nexus';
@@ -29,6 +29,8 @@ import {
 } from 'lucide-react';
 import { getPathBySlug, getNextPaths, getPathTermCount } from '@/lib/learning-paths';
 import { getLexiconTerm } from '@/lib/lexicon-data';
+import { useProgressContext } from '@/contexts';
+import { ProgressBar } from '@/components/progress';
 import type { LearningPath, LearningPathModule, PathDifficulty } from '@/types';
 
 // Icon mapping
@@ -76,21 +78,39 @@ function ModuleCard({ module, index, isExpanded, onToggle, pathColor, pathSlug }
   pathSlug: string;
 }) {
   const iconClass = iconColorMap[pathColor] || iconColorMap.cyan;
+  const { checkModuleCompleted, getModuleInfo, isLoaded } = useProgressContext();
+
+  const isCompleted = isLoaded && checkModuleCompleted(pathSlug, module.id);
+  const moduleInfo = isLoaded ? getModuleInfo(pathSlug, module.id) : null;
+  const bestScore = moduleInfo?.bestScore;
 
   return (
-    <div className="border border-gray-700/50 rounded-xl overflow-hidden">
+    <div className={`border rounded-xl overflow-hidden ${isCompleted ? 'border-green-500/30 bg-green-500/5' : 'border-gray-700/50'}`}>
       <button
         onClick={onToggle}
         className="w-full flex items-center gap-4 p-4 hover:bg-gray-800/30 transition-colors text-left"
       >
-        <div className={`w-10 h-10 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center shrink-0 ${iconClass}`}>
-          <span className="text-sm font-bold">{index + 1}</span>
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+          isCompleted
+            ? 'bg-green-500/20 border border-green-500/50'
+            : `bg-gray-800 border border-gray-700 ${iconClass}`
+        }`}>
+          {isCompleted ? (
+            <CheckCircle2 className="w-5 h-5 text-green-400" />
+          ) : (
+            <span className="text-sm font-bold">{index + 1}</span>
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-white font-medium">{module.title}</h3>
           <p className="text-sm text-gray-500 truncate">{module.description}</p>
         </div>
         <div className="flex items-center gap-3 text-gray-500">
+          {bestScore !== undefined && (
+            <span className={`text-xs px-2 py-0.5 rounded ${bestScore >= 70 ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'}`}>
+              {bestScore}%
+            </span>
+          )}
           <span className="text-xs">{module.estimatedMinutes} min</span>
           <span className="text-xs">{module.terms.length} terms</span>
           {isExpanded ? (
@@ -184,11 +204,19 @@ export default function LearningPathDetailPage() {
   const params = useParams();
   const slug = params.slug as string;
   const path = getPathBySlug(slug);
+  const { getPathCompletion, checkPathCompleted, getPathInfo, beginPath, isLoaded } = useProgressContext();
 
   const [expandedModules, setExpandedModules] = useState<Set<string>>(() => {
     const firstModuleId = path?.modules[0]?.id;
     return firstModuleId ? new Set([firstModuleId]) : new Set();
   });
+
+  // Track path visit
+  useEffect(() => {
+    if (path && isLoaded) {
+      beginPath(path.slug);
+    }
+  }, [path, isLoaded, beginPath]);
 
   if (!path) {
     notFound();
@@ -199,6 +227,11 @@ export default function LearningPathDetailPage() {
   const badge = difficultyBadge[path.difficulty];
   const termCount = getPathTermCount(path);
   const nextPaths = getNextPaths(path.slug);
+
+  const completion = isLoaded ? getPathCompletion(path.slug, path.modules.length) : 0;
+  const isCompleted = isLoaded ? checkPathCompleted(path.slug) : false;
+  const pathInfo = isLoaded ? getPathInfo(path.slug) : null;
+  const bestFinalScore = pathInfo?.bestFinalScore;
 
   const toggleModule = (moduleId: string) => {
     setExpandedModules(prev => {
@@ -270,6 +303,35 @@ export default function LearningPathDetailPage() {
               <span>{termCount} terms</span>
             </div>
           </div>
+
+          {/* Progress */}
+          {(completion > 0 || isCompleted) && (
+            <div className="mt-4 p-4 bg-gray-800/30 border border-gray-700/50 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-400">Your Progress</span>
+                <div className="flex items-center gap-3">
+                  {bestFinalScore !== undefined && (
+                    <span className="text-xs text-gray-500">
+                      Best Quiz: <span className={bestFinalScore >= 70 ? 'text-green-400' : 'text-gray-400'}>{bestFinalScore}%</span>
+                    </span>
+                  )}
+                  {isCompleted ? (
+                    <span className="flex items-center gap-1 text-xs text-green-400">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Completed
+                    </span>
+                  ) : (
+                    <span className="text-sm font-medium text-white">{completion}%</span>
+                  )}
+                </div>
+              </div>
+              <ProgressBar
+                value={isCompleted ? 100 : completion}
+                size="md"
+                color={isCompleted ? 'green' : 'cyan'}
+              />
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
