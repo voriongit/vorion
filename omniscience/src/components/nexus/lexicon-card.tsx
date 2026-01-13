@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { termToSlug } from '@/lib/lexicon-data';
 import type { LexiconTerm } from '@/types';
 
 interface LexiconCardProps {
@@ -17,12 +19,14 @@ const levelColors = {
 
 export function LexiconCard({ term, onClick }: LexiconCardProps) {
   const color = levelColors[term.level];
+  const slug = term.slug || termToSlug(term.term);
 
   return (
-    <div
+    <Link
+      href={`/lexicon/${slug}`}
       onClick={onClick}
       className={cn(
-        'glass p-4 rounded cursor-pointer transition-all',
+        'block glass p-4 rounded cursor-pointer transition-all',
         'hover:bg-white/5 hover:border-gray-600',
         `border-l-2 border-${color}-500`
       )}
@@ -54,6 +58,6 @@ export function LexiconCard({ term, onClick }: LexiconCardProps) {
           ))}
         </div>
       )}
-    </div>
+    </Link>
   );
 }

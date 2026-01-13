@@ -1,6 +1,7 @@
 export { NexusChat } from './nexus-chat';
 export { LexiconBrowser } from './lexicon-browser';
 export { LexiconCard } from './lexicon-card';
+export { TermDetail } from './term-detail';
 export { NeuralLink } from './neural-link';
 export { CortexSettings } from './cortex-settings';
 export { ProcessingIndicator } from './processing-indicator';

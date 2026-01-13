@@ -1,6 +1,18 @@
 // Knowledge/Lexicon Types
 export type KnowledgeLevel = 'novice' | 'intermediate' | 'expert' | 'theoretical';
 
+export interface CodeExample {
+  language: string;
+  title: string;
+  code: string;
+  explanation?: string;
+}
+
+export interface KeyConcept {
+  title: string;
+  description: string;
+}
+
 export interface LexiconTerm {
   id?: string;
   term: string;
@@ -11,6 +23,16 @@ export interface LexiconTerm {
   relatedTerms?: string[];
   createdAt?: Date;
   updatedAt?: Date;
+  // Extended tutorial content
+  slug?: string;
+  overview?: string; // Longer explanation beyond the definition
+  keyConcepts?: KeyConcept[]; // Core concepts to understand
+  examples?: CodeExample[]; // Code examples with explanations
+  useCases?: string[]; // Real-world applications
+  commonMistakes?: string[]; // Pitfalls to avoid
+  practicalTips?: string[]; // Actionable advice
+  furtherReading?: { title: string; url: string }[]; // External resources
+  prerequisites?: string[]; // Terms to understand first
 }
 
 // Learning Path Types

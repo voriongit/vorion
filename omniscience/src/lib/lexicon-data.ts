@@ -31,6 +31,87 @@ export const staticLexicon: LexiconTerm[] = [
     level: 'novice',
     category: 'core',
     tags: ['fundamentals', 'autonomy'],
+    slug: 'agent',
+    overview: `An AI agent is more than just a chatbot—it's a system designed to accomplish tasks autonomously. While a traditional chatbot responds to individual messages, an agent maintains context, uses tools, and works toward goals across multiple steps.
+
+Think of the difference between asking someone a question versus hiring them to complete a project. A chatbot answers your question; an agent takes on the project and figures out what steps are needed to complete it.
+
+Modern agents are built on large language models (LLMs) but add crucial capabilities: memory to remember past interactions, tools to interact with external systems, and planning abilities to break down complex tasks.`,
+    keyConcepts: [
+      {
+        title: 'Perception',
+        description: 'The ability to receive and interpret input from the environment—user messages, API responses, sensor data, or file contents.',
+      },
+      {
+        title: 'Reasoning',
+        description: 'Using the LLM to analyze situations, plan approaches, and make decisions about what actions to take.',
+      },
+      {
+        title: 'Action',
+        description: 'Executing operations in the real world through tools, APIs, or other interfaces.',
+      },
+      {
+        title: 'Memory',
+        description: 'Retaining information across interactions to maintain context and learn from experience.',
+      },
+    ],
+    examples: [
+      {
+        language: 'python',
+        title: 'Simple Agent Loop',
+        code: `from openai import OpenAI
+
+client = OpenAI()
+
+def run_agent(task: str):
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": task}
+    ]
+
+    while True:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=messages
+        )
+
+        assistant_message = response.choices[0].message
+
+        # Check if agent wants to use a tool
+        if assistant_message.tool_calls:
+            # Execute tools and continue
+            tool_results = execute_tools(assistant_message.tool_calls)
+            messages.append(assistant_message)
+            messages.extend(tool_results)
+        else:
+            # Agent is done
+            return assistant_message.content`,
+        explanation: 'This shows the basic agent loop: receive input, reason about it, optionally use tools, and either continue or return a result.',
+      },
+    ],
+    useCases: [
+      'Customer service agents that can look up orders, process returns, and escalate to humans when needed',
+      'Research assistants that search databases, synthesize information, and write reports',
+      'DevOps agents that monitor systems, diagnose issues, and execute fixes',
+      'Personal assistants that manage calendars, send emails, and coordinate tasks',
+    ],
+    commonMistakes: [
+      'Giving agents too much autonomy without proper guardrails and human oversight',
+      'Not implementing proper error handling for when tools fail',
+      'Ignoring cost implications of long-running agent loops',
+      'Failing to log agent actions for debugging and audit purposes',
+    ],
+    practicalTips: [
+      'Start with narrow, well-defined tasks before expanding agent capabilities',
+      'Always implement a maximum iteration limit to prevent runaway loops',
+      'Use structured outputs to make tool calls more reliable',
+      'Build in human-in-the-loop checkpoints for high-stakes decisions',
+    ],
+    relatedTerms: ['Agentic AI', 'Tool Use', 'ReAct', 'Planning', 'Memory Systems'],
+    furtherReading: [
+      { title: 'Building Effective Agents - Anthropic', url: 'https://docs.anthropic.com/en/docs/build-with-claude/agents' },
+      { title: 'LangChain Agents Documentation', url: 'https://python.langchain.com/docs/modules/agents/' },
+    ],
   },
   {
     term: 'Agentic AI',
@@ -45,6 +126,95 @@ export const staticLexicon: LexiconTerm[] = [
     level: 'novice',
     category: 'core',
     tags: ['models', 'fundamentals'],
+    slug: 'llm',
+    overview: `Large Language Models (LLMs) are neural networks trained on massive amounts of text data—books, websites, code, and documents. Through this training, they learn patterns in language: grammar, facts, reasoning styles, and even coding conventions.
+
+What makes LLMs special is their generality. Unlike traditional software that does one thing well, an LLM can write poetry, debug code, explain physics, and draft emails—all with the same model. This flexibility comes from learning to predict "what text comes next" at an enormous scale.
+
+LLMs don't truly "understand" in the human sense, but they're remarkably good at producing coherent, useful outputs. They're statistical engines that have absorbed so much human knowledge that they can appear intelligent. This distinction matters when building systems—know your tool's limitations.`,
+    keyConcepts: [
+      {
+        title: 'Parameters',
+        description: 'The learned weights in the neural network. More parameters generally means more capability but also more compute cost. GPT-4 has hundreds of billions of parameters.',
+      },
+      {
+        title: 'Training Data',
+        description: 'The text corpus used to train the model. Quality and diversity of training data directly impacts model capabilities and biases.',
+      },
+      {
+        title: 'Fine-tuning',
+        description: 'Additional training on specific data to specialize the model for particular tasks or domains.',
+      },
+      {
+        title: 'Inference',
+        description: 'Running the trained model to generate outputs. This is what happens when you send a message to ChatGPT.',
+      },
+    ],
+    examples: [
+      {
+        language: 'python',
+        title: 'Calling an LLM API',
+        code: `from openai import OpenAI
+
+client = OpenAI()
+
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Explain quantum computing in simple terms."}
+    ],
+    temperature=0.7,  # Controls randomness
+    max_tokens=500    # Limits response length
+)
+
+print(response.choices[0].message.content)`,
+        explanation: 'This shows the basic pattern for calling an LLM: specify the model, provide messages, and configure parameters like temperature.',
+      },
+      {
+        language: 'python',
+        title: 'Using Anthropic Claude',
+        code: `import anthropic
+
+client = anthropic.Anthropic()
+
+message = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "What are the key differences between SQL and NoSQL databases?"}
+    ]
+)
+
+print(message.content[0].text)`,
+        explanation: 'Different providers have similar but slightly different APIs. The core concept—send messages, get responses—remains the same.',
+      },
+    ],
+    useCases: [
+      'Conversational AI and chatbots',
+      'Code generation and debugging',
+      'Content creation and summarization',
+      'Translation and language tasks',
+      'Analysis and reasoning tasks',
+    ],
+    commonMistakes: [
+      'Treating LLM outputs as always factual—they can hallucinate confidently',
+      'Ignoring context window limits and wondering why the model "forgets"',
+      'Not considering cost—every token costs money at scale',
+      'Assuming newer/bigger is always better for your specific use case',
+    ],
+    practicalTips: [
+      'Choose models based on your specific task—smaller models can be faster and cheaper for simple tasks',
+      'Always validate critical outputs with external sources',
+      'Use temperature=0 for deterministic tasks, higher for creative ones',
+      'Monitor token usage to control costs in production',
+      'Consider open-source models (Llama, Mistral) for privacy-sensitive applications',
+    ],
+    relatedTerms: ['Foundation Model', 'Token', 'Inference', 'Context Window', 'Fine-tuning'],
+    furtherReading: [
+      { title: 'Anthropic Model Documentation', url: 'https://docs.anthropic.com/en/docs/models-overview' },
+      { title: 'OpenAI Models Overview', url: 'https://platform.openai.com/docs/models' },
+    ],
   },
   {
     term: 'Foundation Model',
@@ -80,6 +250,90 @@ export const staticLexicon: LexiconTerm[] = [
     level: 'novice',
     category: 'core',
     tags: ['fundamentals', 'prompting'],
+    slug: 'prompt',
+    overview: `A prompt is how you communicate with an AI model. It's your interface to unlock the model's capabilities. The same model can produce wildly different outputs depending on how you phrase your request.
+
+Prompting is both an art and a science. Good prompts are clear, specific, and structured. They provide enough context for the model to understand what you want, without unnecessary noise.
+
+Think of prompting like giving instructions to a very capable but literal assistant who has never worked for you before. You need to be explicit about your expectations, provide relevant background, and sometimes show examples of what you want.`,
+    keyConcepts: [
+      {
+        title: 'System Prompt',
+        description: 'Instructions that set the AI\'s behavior, persona, and constraints. Persists across the conversation and shapes all responses.',
+      },
+      {
+        title: 'User Prompt',
+        description: 'The actual request or question from the user. Can include context, examples, and specific instructions for that particular query.',
+      },
+      {
+        title: 'Context',
+        description: 'Background information provided to help the model understand the situation, including relevant data, previous decisions, or domain knowledge.',
+      },
+      {
+        title: 'Output Format',
+        description: 'Specification of how you want the response structured—JSON, markdown, bullet points, or a specific template.',
+      },
+    ],
+    examples: [
+      {
+        language: 'text',
+        title: 'Basic vs. Improved Prompt',
+        code: `# Basic (vague)
+Write about dogs.
+
+# Improved (specific)
+Write a 200-word introduction to Golden Retrievers for a pet adoption website.
+Include: temperament, exercise needs, and family suitability.
+Tone: warm and encouraging.`,
+        explanation: 'The improved prompt specifies length, topic scope, required sections, and tone—giving the model clear direction.',
+      },
+      {
+        language: 'text',
+        title: 'Structured System Prompt',
+        code: `You are a senior code reviewer at a tech company.
+
+Your responsibilities:
+- Review code for bugs, security issues, and best practices
+- Provide specific, actionable feedback
+- Explain WHY something is problematic, not just WHAT
+
+Your constraints:
+- Be constructive, not harsh
+- Prioritize critical issues over style preferences
+- Always suggest improvements, don't just criticize
+
+Output format:
+## Critical Issues
+## Suggestions
+## Positives`,
+        explanation: 'A well-structured system prompt establishes role, responsibilities, constraints, and expected output format.',
+      },
+    ],
+    useCases: [
+      'Crafting system prompts for customer service chatbots',
+      'Building prompts for code generation and review',
+      'Designing prompts for content creation workflows',
+      'Creating prompts for data extraction and analysis',
+    ],
+    commonMistakes: [
+      'Being too vague—"make it better" gives the model no direction',
+      'Overloading with contradictory instructions',
+      'Forgetting to specify output format, leading to inconsistent results',
+      'Not providing examples when the task is ambiguous',
+      'Including irrelevant context that confuses the model',
+    ],
+    practicalTips: [
+      'Start with the end in mind—know what output you want before writing the prompt',
+      'Use delimiters (###, ```, ---) to separate different parts of your prompt',
+      'Be explicit about what NOT to do, not just what to do',
+      'Test your prompts with edge cases before deploying',
+      'Version control your prompts like code—they\'re part of your system',
+    ],
+    relatedTerms: ['System Prompt', 'Few-Shot Learning', 'Chain-of-Thought', 'Prompt Engineering', 'Completion'],
+    furtherReading: [
+      { title: 'Prompt Engineering Guide - Anthropic', url: 'https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering' },
+      { title: 'OpenAI Prompt Engineering Guide', url: 'https://platform.openai.com/docs/guides/prompt-engineering' },
+    ],
   },
   {
     term: 'Completion',
@@ -168,6 +422,130 @@ export const staticLexicon: LexiconTerm[] = [
     level: 'novice',
     category: 'architecture',
     tags: ['tools', 'capabilities'],
+    slug: 'tool-use',
+    overview: `Tool use transforms an LLM from a text generator into an agent that can take actions in the world. Without tools, an AI can only generate text. With tools, it can search the web, query databases, send emails, write files, and interact with any API.
+
+The mechanism is elegant: you describe available tools to the LLM (name, description, parameters), and the model decides when to use them. Instead of generating a text response, it outputs a structured tool call. Your code executes the tool and feeds the result back to the model.
+
+This pattern is incredibly powerful because it lets you combine the reasoning capabilities of LLMs with the precision of traditional software. The AI decides what to do; your code ensures it's done correctly.`,
+    keyConcepts: [
+      {
+        title: 'Tool Definition',
+        description: 'A schema describing what the tool does, what parameters it accepts, and what it returns. Good descriptions help the model use tools correctly.',
+      },
+      {
+        title: 'Tool Call',
+        description: 'The model\'s structured request to execute a tool with specific parameters. Usually JSON format.',
+      },
+      {
+        title: 'Tool Result',
+        description: 'The output from executing a tool, which gets fed back to the model for further reasoning.',
+      },
+      {
+        title: 'Tool Selection',
+        description: 'The model\'s decision about which tool to use (or whether to use any tool) based on the current task.',
+      },
+    ],
+    examples: [
+      {
+        language: 'python',
+        title: 'Defining and Using Tools',
+        code: `from openai import OpenAI
+import json
+
+client = OpenAI()
+
+# Define tools
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get current weather for a location",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "City name, e.g., 'San Francisco'"
+                    }
+                },
+                "required": ["location"]
+            }
+        }
+    }
+]
+
+# Call model with tools
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": "What's the weather in Tokyo?"}],
+    tools=tools
+)
+
+# Handle tool call
+if response.choices[0].message.tool_calls:
+    tool_call = response.choices[0].message.tool_calls[0]
+    args = json.loads(tool_call.function.arguments)
+    result = get_weather(args["location"])  # Your function
+    print(f"Weather result: {result}")`,
+        explanation: 'This shows the complete flow: define a tool schema, let the model decide to call it, execute the function, and use the result.',
+      },
+      {
+        language: 'python',
+        title: 'Tool with Claude',
+        code: `import anthropic
+
+client = anthropic.Anthropic()
+
+response = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    tools=[
+        {
+            "name": "search_database",
+            "description": "Search the product database",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "default": 10}
+                },
+                "required": ["query"]
+            }
+        }
+    ],
+    messages=[{"role": "user", "content": "Find laptops under $1000"}]
+)`,
+        explanation: 'Different APIs have slightly different schemas, but the pattern is the same: describe tools, let the model call them.',
+      },
+    ],
+    useCases: [
+      'Web search and browsing for up-to-date information',
+      'Database queries for customer service and analytics',
+      'File operations for code generation and document processing',
+      'API calls to external services (email, calendar, CRM)',
+      'System administration and DevOps automation',
+    ],
+    commonMistakes: [
+      'Vague tool descriptions that confuse the model about when to use them',
+      'Not validating tool inputs before execution',
+      'Forgetting to handle errors when tools fail',
+      'Creating too many similar tools that confuse tool selection',
+      'Not including tool results in the conversation for follow-up reasoning',
+    ],
+    practicalTips: [
+      'Write tool descriptions from the model\'s perspective—explain when and why to use each tool',
+      'Use clear, distinct names that indicate the tool\'s purpose',
+      'Include examples in descriptions for ambiguous parameters',
+      'Validate all inputs before executing tools—never trust model outputs blindly',
+      'Log all tool calls for debugging and monitoring',
+    ],
+    relatedTerms: ['Function Calling', 'Agent', 'MCP', 'API Gateway', 'ReAct'],
+    furtherReading: [
+      { title: 'Tool Use Guide - Anthropic', url: 'https://docs.anthropic.com/en/docs/build-with-claude/tool-use' },
+      { title: 'Function Calling - OpenAI', url: 'https://platform.openai.com/docs/guides/function-calling' },
+    ],
   },
   {
     term: 'Function Calling',
@@ -182,6 +560,110 @@ export const staticLexicon: LexiconTerm[] = [
     level: 'intermediate',
     category: 'architecture',
     tags: ['retrieval', 'grounding'],
+    slug: 'rag',
+    overview: `Retrieval-Augmented Generation (RAG) solves one of the biggest challenges with LLMs: they only know what they were trained on. RAG lets you give an LLM access to your own documents, databases, and knowledge bases—without retraining the model.
+
+The concept is simple: before asking the LLM to answer a question, first search your knowledge base for relevant information. Then include that information in the prompt. The LLM can now answer questions about your specific data, grounded in actual documents.
+
+RAG has become the standard pattern for enterprise AI applications because it's cost-effective (no fine-tuning needed), transparent (you can see what sources were used), and flexible (update your knowledge base anytime).`,
+    keyConcepts: [
+      {
+        title: 'Embedding',
+        description: 'Converting text into numerical vectors that capture semantic meaning. Similar texts have similar embeddings, enabling semantic search.',
+      },
+      {
+        title: 'Vector Database',
+        description: 'A specialized database that stores embeddings and enables fast similarity search. Examples: Pinecone, Weaviate, Chroma.',
+      },
+      {
+        title: 'Chunking',
+        description: 'Breaking documents into smaller pieces for embedding. Chunk size affects retrieval quality—too small loses context, too large wastes tokens.',
+      },
+      {
+        title: 'Retrieval',
+        description: 'Finding the most relevant chunks for a given query using vector similarity search.',
+      },
+    ],
+    examples: [
+      {
+        language: 'python',
+        title: 'Basic RAG Pipeline',
+        code: `from openai import OpenAI
+from chromadb import Client
+
+client = OpenAI()
+db = Client()
+collection = db.get_collection("my_docs")
+
+def answer_question(question: str) -> str:
+    # 1. Retrieve relevant documents
+    results = collection.query(
+        query_texts=[question],
+        n_results=5
+    )
+
+    # 2. Build context from retrieved docs
+    context = "\\n\\n".join(results['documents'][0])
+
+    # 3. Generate answer with context
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": f"Answer based on this context:\\n{context}"},
+            {"role": "user", "content": question}
+        ]
+    )
+
+    return response.choices[0].message.content`,
+        explanation: 'This shows the core RAG pattern: embed the query, retrieve relevant chunks, then pass them as context to the LLM.',
+      },
+      {
+        language: 'python',
+        title: 'Document Ingestion',
+        code: `from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.document_loaders import DirectoryLoader
+
+# Load documents
+loader = DirectoryLoader('./docs', glob="**/*.md")
+documents = loader.load()
+
+# Split into chunks
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200
+)
+chunks = splitter.split_documents(documents)
+
+# Add to vector store
+vectorstore.add_documents(chunks)`,
+        explanation: 'Before RAG works, you need to load and chunk your documents, then store their embeddings in a vector database.',
+      },
+    ],
+    useCases: [
+      'Customer support bots that answer questions from product documentation',
+      'Internal knowledge bases where employees can query company policies',
+      'Legal research assistants that search through case law and contracts',
+      'Code assistants that understand your specific codebase',
+    ],
+    commonMistakes: [
+      'Chunk sizes too small—loses context and coherence',
+      'Chunk sizes too large—retrieves irrelevant content and wastes tokens',
+      'Not including metadata—makes it hard to filter or cite sources',
+      'Ignoring chunk overlap—can split important information across chunks',
+      'Not evaluating retrieval quality separately from generation quality',
+    ],
+    practicalTips: [
+      'Start with chunk sizes of 500-1000 tokens and 10-20% overlap',
+      'Always store metadata (source, page, date) with your chunks',
+      'Test retrieval quality before adding the LLM—if retrieval is bad, answers will be bad',
+      'Consider hybrid search (keyword + semantic) for better results',
+      'Use re-ranking to improve the order of retrieved documents',
+    ],
+    relatedTerms: ['Embedding', 'Vector Database', 'Grounding', 'Semantic Search', 'GraphRAG'],
+    furtherReading: [
+      { title: 'RAG Techniques - LangChain', url: 'https://python.langchain.com/docs/tutorials/rag/' },
+      { title: 'Building RAG Applications - Anthropic', url: 'https://docs.anthropic.com/en/docs/build-with-claude/retrieval-augmented-generation' },
+    ],
   },
   {
     term: 'GraphRAG',
@@ -555,6 +1037,113 @@ export const staticLexicon: LexiconTerm[] = [
     level: 'intermediate',
     category: 'techniques',
     tags: ['prompting', 'reasoning'],
+    slug: 'chain-of-thought',
+    overview: `Chain-of-Thought (CoT) prompting dramatically improves LLM performance on reasoning tasks by asking the model to "think step by step." Instead of jumping directly to an answer, the model breaks down the problem and works through it systematically.
+
+This technique emerged from a key insight: LLMs are better at reasoning when they can show their work. By generating intermediate steps, the model can catch errors, maintain context, and build toward correct answers—much like how humans solve complex problems.
+
+CoT is particularly effective for math problems, logic puzzles, multi-step planning, and any task that requires connecting multiple pieces of information. It's now considered a fundamental technique in prompt engineering.`,
+    keyConcepts: [
+      {
+        title: 'Step-by-Step Reasoning',
+        description: 'Breaking complex problems into smaller, manageable steps that the model solves sequentially.',
+      },
+      {
+        title: 'Zero-Shot CoT',
+        description: 'Simply adding "Let\'s think step by step" to a prompt without providing examples. Often surprisingly effective.',
+      },
+      {
+        title: 'Few-Shot CoT',
+        description: 'Providing examples that demonstrate the reasoning process, teaching the model the expected format and depth.',
+      },
+      {
+        title: 'Self-Consistency',
+        description: 'Generating multiple reasoning chains and selecting the most common answer to improve reliability.',
+      },
+    ],
+    examples: [
+      {
+        language: 'text',
+        title: 'Zero-Shot Chain-of-Thought',
+        code: `Question: A store sells apples for $2 each. If I buy 3 apples and pay with a $20 bill, how much change should I receive?
+
+Let's think step by step.
+
+# Model Response:
+1. First, I need to calculate the total cost of the apples
+2. Cost = 3 apples × $2 per apple = $6
+3. Next, I subtract the total cost from the payment
+4. Change = $20 - $6 = $14
+
+Therefore, I should receive $14 in change.`,
+        explanation: 'Simply adding "Let\'s think step by step" triggers systematic reasoning, reducing errors on arithmetic problems.',
+      },
+      {
+        language: 'text',
+        title: 'Few-Shot Chain-of-Thought',
+        code: `Example 1:
+Q: If a train travels 60 miles in 1 hour, how far does it travel in 2.5 hours?
+A: The train travels 60 miles per hour. In 2.5 hours, it travels 60 × 2.5 = 150 miles. The answer is 150 miles.
+
+Example 2:
+Q: A recipe calls for 2 cups of flour for 12 cookies. How much flour for 30 cookies?
+A: 12 cookies need 2 cups. That's 2/12 = 1/6 cup per cookie. For 30 cookies: 30 × 1/6 = 5 cups. The answer is 5 cups.
+
+Now solve:
+Q: A car uses 3 gallons of gas to drive 90 miles. How many gallons for 210 miles?`,
+        explanation: 'Providing worked examples teaches the model the expected reasoning format and depth.',
+      },
+      {
+        language: 'python',
+        title: 'CoT with Claude API',
+        code: `import anthropic
+
+client = anthropic.Anthropic()
+
+response = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    messages=[{
+        "role": "user",
+        "content": """Solve this problem step by step:
+
+A farmer has chickens and cows. He counts 50 heads
+and 140 legs. How many chickens and cows does he have?
+
+Think through this carefully, showing each step of
+your reasoning."""
+    }]
+)
+
+print(response.content[0].text)`,
+        explanation: 'Explicitly asking for step-by-step reasoning in the prompt improves accuracy on complex problems.',
+      },
+    ],
+    useCases: [
+      'Mathematical word problems and calculations',
+      'Logic puzzles and deductive reasoning',
+      'Multi-step planning and decision making',
+      'Code debugging and analysis',
+      'Complex question answering requiring synthesis',
+    ],
+    commonMistakes: [
+      'Using CoT for simple tasks where it adds unnecessary tokens',
+      'Not providing enough context for the reasoning to be grounded',
+      'Expecting CoT to fix fundamental knowledge gaps',
+      'Not reviewing reasoning chains for errors in intermediate steps',
+    ],
+    practicalTips: [
+      'Use "Let\'s think step by step" as a quick boost for reasoning tasks',
+      'For critical applications, use self-consistency (multiple samples + majority vote)',
+      'Review the reasoning chain, not just the final answer—errors can hide in steps',
+      'Combine CoT with verification: ask the model to check its own work',
+      'Adjust chain length to task complexity—simple problems need fewer steps',
+    ],
+    relatedTerms: ['Tree of Thoughts', 'ReAct', 'Self-Consistency', 'Prompt Engineering', 'Few-Shot Learning'],
+    furtherReading: [
+      { title: 'Chain-of-Thought Prompting Paper', url: 'https://arxiv.org/abs/2201.11903' },
+      { title: 'Prompt Engineering - Anthropic', url: 'https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering' },
+    ],
   },
   {
     term: 'Tree of Thoughts',
@@ -1438,4 +2027,32 @@ export function getLexiconStats() {
 export function getLexiconTerm(termName: string): LexiconTerm | null {
   const normalized = termName.toLowerCase();
   return staticLexicon.find(item => item.term.toLowerCase() === normalized) || null;
+}
+
+/**
+ * Convert a term name to a URL-safe slug
+ */
+export function termToSlug(termName: string): string {
+  return termName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/**
+ * Get a term by its slug (URL-safe version of name)
+ */
+export function getTermBySlug(slug: string): LexiconTerm | null {
+  const normalized = slug.toLowerCase();
+  return staticLexicon.find(item => {
+    // Check explicit slug first
+    if (item.slug === normalized) return true;
+    // Fall back to converting term name to slug
+    const termSlug = termToSlug(item.term);
+    return termSlug === normalized;
+  }) || null;
+}
+
+/**
+ * Get all terms (for generating static pages)
+ */
+export function getAllTermSlugs(): string[] {
+  return staticLexicon.map(term => term.slug || termToSlug(term.term));
 }
