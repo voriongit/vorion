@@ -25,6 +25,7 @@ import {
   ChevronRight,
   ExternalLink,
   Play,
+  GraduationCap,
 } from 'lucide-react';
 import { getPathBySlug, getNextPaths, getPathTermCount } from '@/lib/learning-paths';
 import { getLexiconTerm } from '@/lib/lexicon-data';
@@ -66,12 +67,13 @@ const difficultyBadge: Record<PathDifficulty, { label: string; class: string }> 
   expert: { label: 'Expert', class: 'bg-red-500/20 text-red-400 border-red-500/30' },
 };
 
-function ModuleCard({ module, index, isExpanded, onToggle, pathColor }: {
+function ModuleCard({ module, index, isExpanded, onToggle, pathColor, pathSlug }: {
   module: LearningPathModule;
   index: number;
   isExpanded: boolean;
   onToggle: () => void;
   pathColor: string;
+  pathSlug: string;
 }) {
   const iconClass = iconColorMap[pathColor] || iconColorMap.cyan;
 
@@ -134,6 +136,17 @@ function ModuleCard({ module, index, isExpanded, onToggle, pathColor }: {
                 );
               })}
             </div>
+          </div>
+
+          {/* Module Quiz Link */}
+          <div className="pt-2 border-t border-gray-700/50">
+            <Link
+              href={`/paths/${pathSlug}/quiz?module=${module.id}`}
+              className="inline-flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
+            >
+              <GraduationCap className="w-4 h-4" />
+              Take Module Quiz
+            </Link>
           </div>
         </div>
       )}
@@ -302,6 +315,7 @@ export default function LearningPathDetailPage() {
                     isExpanded={expandedModules.has(module.id)}
                     onToggle={() => toggleModule(module.id)}
                     pathColor={path.color}
+                    pathSlug={path.slug}
                   />
                 ))}
               </div>
@@ -329,15 +343,24 @@ export default function LearningPathDetailPage() {
               <p className="text-sm text-gray-400 mb-4">
                 Begin with Module 1 and work through each section in order.
               </p>
-              {path.modules[0] && (
+              <div className="flex flex-col gap-2">
+                {path.modules[0] && (
+                  <Link
+                    href={`/lexicon?term=${encodeURIComponent(path.modules[0].terms[0])}`}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-medium rounded-lg transition-colors"
+                  >
+                    <Play className="w-4 h-4" />
+                    Start Learning
+                  </Link>
+                )}
                 <Link
-                  href={`/lexicon?term=${encodeURIComponent(path.modules[0].terms[0])}`}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-medium rounded-lg transition-colors"
+                  href={`/paths/${path.slug}/quiz`}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors"
                 >
-                  <Play className="w-4 h-4" />
-                  Start Learning
+                  <GraduationCap className="w-4 h-4" />
+                  Take Quiz
                 </Link>
-              )}
+              </div>
             </div>
 
             {/* Tags */}

@@ -51,6 +51,52 @@ export interface UserPathProgress {
   completedAt?: Date;
 }
 
+// Quiz Types
+export type QuestionType = 'multiple-choice' | 'true-false' | 'fill-blank';
+
+export interface QuizOption {
+  id: string;
+  text: string;
+  isCorrect: boolean;
+}
+
+export interface QuizQuestion {
+  id: string;
+  termName: string; // Which lexicon term this tests
+  type: QuestionType;
+  question: string;
+  options: QuizOption[];
+  explanation: string; // Shown after answering
+  difficulty: PathDifficulty;
+}
+
+export interface Quiz {
+  id: string;
+  title: string;
+  description: string;
+  moduleId?: string; // If tied to a specific module
+  pathSlug?: string; // If tied to a specific path
+  questions: QuizQuestion[];
+  passingScore: number; // Percentage (0-100)
+  timeLimit?: number; // Minutes, optional
+}
+
+export interface QuizAttempt {
+  quizId: string;
+  answers: Record<string, string>; // questionId -> selectedOptionId
+  score: number;
+  passed: boolean;
+  completedAt: Date;
+  timeSpent: number; // Seconds
+}
+
+export interface UserQuizProgress {
+  moduleQuizzes: Record<string, QuizAttempt[]>; // moduleId -> attempts
+  termMastery: Record<string, number>; // termName -> mastery score (0-100)
+  totalQuizzesTaken: number;
+  averageScore: number;
+}
+
 // Chat Types
 export interface ChatMessage {
   id: string;
