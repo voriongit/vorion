@@ -1,0 +1,9 @@
+{
+  "redirects": [
+    {
+      "source": "/pitch",
+      "destination": "https://learn.vorion.org/pitch",
+      "permanent": false
+    }
+  ]
+}

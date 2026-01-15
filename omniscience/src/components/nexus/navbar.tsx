@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState } from 'react';
-import { Menu, X, Brain, BookOpen, Layers, Settings, FileCode, Github, MessageCircle, Route, User } from 'lucide-react';
+import { Menu, X, Brain, BookOpen, Settings, FileCode, Github, MessageCircle, Route, User, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -32,10 +33,14 @@ export function Navbar({ onActivateChat }: NavbarProps) {
     <nav className="fixed top-0 w-full z-50 glass border-b border-gray-800 h-16">
       <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center space-x-3 group">
-          <div className="w-8 h-8 rounded border border-cyan-500 flex items-center justify-center bg-cyan-900/20 group-hover:bg-cyan-900/40 transition-colors">
-            <Layers className="w-4 h-4 text-cyan-400" />
-          </div>
+        <Link href="/" className="flex items-center space-x-2 group">
+          <Image
+            src="/vorion.png"
+            alt="Vorion"
+            width={36}
+            height={36}
+            className="group-hover:scale-105 transition-transform"
+          />
           <span className="text-lg font-bold tracking-wider font-mono">
             NEXUS<span className="text-cyan-400">.TRIAD</span>
           </span>
