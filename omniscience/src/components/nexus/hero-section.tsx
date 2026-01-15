@@ -64,7 +64,7 @@ export function HeroSection() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
-        <StatCard value={localNodeCount} label="Local Nodes" color="cyan" />
+        <StatCard value={localNodeCount} label="AI Terms" color="cyan" />
         <StatCard value="3" label="AI Personas" color="purple" />
         <StatCard value="Sim" label="Mode Active" color="orange" />
         <StatCard value="On" label="Local First" color="green" />

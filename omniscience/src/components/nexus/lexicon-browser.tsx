@@ -66,10 +66,10 @@ export function LexiconBrowser({ onSelectTerm }: LexiconBrowserProps) {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 mb-6 border-b border-gray-800 pb-4">
         <div>
-          <h2 className="text-2xl font-bold text-white">Knowledge Graph</h2>
+          <h2 className="text-2xl font-bold text-white">AI Terms Glossary</h2>
           <div className="flex items-center gap-3 mt-1">
             <p className="text-xs text-gray-500 font-mono">
-              {filteredTerms.length} NODES
+              {filteredTerms.length} TERMS
             </p>
             <span className="text-gray-700">|</span>
             {isCloudSynced ? (
@@ -95,7 +95,7 @@ export function LexiconBrowser({ onSelectTerm }: LexiconBrowserProps) {
             <Input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Filter nodes..."
+              placeholder="Search terms..."
               className="pl-9 w-48"
             />
           </div>

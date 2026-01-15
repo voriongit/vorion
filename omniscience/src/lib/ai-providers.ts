@@ -2,21 +2,31 @@
  * AI Provider Abstraction Layer
  *
  * This module provides a unified interface for multiple AI models.
- * Currently uses Gemini to simulate all perspectives.
- * Designed for easy extension to real Claude/Grok APIs when ready.
+ * Supports native Gemini, Claude, and Grok APIs when keys are configured.
+ * Falls back to Gemini simulation for unconfigured providers.
  */
 
 import { google } from '@ai-sdk/google';
 import { anthropic } from '@ai-sdk/anthropic';
+import { xai } from '@ai-sdk/xai';
 import { generateText, streamText } from 'ai';
 import type { AIModel, SynthesisPerspective, SynthesisRequest, SynthesisResponse } from '@/types';
 
-// Provider status - which models are available
-export const providerStatus: Record<AIModel, { available: boolean; simulated: boolean }> = {
-  gemini: { available: true, simulated: false },
-  claude: { available: false, simulated: true },  // Will be true when API key added
-  grok: { available: false, simulated: true },    // Will be true when API key added
-};
+// Provider status - dynamically check for API keys
+export function getProviderStatus(): Record<AIModel, { available: boolean; simulated: boolean }> {
+  const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+  const hasXaiKey = !!process.env.XAI_API_KEY;
+  const hasGoogleKey = !!process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+  return {
+    gemini: { available: hasGoogleKey, simulated: false },
+    claude: { available: hasAnthropicKey, simulated: !hasAnthropicKey },
+    grok: { available: hasXaiKey, simulated: !hasXaiKey },
+  };
+}
+
+// Legacy export for backwards compatibility
+export const providerStatus = getProviderStatus();
 
 // Model personas for simulation
 const MODEL_PERSONAS: Record<AIModel, string> = {
@@ -69,7 +79,8 @@ export async function generatePerspective(
   context?: string
 ): Promise<SynthesisPerspective> {
   const persona = MODEL_PERSONAS[model];
-  const status = providerStatus[model];
+  const status = getProviderStatus()[model];
+  const promptText = context ? `Context: ${context}\n\nQuestion: ${query}` : query;
 
   // If model is available natively, use it
   if (status.available && !status.simulated) {
@@ -77,16 +88,25 @@ export async function generatePerspective(
       const result = await generateText({
         model: google('gemini-2.0-flash'),
         system: persona,
-        prompt: context ? `Context: ${context}\n\nQuestion: ${query}` : query,
+        prompt: promptText,
       });
       return { model, content: result.text };
     }
 
-    if (model === 'claude' && process.env.ANTHROPIC_API_KEY) {
+    if (model === 'claude') {
       const result = await generateText({
         model: anthropic('claude-sonnet-4-20250514'),
         system: persona,
-        prompt: context ? `Context: ${context}\n\nQuestion: ${query}` : query,
+        prompt: promptText,
+      });
+      return { model, content: result.text };
+    }
+
+    if (model === 'grok') {
+      const result = await generateText({
+        model: xai('grok-3'),
+        system: persona,
+        prompt: promptText,
       });
       return { model, content: result.text };
     }

@@ -10,57 +10,101 @@ const docCategories = [
     title: 'Agent Taxonomy',
     description: 'Classification of agent types from simple reflex to BDI agents',
     icon: Layers,
-    href: '/docs/taxonomy',
-    articles: ['Simple Reflex', 'Model-Based', 'Goal-Based', 'Utility-Based', 'Learning Agents', 'BDI Agents'],
+    category: 'core',
+    articles: [
+      { name: 'Agent', slug: 'agent' },
+      { name: 'Agentic AI', slug: 'agentic-ai' },
+      { name: 'Multi-Agent Systems', slug: 'multi-agent-systems' },
+      { name: 'Tool Use', slug: 'tool-use' },
+      { name: 'Autonomous Agent', slug: 'autonomous-agent' },
+    ],
   },
   {
     title: 'Cognitive Architecture',
     description: 'Internal structures enabling agent reasoning and action',
     icon: Cpu,
-    href: '/docs/architecture',
-    articles: ['ReAct Pattern', 'Memory Systems', 'Planning Engines', 'Tool Use', 'Neuro-Symbolic'],
+    category: 'architecture',
+    articles: [
+      { name: 'ReAct Pattern', slug: 'react' },
+      { name: 'Chain of Thought', slug: 'chain-of-thought' },
+      { name: 'Memory Systems', slug: 'memory' },
+      { name: 'Inference Scaling', slug: 'inference-scaling' },
+      { name: 'Mixture of Experts', slug: 'mixture-of-experts' },
+    ],
   },
   {
     title: 'Orchestration',
     description: 'Multi-agent coordination patterns and protocols',
     icon: Network,
-    href: '/docs/orchestration',
-    articles: ['Hierarchical', 'Swarm Intelligence', 'Event-Driven', 'Multi-Agent Debate', 'Consensus'],
+    category: 'orchestration',
+    articles: [
+      { name: 'Agent Orchestration', slug: 'agent-orchestration' },
+      { name: 'Multi-Agent Debate', slug: 'multi-agent-debate' },
+      { name: 'Swarm Intelligence', slug: 'swarm-intelligence' },
+      { name: 'Hierarchical Agents', slug: 'hierarchical-agents' },
+    ],
   },
   {
-    title: 'Protocols',
+    title: 'Protocols & Standards',
     description: 'Standards for agent communication and identity',
     icon: FileCode,
-    href: '/docs/protocols',
-    articles: ['MCP', 'A2A', 'Agent Identity (DID)', 'BASIS Standard'],
+    category: 'protocols',
+    articles: [
+      { name: 'Model Context Protocol', slug: 'model-context-protocol' },
+      { name: 'Agent-to-Agent (A2A)', slug: 'agent-to-agent-protocol' },
+      { name: 'EU AI Act', slug: 'eu-ai-act' },
+      { name: 'NIST AI RMF', slug: 'nist-ai-rmf' },
+    ],
   },
   {
     title: 'Safety & Governance',
     description: 'Trust, oversight, and accountability mechanisms',
     icon: Shield,
-    href: '/docs/safety',
-    articles: ['Trust Scoring (ATSF)', 'Capability Gating', 'Audit Trails', 'Human Oversight'],
+    category: 'safety',
+    articles: [
+      { name: 'AI Red Teaming', slug: 'ai-red-teaming' },
+      { name: 'Deceptive Alignment', slug: 'deceptive-alignment' },
+      { name: 'Human-in-the-Loop', slug: 'human-in-the-loop' },
+      { name: 'Kill Switch', slug: 'kill-switch' },
+      { name: 'Corrigibility', slug: 'corrigibility' },
+    ],
   },
   {
-    title: 'Domain Applications',
-    description: 'Real-world use cases for agentic AI',
+    title: 'Modern AI Concepts',
+    description: 'Current trends and terminology in AI',
     icon: Zap,
-    href: '/docs/domains',
-    articles: ['Software Engineering', 'Scientific Research', 'Finance & Trading', 'Enterprise Automation'],
+    category: 'techniques',
+    articles: [
+      { name: 'Ralph Wiggum Theory', slug: 'ralph-wiggum-theory' },
+      { name: 'Vibe Coding', slug: 'vibe-coding' },
+      { name: 'AI Slop', slug: 'ai-slop' },
+      { name: 'Model Collapse', slug: 'model-collapse' },
+      { name: 'Deepseek', slug: 'deepseek' },
+    ],
   },
   {
-    title: 'Evolution & Learning',
-    description: 'How agents improve over time',
+    title: 'Compliance & Regulation',
+    description: 'Laws, frameworks, and compliance requirements',
     icon: GraduationCap,
-    href: '/docs/evolution',
-    articles: ['Seeding & Initialization', 'Evolutionary Optimization', 'Memetic Learning', 'Self-Improvement'],
+    category: 'ethics',
+    articles: [
+      { name: 'EU AI Act', slug: 'eu-ai-act' },
+      { name: 'Executive Order 14110', slug: 'executive-order-14110' },
+      { name: 'Algorithmic Impact Assessment', slug: 'algorithmic-impact-assessment' },
+      { name: 'Model Cards', slug: 'model-cards' },
+    ],
   },
   {
-    title: 'SDK Reference',
-    description: 'AgentAnchor and BASIS SDK documentation',
+    title: 'Red Team & Testing',
+    description: 'Adversarial testing and deception detection',
     icon: BookOpen,
-    href: '/docs/sdk',
-    articles: ['@basis-protocol/core', '@agentanchor/sdk', '@agentanchor/react', 'Cognigate API'],
+    category: 'safety',
+    articles: [
+      { name: 'Sandboxing', slug: 'sandboxing' },
+      { name: 'Honeypot Testing', slug: 'honeypot-testing' },
+      { name: 'Behavioral Consistency', slug: 'behavioral-consistency-testing' },
+      { name: 'Jailbreaking', slug: 'jailbreaking' },
+    ],
   },
 ];
 
@@ -98,12 +142,13 @@ export default function DocsPage() {
                     <p className="text-sm text-gray-400 mb-3">{category.description}</p>
                     <div className="flex flex-wrap gap-1">
                       {category.articles.map(article => (
-                        <span
-                          key={article}
-                          className="text-xs px-2 py-0.5 bg-gray-800 text-gray-500 rounded hover:text-cyan-400 cursor-pointer transition-colors"
+                        <Link
+                          key={article.slug}
+                          href={`/lexicon/${article.slug}`}
+                          className="text-xs px-2 py-0.5 bg-gray-800 text-gray-500 rounded hover:text-cyan-400 hover:bg-gray-700 transition-colors"
                         >
-                          {article}
-                        </span>
+                          {article.name}
+                        </Link>
                       ))}
                     </div>
                   </div>
@@ -117,32 +162,32 @@ export default function DocsPage() {
             <h3 className="text-lg font-bold text-white mb-4">Quick Links</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Link
-                href="/docs/protocols/basis"
+                href="/lexicon/constitutional-ai"
                 className="p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center"
               >
                 <div className="text-2xl mb-1">🔗</div>
-                <div className="text-sm text-white">BASIS Standard</div>
+                <div className="text-sm text-white">Constitutional AI</div>
               </Link>
               <Link
-                href="/docs/sdk/agentanchor"
+                href="/lexicon/ai-red-teaming"
                 className="p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center"
               >
-                <div className="text-2xl mb-1">📦</div>
-                <div className="text-sm text-white">SDK Quickstart</div>
+                <div className="text-2xl mb-1">🎯</div>
+                <div className="text-sm text-white">Red Teaming</div>
               </Link>
               <Link
-                href="/docs/safety/trust-scoring"
+                href="/lexicon/eu-ai-act"
                 className="p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center"
               >
                 <div className="text-2xl mb-1">🛡️</div>
-                <div className="text-sm text-white">Trust Scoring</div>
+                <div className="text-sm text-white">EU AI Act</div>
               </Link>
               <Link
                 href="/lexicon"
                 className="p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center"
               >
                 <div className="text-2xl mb-1">📖</div>
-                <div className="text-sm text-white">Glossary</div>
+                <div className="text-sm text-white">Full Glossary</div>
               </Link>
             </div>
           </div>
