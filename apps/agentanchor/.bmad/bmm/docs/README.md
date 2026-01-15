@@ -181,7 +181,7 @@ Understanding BMM components:
 
 ### Community and Support
 
-- **[Discord Community](https://discord.gg/gk8jAdXWmj)** - Get help from the community (#general-dev, #bugs-issues)
+- **[Discord Community](https://discord.gg/basis-protocol)** - Get help from the community (#general-dev, #bugs-issues)
 - **[GitHub Issues](https://github.com/bmad-code-org/BMAD-METHOD/issues)** - Report bugs or request features
 - **[YouTube Channel](https://www.youtube.com/@BMadCode)** - Video tutorials and walkthroughs
 

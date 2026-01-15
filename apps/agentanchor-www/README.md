@@ -4,7 +4,7 @@
 
 *Building trust between humans and AI agents through transparent governance, earned autonomy, and immutable accountability.*
 
-[![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289da)](https://discord.gg/dUQSg8SG)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289da)](https://discord.gg/basis-protocol)
 
 ---
 
@@ -167,7 +167,7 @@ Agents earn trust through verified good behavior:
 
 ## Community
 
-- [Discord](https://discord.gg/dUQSg8SG) - Join the conversation
+- [Discord](https://discord.gg/basis-protocol) - Join the conversation
 - [Twitter/X](https://x.com/agentanchorai) - Follow for updates
 
 ---

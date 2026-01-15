@@ -238,11 +238,33 @@ export default function PitchPage() {
         </div>
       </section>
 
+      {/* Video Demo Section */}
+      <section className="py-16 px-6 border-t border-gray-800 bg-gradient-to-b from-purple-500/5 to-transparent">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-white mb-4">
+            Watch How It Works
+          </h2>
+          <p className="text-gray-400 mb-8">
+            See ATSF in action - from integration to real-time governance decisions.
+          </p>
+          <div className="aspect-video bg-gray-900 rounded-xl border border-gray-800 flex items-center justify-center group cursor-pointer hover:border-cyan-500/50 transition-colors">
+            <div className="text-center">
+              <div className="w-20 h-20 mx-auto rounded-full bg-cyan-500/20 flex items-center justify-center mb-4 group-hover:bg-cyan-500/30 transition-colors">
+                <svg className="w-8 h-8 text-cyan-400 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              </div>
+              <p className="text-gray-500 text-sm">Demo video coming soon</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Interactive Demo Section */}
       <section className="py-16 px-6 border-t border-gray-800">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-bold text-white mb-4 text-center">
-            See It In Action
+            Try It Yourself
           </h2>
           <p className="text-gray-400 text-center mb-8">
             TrustBot demonstrates real-time governance decisions. Try asking about payments vs. scheduling.

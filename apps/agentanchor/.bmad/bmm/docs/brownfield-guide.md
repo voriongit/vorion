@@ -748,7 +748,7 @@ flowchart TD
 
 **Community:**
 
-- [Discord](https://discord.gg/gk8jAdXWmj) - #general-dev, #bugs-issues
+- [Discord](https://discord.gg/basis-protocol) - #general-dev, #bugs-issues
 - [GitHub Issues](https://github.com/bmad-code-org/BMAD-METHOD/issues)
 - [YouTube Channel](https://www.youtube.com/@BMadCode)
 

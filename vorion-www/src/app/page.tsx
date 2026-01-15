@@ -1,6 +1,6 @@
 import React from 'react';
 import Image from 'next/image';
-import { ArrowRight, Shield, Cpu, Scale, Database, Globe } from 'lucide-react';
+import { ArrowRight, Shield, Cpu, Scale, Database, Globe, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
 import GovernancePlayground from '@/components/GovernancePlayground';
 
@@ -16,9 +16,13 @@ export default function Home() {
             <span className="font-bold text-xl tracking-tighter text-white">VORION<span className="text-indigo-500">.ORG</span></span>
           </div>
           <div className="flex gap-6 text-sm font-medium text-neutral-400">
-            <Link href="https://basis.vorion.org" className="hover:text-white transition-colors">Standard (BASIS)</Link>
-            <Link href="https://learn.vorion.org" className="hover:text-white transition-colors">Learn (Omniscience)</Link>
-            <Link href="https://cognigate.dev" className="hover:text-white transition-colors">Developer Engine</Link>
+            <Link href="https://basis.vorion.org" className="hover:text-white transition-colors">Standard</Link>
+            <Link href="https://learn.vorion.org" className="hover:text-white transition-colors">Learn</Link>
+            <Link href="https://cognigate.dev" className="hover:text-white transition-colors">Developers</Link>
+            <Link href="/pitch" className="hover:text-white transition-colors">Enterprise</Link>
+            <Link href="https://discord.gg/basis-protocol" className="hover:text-white transition-colors flex items-center gap-1">
+              <MessageCircle className="w-3 h-3" /> Discord
+            </Link>
           </div>
         </div>
       </nav>
@@ -120,11 +124,14 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-white/5 py-12 px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-sm text-neutral-500">
-          <p>© 2026 Vorion Risk, LLC.</p>
+          <p>© {new Date().getFullYear()} Vorion Risk, LLC.</p>
           <div className="flex gap-6">
-            <Link href="#" className="hover:text-white transition-colors">Privacy</Link>
-            <Link href="#" className="hover:text-white transition-colors">Terms</Link>
-            <Link href="https://github.com/vorion-org" className="hover:text-white transition-colors flex items-center gap-2">
+            <Link href="https://learn.vorion.org" className="hover:text-white transition-colors">Learn</Link>
+            <Link href="https://basis.vorion.org" className="hover:text-white transition-colors">BASIS</Link>
+            <Link href="https://discord.gg/basis-protocol" className="hover:text-white transition-colors flex items-center gap-1">
+              <MessageCircle className="w-3 h-3" /> Discord
+            </Link>
+            <Link href="https://github.com/voriongit" className="hover:text-white transition-colors flex items-center gap-1">
               <Globe className="w-3 h-3" /> GitHub
             </Link>
           </div>

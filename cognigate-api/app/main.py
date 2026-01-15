@@ -12,7 +12,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from app.config import get_settings
 from app.routers import enforce, intent, proof, health, admin
@@ -126,5 +126,12 @@ async def favicon():
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """Redirect root to API documentation."""
-    return RedirectResponse(url="/docs")
+    """Serve the landing page."""
+    index_path = static_path / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path), media_type="text/html")
+    # Fallback to docs if landing page doesn't exist
+    return HTMLResponse(
+        content='<html><head><meta http-equiv="refresh" content="0;url=/docs"></head></html>',
+        status_code=200,
+    )

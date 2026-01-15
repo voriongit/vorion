@@ -157,6 +157,9 @@ export default function HomePage() {
             <a href="https://basis.vorion.org" className="hover:text-cyan-400 transition-colors">
               BASIS
             </a>
+            <a href="https://discord.gg/basis-protocol" className="hover:text-cyan-400 transition-colors">
+              Discord
+            </a>
             <a href="https://github.com/voriongit" className="hover:text-cyan-400 transition-colors">
               GitHub
             </a>

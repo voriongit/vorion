@@ -559,7 +559,7 @@ Trust your expertise - BMM supports your decisions.
 **A:**
 
 1. Search [Complete Documentation](./README.md) for related topics
-2. Ask in [Discord Community](https://discord.gg/gk8jAdXWmj) (#general-dev)
+2. Ask in [Discord Community](https://discord.gg/basis-protocol) (#general-dev)
 3. Open a [GitHub Issue](https://github.com/bmad-code-org/BMAD-METHOD/issues)
 4. Watch [YouTube Tutorials](https://www.youtube.com/@BMadCode)
 
@@ -585,4 +585,4 @@ Please include:
 
 ---
 
-**Have a question not answered here?** Please [open an issue](https://github.com/bmad-code-org/BMAD-METHOD/issues) or ask in [Discord](https://discord.gg/gk8jAdXWmj) so we can add it!
+**Have a question not answered here?** Please [open an issue](https://github.com/bmad-code-org/BMAD-METHOD/issues) or ask in [Discord](https://discord.gg/basis-protocol) so we can add it!

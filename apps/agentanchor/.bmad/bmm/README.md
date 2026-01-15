@@ -119,7 +119,7 @@ Use party mode to engage all 19+ agents (from BMM, CIS, BMB, custom modules) in 
 
 ## 🤝 Community
 
-- **[Discord](https://discord.gg/gk8jAdXWmj)** - Get help, share feedback (#general-dev, #bugs-issues)
+- **[Discord](https://discord.gg/basis-protocol)** - Get help, share feedback (#general-dev, #bugs-issues)
 - **[GitHub Issues](https://github.com/bmad-code-org/BMAD-METHOD/issues)** - Report bugs or request features
 - **[YouTube](https://www.youtube.com/@BMadCode)** - Video tutorials and walkthroughs
 

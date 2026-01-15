@@ -12,5 +12,5 @@ export const urls = {
   docs: process.env.NEXT_PUBLIC_DOCS_URL || 'https://app.agentanchorai.com/docs/api',
 
   // Discord community
-  discord: 'https://discord.gg/dUQSg8SG',
+  discord: 'https://discord.gg/basis-protocol',
 }

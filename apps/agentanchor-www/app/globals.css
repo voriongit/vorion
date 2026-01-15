@@ -11,20 +11,25 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Clean scrollbar */
+/* Dark theme scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #0a0a0f;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #333340;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #00f3ff;
+}
+
+/* Selection styling */
+::selection {
+  background-color: rgba(0, 243, 255, 0.3);
 }
