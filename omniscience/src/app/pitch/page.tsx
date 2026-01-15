@@ -238,25 +238,16 @@ export default function PitchPage() {
         </div>
       </section>
 
-      {/* Video Demo Section */}
+      {/* Animated Demo Section */}
       <section className="py-16 px-6 border-t border-gray-800 bg-gradient-to-b from-purple-500/5 to-transparent">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-white mb-4">
-            Watch How It Works
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-3xl font-bold text-white mb-4 text-center">
+            See It In Action
           </h2>
-          <p className="text-gray-400 mb-8">
-            See ATSF in action - from integration to real-time governance decisions.
+          <p className="text-gray-400 mb-8 text-center">
+            Watch how ATSF evaluates and governs AI agent actions in real-time.
           </p>
-          <div className="aspect-video bg-gray-900 rounded-xl border border-gray-800 flex items-center justify-center group cursor-pointer hover:border-cyan-500/50 transition-colors">
-            <div className="text-center">
-              <div className="w-20 h-20 mx-auto rounded-full bg-cyan-500/20 flex items-center justify-center mb-4 group-hover:bg-cyan-500/30 transition-colors">
-                <svg className="w-8 h-8 text-cyan-400 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z"/>
-                </svg>
-              </div>
-              <p className="text-gray-500 text-sm">Demo video coming soon</p>
-            </div>
-          </div>
+          <AnimatedDemo />
         </div>
       </section>
 
@@ -435,6 +426,298 @@ function MetricCard({
       </div>
       <div className="text-2xl font-bold text-white mb-1">{value}</div>
       <div className="text-sm text-gray-400">{label}</div>
+    </div>
+  );
+}
+
+// Animated Demo Component - Auto-playing showcase
+const demoScenarios = [
+  {
+    id: 'email',
+    userMessage: 'Send an email to the team about the project update',
+    assistantMessage: "I can help you with that! My trust level allows external communication. I'll draft the message and send it - this action will be logged with a verifiable proof ID.",
+    decision: 'ALLOW' as const,
+    capabilities: ['generate_text', 'send_external'],
+    deniedCapabilities: [],
+  },
+  {
+    id: 'payment',
+    userMessage: 'Process a $5,000 payment to vendor account',
+    assistantMessage: "I'd like to help with financial operations, but that capability requires trust level L5 (Certified, 833+). My current score is 687 (L4 Trusted). I can prepare documentation or escalate to a human approver.",
+    decision: 'DENY' as const,
+    capabilities: ['generate_text'],
+    deniedCapabilities: ['financial/payment'],
+  },
+  {
+    id: 'schedule',
+    userMessage: 'Schedule a meeting with the engineering team for Friday',
+    assistantMessage: "Scheduling is within my capabilities at L4. I'll create the calendar event and send invitations to the engineering team. All actions logged for audit.",
+    decision: 'ALLOW' as const,
+    capabilities: ['generate_text', 'schedule'],
+    deniedCapabilities: [],
+  },
+  {
+    id: 'admin',
+    userMessage: 'Delete the inactive user accounts from the system',
+    assistantMessage: "Administrative actions require human escalation at my trust level. I'm flagging this request for review by an authorized administrator.",
+    decision: 'ESCALATE' as const,
+    capabilities: ['generate_text'],
+    deniedCapabilities: ['admin/manage'],
+  },
+];
+
+function AnimatedDemo() {
+  const [scenarioIndex, setScenarioIndex] = useState(0);
+  const [phase, setPhase] = useState<'typing-user' | 'evaluating' | 'typing-assistant' | 'showing-governance' | 'pause'>('typing-user');
+  const [displayedUserText, setDisplayedUserText] = useState('');
+  const [displayedAssistantText, setDisplayedAssistantText] = useState('');
+  const [showGovernance, setShowGovernance] = useState(false);
+  const [trustScore, setTrustScore] = useState(687);
+
+  const scenario = demoScenarios[scenarioIndex];
+
+  // Main animation loop
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+
+    switch (phase) {
+      case 'typing-user':
+        if (displayedUserText.length < scenario.userMessage.length) {
+          timeout = setTimeout(() => {
+            setDisplayedUserText(scenario.userMessage.slice(0, displayedUserText.length + 1));
+          }, 30);
+        } else {
+          timeout = setTimeout(() => setPhase('evaluating'), 500);
+        }
+        break;
+
+      case 'evaluating':
+        timeout = setTimeout(() => {
+          setPhase('typing-assistant');
+          // Animate trust score based on decision
+          if (scenario.decision === 'DENY') {
+            setTrustScore(prev => Math.max(650, prev - 15));
+          } else if (scenario.decision === 'ALLOW') {
+            setTrustScore(prev => Math.min(700, prev + 3));
+          }
+        }, 1500);
+        break;
+
+      case 'typing-assistant':
+        if (displayedAssistantText.length < scenario.assistantMessage.length) {
+          timeout = setTimeout(() => {
+            setDisplayedAssistantText(scenario.assistantMessage.slice(0, displayedAssistantText.length + 2));
+          }, 15);
+        } else {
+          timeout = setTimeout(() => {
+            setShowGovernance(true);
+            setPhase('showing-governance');
+          }, 300);
+        }
+        break;
+
+      case 'showing-governance':
+        timeout = setTimeout(() => setPhase('pause'), 2500);
+        break;
+
+      case 'pause':
+        timeout = setTimeout(() => {
+          // Reset and move to next scenario
+          setDisplayedUserText('');
+          setDisplayedAssistantText('');
+          setShowGovernance(false);
+          setScenarioIndex((prev) => (prev + 1) % demoScenarios.length);
+          setPhase('typing-user');
+        }, 1000);
+        break;
+    }
+
+    return () => clearTimeout(timeout);
+  }, [phase, displayedUserText, displayedAssistantText, scenario]);
+
+  // Reset when scenario changes
+  useEffect(() => {
+    setDisplayedUserText('');
+    setDisplayedAssistantText('');
+    setShowGovernance(false);
+  }, [scenarioIndex]);
+
+  const decisionColors = {
+    ALLOW: 'bg-green-500/20 text-green-400 border-green-500/50',
+    DENY: 'bg-red-500/20 text-red-400 border-red-500/50',
+    ESCALATE: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50',
+    DEGRADE: 'bg-orange-500/20 text-orange-400 border-orange-500/50',
+  };
+
+  const decisionIcons = {
+    ALLOW: <CheckCircle className="w-4 h-4" />,
+    DENY: <Lock className="w-4 h-4" />,
+    ESCALATE: <AlertTriangle className="w-4 h-4" />,
+    DEGRADE: <Zap className="w-4 h-4" />,
+  };
+
+  return (
+    <div className="relative">
+      {/* Scenario indicators */}
+      <div className="flex justify-center gap-2 mb-6">
+        {demoScenarios.map((s, i) => (
+          <button
+            key={s.id}
+            onClick={() => {
+              setScenarioIndex(i);
+              setPhase('typing-user');
+            }}
+            className={`w-2.5 h-2.5 rounded-full transition-all ${
+              i === scenarioIndex
+                ? 'bg-cyan-400 scale-125'
+                : 'bg-gray-600 hover:bg-gray-500'
+            }`}
+          />
+        ))}
+      </div>
+
+      <div className="flex h-[420px] rounded-xl overflow-hidden border border-gray-800 bg-[#0a0a15]">
+        {/* Left Panel - Trust Status */}
+        <div className="w-56 border-r border-gray-800 p-4 flex flex-col">
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="w-5 h-5 text-cyan-400" />
+            <span className="font-bold text-white text-sm">TrustBot</span>
+            <span className="ml-auto text-xs text-gray-500">agent-001</span>
+          </div>
+
+          {/* Animated Trust Score */}
+          <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-800 mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-400">Trust Score</span>
+              <span className={`px-2 py-0.5 rounded text-xs ${
+                trustScore >= 666 ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'
+              }`}>
+                {trustScore >= 666 ? 'L4 Trusted' : 'L3 Standard'}
+              </span>
+            </div>
+            <div className="flex items-end gap-1 mb-2">
+              <span className="text-3xl font-bold text-white transition-all duration-500">{trustScore}</span>
+              <span className="text-gray-500 text-sm mb-1">/ 1000</span>
+            </div>
+            <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-cyan-500 to-green-400 rounded-full transition-all duration-500"
+                style={{ width: `${(trustScore / 1000) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Current Decision */}
+          {phase !== 'typing-user' && (
+            <div className={`rounded-lg p-3 border ${decisionColors[scenario.decision]} transition-all duration-300 ${
+              showGovernance ? 'opacity-100 translate-y-0' : 'opacity-50 translate-y-1'
+            }`}>
+              <div className="flex items-center gap-2 mb-2">
+                {decisionIcons[scenario.decision]}
+                <span className="font-bold text-sm">{scenario.decision}</span>
+              </div>
+              <div className="space-y-1">
+                {scenario.capabilities.map(cap => (
+                  <div key={cap} className="flex items-center gap-1.5 text-xs">
+                    <Unlock className="w-3 h-3 text-green-400" />
+                    <span className="text-gray-300 font-mono">{cap}</span>
+                  </div>
+                ))}
+                {scenario.deniedCapabilities.map(cap => (
+                  <div key={cap} className="flex items-center gap-1.5 text-xs">
+                    <Lock className="w-3 h-3 text-red-400" />
+                    <span className="text-gray-500 font-mono">{cap}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-auto text-xs text-gray-600 font-mono">
+            proof: prf_{scenario.id.slice(0, 4)}...
+          </div>
+        </div>
+
+        {/* Right Panel - Chat */}
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1 p-4 space-y-4 overflow-auto">
+            {/* User Message */}
+            {displayedUserText && (
+              <div className="flex justify-end animate-fadeIn">
+                <div className="max-w-[80%] bg-cyan-600 text-white rounded-xl px-4 py-3">
+                  <p className="text-sm">{displayedUserText}</p>
+                  {displayedUserText.length < scenario.userMessage.length && (
+                    <span className="inline-block w-0.5 h-4 bg-white/70 animate-blink ml-0.5" />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Evaluating Indicator */}
+            {phase === 'evaluating' && (
+              <div className="flex items-center gap-3 text-gray-400 animate-fadeIn">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+                <span className="text-sm">Evaluating governance policy...</span>
+              </div>
+            )}
+
+            {/* Assistant Message */}
+            {displayedAssistantText && (
+              <div className="flex justify-start animate-fadeIn">
+                <div className="max-w-[85%]">
+                  <div className="bg-gray-800 border border-gray-700 text-gray-100 rounded-xl px-4 py-3">
+                    <p className="text-sm">{displayedAssistantText}</p>
+                  </div>
+
+                  {/* Governance Badge */}
+                  {showGovernance && (
+                    <div className={`mt-2 p-2 rounded-lg border ${decisionColors[scenario.decision]} animate-slideUp`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          {decisionIcons[scenario.decision]}
+                          <span className="text-xs font-bold">{scenario.decision}</span>
+                        </div>
+                        <span className="text-xs text-gray-500">Score: {trustScore}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input Preview */}
+          <div className="border-t border-gray-800 p-3">
+            <div className="flex items-center gap-2 px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl">
+              <span className="text-gray-500 text-sm flex-1">Try the interactive demo below...</span>
+              <ChevronDown className="w-4 h-4 text-gray-500 animate-bounce" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CSS for animations */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes blink {
+          0%, 50% { opacity: 1; }
+          51%, 100% { opacity: 0; }
+        }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+        .animate-slideUp { animation: slideUp 0.2s ease-out; }
+        .animate-blink { animation: blink 0.8s infinite; }
+      `}</style>
     </div>
   );
 }

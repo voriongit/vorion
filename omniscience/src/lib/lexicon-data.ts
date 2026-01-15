@@ -1295,7 +1295,7 @@ if not is_safe:
   {
     term: 'Accelerated Decay',
     definition: 'A 3x faster trust score reduction applied in ATSF after security failures or policy violations. Rapidly demotes agents that demonstrate untrustworthiness, providing faster response to potential threats than standard decay.',
-    level: 'advanced',
+    level: 'expert',
     category: 'safety',
     tags: ['trust', 'security', 'atsf'],
     slug: 'accelerated-decay',
@@ -1304,7 +1304,7 @@ if not is_safe:
   {
     term: 'Proof Chain',
     definition: 'A SHA-256 hashed audit trail in ATSF that cryptographically links agent actions for verification. Each action references the previous hash, creating an immutable, tamper-evident record of agent behavior.',
-    level: 'advanced',
+    level: 'expert',
     category: 'safety',
     tags: ['audit', 'security', 'atsf', 'cryptography'],
     slug: 'proof-chain',
