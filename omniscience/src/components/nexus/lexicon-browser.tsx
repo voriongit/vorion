@@ -5,7 +5,7 @@ import { Search, Filter, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LexiconCard } from './lexicon-card';
-import { useLexicon } from '@/lib/firebase-hooks';
+import { useLexicon } from '@/lib/supabase-hooks';
 import type { LexiconTerm, KnowledgeLevel } from '@/types';
 
 interface LexiconBrowserProps {

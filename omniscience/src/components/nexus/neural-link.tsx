@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { PenLine, Upload, Cloud, CloudOff, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useSubmissions, useFirebaseStatus, useLexiconMutations } from '@/lib/firebase-hooks';
+import { useSubmissions, useFirebaseStatus, useLexiconMutations } from '@/lib/supabase-hooks';
 import type { KnowledgeLevel } from '@/types';
 
 interface NeuralLinkProps {

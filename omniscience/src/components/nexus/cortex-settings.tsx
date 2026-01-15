@@ -1,18 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, AlertTriangle, Key, Cloud, CloudOff, Database, RefreshCw, Upload, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { useFirebaseStatus, seedLexiconToFirestore } from '@/lib/firebase-hooks';
-import { isFirebaseConfigured } from '@/lib/firebase';
+import { CheckCircle, AlertTriangle, Key, Cloud, CloudOff, Database, Loader2 } from 'lucide-react';
+import { useSupabaseStatus } from '@/lib/supabase-hooks';
+import { isSupabaseConfigured } from '@/lib/supabase-client';
 import type { AIModel } from '@/types';
 
 type ProviderStatus = Record<AIModel, { available: boolean; simulated: boolean }>;
 
 export function CortexSettings() {
-  const firebaseStatus = useFirebaseStatus();
-  const [seeding, setSeeding] = useState(false);
-  const [seedResult, setSeedResult] = useState<{ success: number; errors: number } | null>(null);
+  const dbStatus = useSupabaseStatus();
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -40,40 +37,23 @@ export function CortexSettings() {
 
   // Debug: check raw env vars on client
   const debugEnvVars = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.substring(0, 10) + '...',
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    isConfigured: isFirebaseConfigured(),
-  };
-
-  const handleSeedLexicon = async () => {
-    if (!firebaseStatus.connected) return;
-
-    setSeeding(true);
-    setSeedResult(null);
-
-    try {
-      const result = await seedLexiconToFirestore();
-      setSeedResult(result);
-    } catch (err) {
-      console.error('Seed failed:', err);
-    } finally {
-      setSeeding(false);
-    }
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) + '...',
+    isConfigured: isSupabaseConfigured(),
   };
 
   return (
     <div className="fade-in">
       <div className="max-w-2xl mx-auto space-y-6">
-        {/* Firebase Status */}
+        {/* Database Status */}
         <div className={`glass p-6 rounded-xl border-l-4 ${
-          firebaseStatus.connected ? 'border-emerald-500' : 'border-amber-500'
+          dbStatus.connected ? 'border-emerald-500' : 'border-amber-500'
         }`}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <Database className="w-5 h-5" />
               Cloud Sync Status
             </h2>
-            {firebaseStatus.connected ? (
+            {dbStatus.connected ? (
               <span className="flex items-center gap-1 text-xs text-emerald-500 font-mono">
                 <Cloud className="w-3 h-3" />
                 CONNECTED
@@ -81,59 +61,28 @@ export function CortexSettings() {
             ) : (
               <span className="flex items-center gap-1 text-xs text-amber-500 font-mono">
                 <CloudOff className="w-3 h-3" />
-                {firebaseStatus.configured ? 'OFFLINE' : 'NOT CONFIGURED'}
+                {dbStatus.configured ? 'OFFLINE' : 'NOT CONFIGURED'}
               </span>
             )}
           </div>
 
-          {firebaseStatus.connected ? (
-            <>
-              <p className="text-sm text-gray-400 mb-4">
-                Firebase Firestore is connected. Your lexicon syncs in real-time across all devices.
-              </p>
-              <div className="flex items-center gap-3">
-                <Button
-                  onClick={handleSeedLexicon}
-                  disabled={seeding}
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs"
-                >
-                  {seeding ? (
-                    <>
-                      <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
-                      Seeding...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-3 h-3 mr-2" />
-                      Seed Static Data to Cloud
-                    </>
-                  )}
-                </Button>
-                {seedResult && (
-                  <span className="text-xs text-gray-500">
-                    Added {seedResult.success} terms
-                    {seedResult.errors > 0 && `, ${seedResult.errors} errors`}
-                  </span>
-                )}
-              </div>
-            </>
+          {dbStatus.connected ? (
+            <p className="text-sm text-gray-400">
+              Supabase is connected. Your lexicon syncs in real-time across all devices.
+            </p>
           ) : (
             <>
               <p className="text-sm text-gray-400 mb-4">
-                {firebaseStatus.configured
-                  ? `Connection failed: ${firebaseStatus.error}`
-                  : 'Add Firebase environment variables to enable cloud sync.'}
+                {dbStatus.configured
+                  ? `Connection failed: ${dbStatus.error}`
+                  : 'Add Supabase environment variables to enable cloud sync.'}
               </p>
-              {!firebaseStatus.configured && (
+              {!dbStatus.configured && (
                 <div className="bg-gray-800/50 p-3 rounded-lg">
                   <p className="text-xs text-gray-500 font-mono mb-2">Required variables:</p>
                   <ul className="text-xs text-gray-600 space-y-1 font-mono">
-                    <li>NEXT_PUBLIC_FIREBASE_API_KEY</li>
-                    <li>NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN</li>
-                    <li>NEXT_PUBLIC_FIREBASE_PROJECT_ID</li>
-                    <li>NEXT_PUBLIC_FIREBASE_APP_ID</li>
+                    <li>NEXT_PUBLIC_SUPABASE_URL</li>
+                    <li>NEXT_PUBLIC_SUPABASE_ANON_KEY</li>
                   </ul>
                 </div>
               )}
