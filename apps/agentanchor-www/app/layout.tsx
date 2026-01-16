@@ -6,10 +6,14 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://agentanchorai.com'),
   title: 'AgentAnchor - AI Governance Platform',
   description: 'Enterprise AI governance infrastructure. Deploy AI agents you can trust with real-time trust scoring, capability gating, and immutable audit trails.',
   keywords: ['AI governance', 'AI agents', 'trust scoring', 'AI accountability', 'AI compliance', 'agent governance', 'AI safety', 'enterprise AI'],
   authors: [{ name: 'AgentAnchor Team' }],
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
     title: 'AgentAnchor - AI Governance Platform',
     description: 'Enterprise AI governance infrastructure. Real-time trust scoring, capability gating, and immutable audit trails.',

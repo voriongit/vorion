@@ -14,16 +14,30 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://vorion.org"),
   title: "VORION | Governance for the Autonomous Age",
   description: "VORION is the commercial steward of the BASIS standard. Infrastructure to bind AI to verifiable human intent.",
+  keywords: ["AI governance", "BASIS standard", "AI safety", "autonomous systems", "AI compliance", "agent governance", "VORION"],
+  authors: [{ name: "VORION" }],
   icons: {
     icon: "/vorion.png",
     apple: "/vorion.png",
   },
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     title: "VORION | Governance for the Autonomous Age",
     description: "Infrastructure to bind AI to verifiable human intent.",
+    url: "https://vorion.org",
+    siteName: "VORION",
+    type: "website",
     images: ["/vorion.png"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "VORION | Governance for the Autonomous Age",
+    description: "Infrastructure to bind AI to verifiable human intent.",
   },
 };
 
