@@ -242,7 +242,7 @@ await agent.invoke(input, { callbacks: [callback] });`}</code>
               <div className="p-5 rounded-xl bg-white/5 border border-white/10">
                 <h3 className="font-bold text-white mb-2">Open Source</h3>
                 <p className="text-sm text-neutral-400 mb-3">View source, contribute, or fork for your needs.</p>
-                <a href="https://github.com/voriongit/vorion" target="_blank" className="inline-flex items-center gap-2 px-4 py-2 border border-white/20 hover:bg-white/5 text-white rounded transition-colors text-sm font-medium">
+                <a href="https://github.com/voriongit" target="_blank" className="inline-flex items-center gap-2 px-4 py-2 border border-white/20 hover:bg-white/5 text-white rounded transition-colors text-sm font-medium">
                   <Globe className="w-4 h-4" /> View on GitHub
                 </a>
               </div>
