@@ -16,7 +16,7 @@ export default function Home() {
             <span className="font-bold text-xl tracking-tighter text-white">VORION<span className="text-indigo-500">.ORG</span></span>
           </div>
           <div className="flex gap-6 text-sm font-medium text-neutral-400">
-            <Link href="https://basis.vorion.org" className="hover:text-white transition-colors">Standard</Link>
+            <Link href="https://vorion.org/basis" className="hover:text-white transition-colors">Standard</Link>
             <Link href="https://learn.vorion.org" className="hover:text-white transition-colors">Learn</Link>
             <Link href="https://cognigate.dev" className="hover:text-white transition-colors">Developers</Link>
             <Link href="/pitch" className="hover:text-white transition-colors">Enterprise</Link>
@@ -81,7 +81,7 @@ export default function Home() {
             title="BASIS"
             subtitle="The Standard"
             desc="Baseline Authority for Safe & Interoperable Systems. The global governance rules that systems must follow before reasoning begins."
-            link="https://basis.vorion.org"
+            link="https://vorion.org/basis"
           />
 
           {/* INTENT */}
@@ -127,7 +127,7 @@ export default function Home() {
           <p>© {new Date().getFullYear()} Vorion Risk, LLC.</p>
           <div className="flex gap-6">
             <Link href="https://learn.vorion.org" className="hover:text-white transition-colors">Learn</Link>
-            <Link href="https://basis.vorion.org" className="hover:text-white transition-colors">BASIS</Link>
+            <Link href="https://vorion.org/basis" className="hover:text-white transition-colors">BASIS</Link>
             <Link href="https://discord.gg/basis-protocol" className="hover:text-white transition-colors flex items-center gap-1">
               <MessageCircle className="w-3 h-3" /> Discord
             </Link>

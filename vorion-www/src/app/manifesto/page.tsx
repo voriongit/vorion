@@ -124,7 +124,7 @@ export default function Manifesto() {
             </p>
             <div className="mt-8">
               <Link
-                href="https://basis.vorion.org"
+                href="https://vorion.org/basis"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded hover:bg-indigo-500 transition-colors"
               >
                 Read the Technical Standard →

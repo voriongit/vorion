@@ -42,13 +42,13 @@ const ecosystemLinks = [
     icon: Shield,
     title: 'BASIS Standard',
     description: 'Blockchain Agent Standard for Identity and Security',
-    href: 'https://basis.vorion.org',
+    href: 'https://vorion.org/basis',
   },
   {
     icon: Zap,
     title: 'AgentAnchor',
     description: 'AI governance platform for certification and trust scoring',
-    href: 'https://agentanchor.ai',
+    href: 'https://agentanchorai.com',
   },
   {
     icon: Cpu,
@@ -154,7 +154,7 @@ export default function HomePage() {
             <a href="https://vorion.org" className="hover:text-cyan-400 transition-colors">
               Vorion
             </a>
-            <a href="https://basis.vorion.org" className="hover:text-cyan-400 transition-colors">
+            <a href="https://vorion.org/basis" className="hover:text-cyan-400 transition-colors">
               BASIS
             </a>
             <a href="https://discord.gg/basis-protocol" className="hover:text-cyan-400 transition-colors">

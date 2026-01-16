@@ -21,7 +21,7 @@ const navItems = [
 ];
 
 const externalLinks = [
-  { href: 'https://basis.vorion.org', label: 'BASIS Standard' },
+  { href: 'https://vorion.org/basis', label: 'BASIS Standard' },
   { href: 'https://github.com/voriongit/omniscience', label: 'GitHub', icon: Github },
   { href: 'https://discord.gg/basis-protocol', label: 'Discord', icon: MessageCircle },
 ];

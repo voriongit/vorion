@@ -5,21 +5,21 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'AgentAnchor - The A3I Operating System',
-  description: 'The world\'s first AI Governance Operating System. Deploy AI agents you can trust with enterprise-grade governance, real-time safety controls, and immutable accountability.',
-  keywords: ['AI governance', 'AI agents', 'trust score', 'AI accountability', 'AI transparency', 'agent training', 'A3I-OS', 'AI safety'],
+  title: 'AgentAnchor - AI Governance Platform',
+  description: 'Enterprise AI governance infrastructure. Deploy AI agents you can trust with real-time trust scoring, capability gating, and immutable audit trails.',
+  keywords: ['AI governance', 'AI agents', 'trust scoring', 'AI accountability', 'AI compliance', 'agent governance', 'AI safety', 'enterprise AI'],
   authors: [{ name: 'AgentAnchor Team' }],
   openGraph: {
-    title: 'AgentAnchor - The A3I Operating System',
-    description: 'Deploy AI agents you can trust. Enterprise-grade governance, real-time safety controls, and immutable accountability.',
+    title: 'AgentAnchor - AI Governance Platform',
+    description: 'Enterprise AI governance infrastructure. Real-time trust scoring, capability gating, and immutable audit trails.',
     url: 'https://agentanchorai.com',
     siteName: 'AgentAnchor',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AgentAnchor - The A3I Operating System',
-    description: 'Agents you can anchor to.',
+    title: 'AgentAnchor - AI Governance Platform',
+    description: 'Governance infrastructure for autonomous AI agents.',
     creator: '@agentanchor',
   },
 }

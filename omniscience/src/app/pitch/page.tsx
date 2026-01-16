@@ -372,7 +372,7 @@ await agent.invoke(input, { callbacks: [callback] });`}</code>
           </p>
           <div className="flex gap-4 text-sm text-gray-500">
             <Link href="/" className="hover:text-cyan-400">NEXUS.TRIAD</Link>
-            <a href="https://basis.vorion.org" className="hover:text-cyan-400">BASIS</a>
+            <a href="https://vorion.org/basis" className="hover:text-cyan-400">BASIS</a>
           </div>
         </div>
       </footer>

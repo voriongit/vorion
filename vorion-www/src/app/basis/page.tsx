@@ -83,7 +83,7 @@ export default function BASISPage() {
               name="INTENT"
               subtitle="Parse & Plan"
               description="Understand what the agent wants to do. Parse, plan, and classify risk."
-              href="https://basis.vorion.org/layers/intent"
+              href="https://vorion.org/basis/layers/intent"
               color="blue"
             />
             <LayerCard
@@ -91,7 +91,7 @@ export default function BASISPage() {
               name="ENFORCE"
               subtitle="Trust & Gate"
               description="Check if it's allowed based on trust score and policy."
-              href="https://basis.vorion.org/layers/enforce"
+              href="https://vorion.org/basis/layers/enforce"
               color="indigo"
             />
             <LayerCard
@@ -99,7 +99,7 @@ export default function BASISPage() {
               name="PROOF"
               subtitle="Log & Audit"
               description="Create immutable, cryptographically chained audit trail."
-              href="https://basis.vorion.org/layers/proof"
+              href="https://vorion.org/basis/layers/proof"
               color="emerald"
             />
             <LayerCard
@@ -107,7 +107,7 @@ export default function BASISPage() {
               name="CHAIN"
               subtitle="Anchor & Verify"
               description="Commit proofs to blockchain for independent verification."
-              href="https://basis.vorion.org/layers/chain"
+              href="https://vorion.org/basis/layers/chain"
               color="purple"
             />
           </div>
@@ -169,13 +169,13 @@ export default function BASISPage() {
           <h2 className="text-2xl font-bold text-white mb-6">Get Started</h2>
           <div className="flex flex-wrap gap-4">
             <Link
-              href="https://basis.vorion.org"
+              href="https://vorion.org/basis"
               className="px-6 py-3 bg-white text-black font-semibold rounded hover:bg-neutral-200 transition-colors flex items-center gap-2"
             >
               Read the Full Spec <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
-              href="https://basis.vorion.org/implement/getting-started"
+              href="https://vorion.org/basis/implement/getting-started"
               className="px-6 py-3 border border-white/10 rounded text-white hover:bg-white/5 transition-colors flex items-center gap-2"
             >
               Implementation Guide <ExternalLink className="w-4 h-4" />

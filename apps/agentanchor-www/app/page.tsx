@@ -44,20 +44,17 @@ export default function Home() {
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-cyan-400 text-sm font-medium">
             <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></span>
-            A3I-OS v2.0 Live — Enterprise AI Governance
+            Now Live — Enterprise AI Governance Platform
           </div>
 
           <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
-            The A3I<br />
-            <span className="bg-gradient-to-r from-cyan-400 to-cyan-300 bg-clip-text text-transparent">Operating System</span>
+            AI Governance<br />
+            <span className="bg-gradient-to-r from-cyan-400 to-cyan-300 bg-clip-text text-transparent">Infrastructure</span>
           </h1>
 
           <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
             Deploy AI agents you can trust. AgentAnchor provides enterprise-grade governance,
-            real-time safety controls, and immutable accountability for every agent action.
-          </p>
-          <p className="text-lg text-cyan-400 font-medium mb-2">
-            "Agents you can anchor to."
+            real-time trust scoring, capability gating, and immutable audit trails for every agent action.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -65,7 +62,7 @@ export default function Home() {
               href={urls.app}
               className="px-8 py-4 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white rounded-lg font-semibold transition shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40"
             >
-              Enter The Anchor
+              Get Started
             </a>
             <a
               href="https://discord.gg/basis-protocol"
@@ -84,10 +81,10 @@ export default function Home() {
           <div className="mt-16 pt-8 border-t border-white/5">
             <p className="text-sm text-gray-500 mb-6">Built with enterprise security in mind</p>
             <div className="flex flex-wrap justify-center gap-8 text-gray-500">
-              <span className="text-sm font-medium">8-Level Agent Hierarchy</span>
-              <span className="text-sm font-medium">Council of Nine Governance</span>
-              <span className="text-sm font-medium">Cryptographic Truth Chain</span>
-              <span className="text-sm font-medium">Human-in-the-Loop Controls</span>
+              <span className="text-sm font-medium">6-Tier Trust Scoring</span>
+              <span className="text-sm font-medium">Capability Gating</span>
+              <span className="text-sm font-medium">Cryptographic Audit Trail</span>
+              <span className="text-sm font-medium">Human-in-the-Loop Escalation</span>
             </div>
           </div>
         </div>
@@ -664,7 +661,7 @@ await CircuitBreakerService.pauseAgent({
             <a href="https://vorion.org" className="hover:text-cyan-400 transition-colors">
               Vorion
             </a>
-            <a href="https://basis.vorion.org" className="hover:text-cyan-400 transition-colors">
+            <a href="https://vorion.org/basis" className="hover:text-cyan-400 transition-colors">
               BASIS
             </a>
             <a href="https://discord.gg/basis-protocol" className="hover:text-cyan-400 transition-colors flex items-center gap-1">
