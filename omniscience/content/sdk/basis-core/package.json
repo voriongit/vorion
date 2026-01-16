@@ -37,7 +37,7 @@
     "url": "https://github.com/vorion-protocol/basis-protocol.git",
     "directory": "packages/core"
   },
-  "homepage": "https://basis.vorion.org",
+  "homepage": "https://vorion.org/basis",
   "bugs": {
     "url": "https://github.com/vorion-protocol/basis-protocol/issues"
   },

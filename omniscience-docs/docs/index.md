@@ -91,9 +91,9 @@ The agentic AI landscape is evolving rapidly:
 
 Omniscience is maintained by the [Vorion](https://vorion.org) community:
 
-- **[BASIS Standard](https://basis.vorion.org)** — Open standard for AI agent governance
+- **[BASIS Standard](https://vorion.org/basis)** — Open standard for AI agent governance
 - **[Cognigate](https://cognigate.dev)** — Reference implementation of BASIS
-- **[AgentAnchor](https://agentanchor.ai)** — Agent certification platform
+- **[AgentAnchor](https://agentanchorai.com)** — Agent certification platform
 
 ---
 

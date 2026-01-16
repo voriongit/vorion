@@ -713,4 +713,4 @@ BASIS continues to evolve:
 
 - [Agent Identity](./agent-identity.md) - DID/VC foundations
 - [Trust Scoring](../safety/trust-scoring.md) - ATSF deep dive
-- [BASIS Documentation](https://basis.vorion.org) - Official specification
+- [BASIS Documentation](https://vorion.org/basis) - Official specification

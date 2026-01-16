@@ -8,7 +8,7 @@ vorion.org                    ← Corporate / Movement home
 ├── /about                   ← Team, mission
 └── /blog                    ← Updates, thought leadership
 
-basis.vorion.org             ← The Open Standard
+vorion.org/basis             ← The Open Standard
 ├── /                        ← BASIS overview
 ├── /intent                  ← INTENT layer
 ├── /enforce                 ← ENFORCE layer
@@ -25,7 +25,7 @@ cognigate.dev                ← Reference Implementation
 ├── /api                     ← API reference (Swagger)
 └── /status                  ← Service status
 
-agentanchor.ai               ← Certification Platform
+agentanchorai.com            ← Certification Platform
 ├── /                        ← Marketing / landing
 ├── /register                ← Sign up
 ├── /dashboard               ← Authenticated portal
@@ -44,19 +44,19 @@ agentanchor.ai               ← Certification Platform
 ```yaml
 primary_nav:
   - label: BASIS
-    url: https://basis.vorion.org
+    url: https://vorion.org/basis
     description: The Open Standard
-    
+
   - label: Cognigate
     url: https://cognigate.dev
     description: Reference Implementation
-    
+
   - label: AgentAnchor
-    url: https://agentanchor.ai
+    url: https://agentanchorai.com
     description: Certification Platform
-    
+
   - label: Community
-    url: https://basis.vorion.org/community
+    url: https://discord.gg/basis-protocol
     description: Get Involved
 
 secondary_nav:
@@ -331,7 +331,7 @@ Each page should have exactly one canonical URL:
 module.exports = {
   title: 'BASIS',
   tagline: 'The open standard for AI agent governance',
-  url: 'https://basis.vorion.org',
+  url: 'https://vorion.org/basis',
   baseUrl: '/',
   
   themeConfig: {

@@ -110,8 +110,8 @@ CNAME learn -> cname.vercel-dns.com
 
 | Product | Description |
 |---------|-------------|
-| [BASIS](https://basis.vorion.org) | Blockchain Agent Standard for Identity and Security |
-| [AgentAnchor](https://agentanchor.ai) | AI governance platform with certification |
+| [BASIS](https://vorion.org/basis) | Open standard for AI agent governance |
+| [AgentAnchor](https://agentanchorai.com) | AI governance platform with certification |
 | [Cognigate](https://cognigate.dev) | Reference implementation of BASIS runtime |
 
 ## Technology Stack

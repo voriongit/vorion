@@ -30,9 +30,9 @@ This app is part of the Vorion monorepo at `C:\Axiom`
 - `app.agentanchorai.com` -> AgentAnchor platform (apps/agentanchor)
 
 ## BASIS Standard (Open Source)
-- **Site:** basis.vorion.org
+- **Site:** vorion.org/basis
 - **Source:** basis-core/ in monorepo
-- **License:** Open source
+- **License:** Open standard (CC BY 4.0)
 
 ## Architecture
 - **Seven-Layer Governance:** Human -> Council -> Validators -> Academy -> Truth Chain -> Observer -> Workers

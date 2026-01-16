@@ -22,7 +22,7 @@ export default function Home() {
           </div>
           <div className="hidden md:flex gap-6 text-sm font-medium text-neutral-400">
             <Link href="#platform" className="hover:text-white transition-colors">Platform</Link>
-            <Link href="#demo" className="hover:text-white transition-colors">Demo</Link>
+            <Link href="/demo" className="hover:text-white transition-colors">Try Demo</Link>
             <Link href="https://cognigate.dev" className="hover:text-white transition-colors">Developers</Link>
             <Link href="https://agentanchorai.com/pricing" className="hover:text-white transition-colors">Pricing</Link>
             <Link href="https://discord.gg/basis-protocol" className="hover:text-white transition-colors flex items-center gap-1">

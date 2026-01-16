@@ -43,7 +43,7 @@
     "type": "git",
     "url": "https://github.com/vorion-org/basis-core.git"
   },
-  "homepage": "https://basis.vorion.org",
+  "homepage": "https://vorion.org/basis",
   "bugs": {
     "url": "https://github.com/vorion-org/basis-core/issues"
   },

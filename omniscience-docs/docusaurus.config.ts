@@ -91,7 +91,7 @@ const config: Config = {
           position: 'left',
         },
         {
-          href: 'https://basis.vorion.org',
+          href: 'https://vorion.org/basis',
           label: 'BASIS Standard',
           position: 'right',
         },
@@ -123,9 +123,9 @@ const config: Config = {
           title: 'Vorion Ecosystem',
           items: [
             { label: 'Vorion', href: 'https://vorion.org' },
-            { label: 'BASIS Standard', href: 'https://basis.vorion.org' },
+            { label: 'BASIS Standard', href: 'https://vorion.org/basis' },
             { label: 'Cognigate', href: 'https://cognigate.dev' },
-            { label: 'AgentAnchor', href: 'https://agentanchor.ai' },
+            { label: 'AgentAnchor', href: 'https://agentanchorai.com' },
           ],
         },
         {
