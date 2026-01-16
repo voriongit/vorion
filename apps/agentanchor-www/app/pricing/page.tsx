@@ -59,33 +59,27 @@ export default function PricingPage() {
     agentCount: '',
     message: '',
   });
-  const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'success'>('idle');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setStatus('sending');
 
-    try {
-      const response = await fetch('https://learn.vorion.org/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          company: formData.company,
-          message: `[Pricing Inquiry]\nAgent Count: ${formData.agentCount}\n\n${formData.message}`,
-        }),
-      });
+    // Construct mailto link with form data
+    const subject = encodeURIComponent(`[AgentAnchor Pricing] Inquiry from ${formData.company}`);
+    const body = encodeURIComponent(
+      `Name: ${formData.name}\n` +
+      `Email: ${formData.email}\n` +
+      `Company: ${formData.company}\n` +
+      `Expected Agents: ${formData.agentCount || 'Not specified'}\n\n` +
+      `Message:\n${formData.message}`
+    );
 
-      if (response.ok) {
-        setStatus('success');
-        setFormData({ name: '', email: '', company: '', agentCount: '', message: '' });
-      } else {
-        setStatus('error');
-      }
-    } catch {
-      setStatus('error');
-    }
+    // Open mailto link
+    window.location.href = `mailto:sales@vorion.org?subject=${subject}&body=${body}`;
+
+    // Show success state
+    setStatus('success');
+    setFormData({ name: '', email: '', company: '', agentCount: '', message: '' });
   };
 
   return (
@@ -218,10 +212,16 @@ export default function PricingPage() {
           {status === 'success' ? (
             <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-8 text-center">
               <svg className="w-12 h-12 text-green-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              <h3 className="text-xl font-bold text-white mb-2">Message Sent!</h3>
-              <p className="text-gray-400">We'll be in touch within 24 hours.</p>
+              <h3 className="text-xl font-bold text-white mb-2">Email Draft Ready</h3>
+              <p className="text-gray-400 mb-4">Your email client should have opened with your message. Send the email to complete your inquiry.</p>
+              <button
+                onClick={() => setStatus('idle')}
+                className="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition"
+              >
+                Submit another inquiry
+              </button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="bg-white/5 border border-white/10 rounded-xl p-8 space-y-6">
@@ -291,17 +291,15 @@ export default function PricingPage() {
                 />
               </div>
 
-              {status === 'error' && (
-                <p className="text-red-400 text-sm">Failed to send. Please try again or email us directly.</p>
-              )}
-
               <button
                 type="submit"
-                disabled={status === 'sending'}
-                className="w-full py-4 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 disabled:opacity-50 text-white rounded-lg font-semibold transition"
+                className="w-full py-4 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white rounded-lg font-semibold transition"
               >
-                {status === 'sending' ? 'Sending...' : 'Request Pricing'}
+                Request Pricing
               </button>
+              <p className="text-xs text-gray-500 text-center">
+                Opens your email client with a pre-filled message to sales@vorion.org
+              </p>
             </form>
           )}
         </div>
