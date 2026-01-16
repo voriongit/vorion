@@ -21,27 +21,27 @@ import type { PersistenceProvider } from '../persistence/types.js';
 const logger = createLogger({ component: 'trust-engine' });
 
 /**
- * Trust level thresholds (6 tiers)
+ * Trust level thresholds (6 tiers) - per BASIS specification
  */
 export const TRUST_THRESHOLDS: Record<TrustLevel, { min: number; max: number }> = {
-  0: { min: 0, max: 166 },      // Untrusted
-  1: { min: 167, max: 332 },    // Observed
-  2: { min: 333, max: 499 },    // Limited
-  3: { min: 500, max: 665 },    // Standard
-  4: { min: 666, max: 832 },    // Trusted
-  5: { min: 833, max: 1000 },   // Certified
+  0: { min: 0, max: 99 },       // Sandbox
+  1: { min: 100, max: 299 },    // Provisional
+  2: { min: 300, max: 499 },    // Standard
+  3: { min: 500, max: 699 },    // Trusted
+  4: { min: 700, max: 899 },    // Certified
+  5: { min: 900, max: 1000 },   // Autonomous
 };
 
 /**
- * Trust level names (6 tiers)
+ * Trust level names (6 tiers) - per BASIS specification
  */
 export const TRUST_LEVEL_NAMES: Record<TrustLevel, string> = {
-  0: 'Untrusted',
-  1: 'Observed',
-  2: 'Limited',
-  3: 'Standard',
-  4: 'Trusted',
-  5: 'Certified',
+  0: 'Sandbox',
+  1: 'Provisional',
+  2: 'Standard',
+  3: 'Trusted',
+  4: 'Certified',
+  5: 'Autonomous',
 };
 
 /**
@@ -724,7 +724,7 @@ export class TrustEngine extends EventEmitter {
   private createInitialRecord(entityId: ID): TrustRecord {
     return {
       entityId,
-      score: TRUST_THRESHOLDS[1].min, // Start at L1 (Observed) minimum
+      score: TRUST_THRESHOLDS[1].min, // Start at L1 (Provisional) minimum
       level: 1,
       components: {
         behavioral: 0.5,

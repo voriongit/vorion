@@ -193,12 +193,12 @@ main();`}</code>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                <TrustRow level="L0" name="Unverified" score="0-99" capabilities="Sandbox only" color="red" />
-                <TrustRow level="L1" name="Provisional" score="100-299" capabilities="Read-only operations" color="orange" />
-                <TrustRow level="L2" name="Certified" score="300-499" capabilities="Basic write operations" color="yellow" />
-                <TrustRow level="L3" name="Trusted" score="500-699" capabilities="Standard operations" color="green" />
-                <TrustRow level="L4" name="Verified" score="700-899" capabilities="Elevated operations" color="blue" />
-                <TrustRow level="L5" name="Sovereign" score="900-1000" capabilities="Full autonomy" color="purple" />
+                <TrustRow level="L0" name="Sandbox" score="0-99" capabilities="Sandbox only; no external effects" color="red" />
+                <TrustRow level="L1" name="Provisional" score="100-299" capabilities="Basic read; internal messaging" color="orange" />
+                <TrustRow level="L2" name="Standard" score="300-499" capabilities="Standard ops; limited external" color="yellow" />
+                <TrustRow level="L3" name="Trusted" score="500-699" capabilities="Extended ops; external APIs" color="green" />
+                <TrustRow level="L4" name="Certified" score="700-899" capabilities="Privileged ops; financial" color="blue" />
+                <TrustRow level="L5" name="Autonomous" score="900-1000" capabilities="Full autonomy within policy" color="purple" />
               </tbody>
             </table>
           </div>

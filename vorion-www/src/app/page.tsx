@@ -409,7 +409,7 @@ function AnimatedDemo() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-neutral-400">Trust Score</span>
               <span className={`px-2 py-0.5 rounded text-xs ${trustScore >= 700 ? 'bg-green-500/10 text-green-400' : 'bg-blue-500/10 text-blue-400'}`}>
-                {trustScore >= 700 ? 'L4 Verified' : 'L3 Trusted'}
+                {trustScore >= 700 ? 'L4 Certified' : 'L3 Trusted'}
               </span>
             </div>
             <div className="flex items-end gap-1 mb-2">

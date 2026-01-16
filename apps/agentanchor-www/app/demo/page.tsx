@@ -237,14 +237,14 @@ export default function DemoPage() {
   );
 }
 
-// Unified 6-tier trust system (0-1000 scale)
+// Unified 6-tier trust system (0-1000 scale) - per BASIS spec
 const TRUST_TIERS = [
-  { level: 0, name: 'Unverified', min: 0, max: 99, color: 'red' },
+  { level: 0, name: 'Sandbox', min: 0, max: 99, color: 'red' },
   { level: 1, name: 'Provisional', min: 100, max: 299, color: 'orange' },
-  { level: 2, name: 'Certified', min: 300, max: 499, color: 'yellow' },
+  { level: 2, name: 'Standard', min: 300, max: 499, color: 'yellow' },
   { level: 3, name: 'Trusted', min: 500, max: 699, color: 'blue' },
-  { level: 4, name: 'Verified', min: 700, max: 899, color: 'green' },
-  { level: 5, name: 'Sovereign', min: 900, max: 1000, color: 'cyan' },
+  { level: 4, name: 'Certified', min: 700, max: 899, color: 'green' },
+  { level: 5, name: 'Autonomous', min: 900, max: 1000, color: 'cyan' },
 ] as const;
 
 function getTrustTier(score: number) {
@@ -432,7 +432,7 @@ function generateMockResponse(userInput: string): Message {
       id: Date.now().toString(),
       role: 'assistant',
       content:
-        "I'd like to help with financial operations, but that capability requires trust level L5 Sovereign (900+). My current trust score is 687 (L3 Trusted). I can provide information about payments or help you prepare documentation instead.",
+        "I'd like to help with financial operations, but that capability requires trust level L5 Autonomous (900+). My current trust score is 687 (L3 Trusted). I can provide information about payments or help you prepare documentation instead.",
       timestamp: new Date(),
       governance: {
         decision: 'DENY',
