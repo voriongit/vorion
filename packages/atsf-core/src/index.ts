@@ -40,8 +40,26 @@ export * from './cognigate/index.js';
 // Proof/audit chain
 export * from './proof/index.js';
 
+// Decision Provenance (DPO)
+export * from './provenance/index.js';
+
 // Trust Engine
 export * from './trust-engine/index.js';
+
+// Typed Security Layers
+export * from './layers/index.js';
+
+// Multi-Agent Trust Arbitration
+export * from './arbitration/index.js';
+
+// Progressive Containment
+export * from './containment/index.js';
+
+// Output Contracts (VorionResponse)
+export * from './contracts/index.js';
+
+// Governance & Authority Engine
+export * from './governance/index.js';
 
 // Persistence layer
 export * from './persistence/index.js';
