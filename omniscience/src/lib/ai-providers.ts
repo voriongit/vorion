@@ -44,7 +44,7 @@ const MODEL_PERSONAS: Record<AIModel, string> = {
 };
 
 // Synthesis prompt template
-const SYNTHESIS_PROMPT = `You are the NEXUS TRIAD SYNTHESIZER.
+const SYNTHESIS_PROMPT = `You are the OMNISCIENCE SYNTHESIZER.
 
 You have received perspectives from multiple AI models on a user's question.
 Your task is to synthesize these into a single, cohesive, and comprehensive answer.

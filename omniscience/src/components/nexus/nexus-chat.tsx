@@ -163,7 +163,7 @@ export function NexusChat({ isOpen, onToggle }: NexusChatProps) {
           <div className="bg-gray-800 p-3 flex justify-between items-center border-b border-gray-700">
             <div className="flex items-center space-x-2">
               <Layers className="w-4 h-4 text-cyan-400" />
-              <span className="font-mono font-bold text-sm text-white">TRIAD.CORE</span>
+              <span className="font-mono font-bold text-sm text-white">OMNI.AI</span>
             </div>
             <button
               onClick={onToggle}

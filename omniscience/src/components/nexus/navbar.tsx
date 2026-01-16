@@ -42,7 +42,7 @@ export function Navbar({ onActivateChat }: NavbarProps) {
             className="group-hover:scale-105 transition-transform"
           />
           <span className="text-lg font-bold tracking-wider font-mono">
-            NEXUS<span className="text-cyan-400">.TRIAD</span>
+            <span className="text-cyan-400">Omni</span>science
           </span>
         </Link>
 

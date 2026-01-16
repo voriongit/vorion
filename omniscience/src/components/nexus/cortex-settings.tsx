@@ -121,7 +121,7 @@ export function CortexSettings() {
           </p>
           <div className={`flex items-center space-x-2 text-xs font-mono ${allNative ? 'text-cyan-400' : 'text-green-400'}`}>
             <CheckCircle className="w-4 h-4" />
-            <span>{allNative ? 'TRIAD ENGINE ONLINE' : 'CORE ENGINE ONLINE'}</span>
+            <span>{allNative ? 'OMNI ENGINE ONLINE' : 'CORE ENGINE ONLINE'}</span>
           </div>
         </div>
 

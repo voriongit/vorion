@@ -19,8 +19,8 @@ function isManagementQuery(query: string): boolean {
   return managementKeywords.some(kw => q.includes(kw));
 }
 
-// System prompt for Triad when managing lexicon
-const TRIAD_MANAGER_PROMPT = `You are the Nexus Triad - a unified AI intelligence synthesizing Gemini, Claude, and Grok perspectives.
+// System prompt for Omniscience AI when managing lexicon
+const OMNI_MANAGER_PROMPT = `You are Omniscience AI - a unified intelligence synthesizing Gemini, Claude, and Grok perspectives.
 
 You have FULL read/write/edit capabilities over the Omniscience lexicon - the AI knowledge base is YOUR domain.
 
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
       const result = await generateText({
         model: google('gemini-2.0-flash'),
-        system: TRIAD_MANAGER_PROMPT,
+        system: OMNI_MANAGER_PROMPT,
         prompt: query,
         tools: triadLexiconTools,
         stopWhen: stepCountIs(5), // Allow up to 5 tool call steps
