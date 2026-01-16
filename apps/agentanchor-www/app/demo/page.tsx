@@ -142,7 +142,7 @@ export default function DemoPage() {
             </div>
           </div>
 
-          <TrustScoreCard score={687} tier="Trusted" />
+          <TrustScoreCard score={687} />
         </div>
 
         <div className="flex-1 p-4 overflow-auto">
@@ -237,13 +237,37 @@ export default function DemoPage() {
   );
 }
 
-function TrustScoreCard({ score, tier }: { score: number; tier: string }) {
+// Unified 6-tier trust system (0-1000 scale)
+const TRUST_TIERS = [
+  { level: 0, name: 'Unverified', min: 0, max: 99, color: 'red' },
+  { level: 1, name: 'Provisional', min: 100, max: 299, color: 'orange' },
+  { level: 2, name: 'Certified', min: 300, max: 499, color: 'yellow' },
+  { level: 3, name: 'Trusted', min: 500, max: 699, color: 'blue' },
+  { level: 4, name: 'Verified', min: 700, max: 899, color: 'green' },
+  { level: 5, name: 'Sovereign', min: 900, max: 1000, color: 'cyan' },
+] as const;
+
+function getTrustTier(score: number) {
+  return TRUST_TIERS.find(t => score >= t.min && score <= t.max) ?? TRUST_TIERS[0];
+}
+
+function TrustScoreCard({ score }: { score: number }) {
+  const tier = getTrustTier(score);
+  const tierColors: Record<string, string> = {
+    red: 'bg-red-500/10 text-red-400',
+    orange: 'bg-orange-500/10 text-orange-400',
+    yellow: 'bg-yellow-500/10 text-yellow-400',
+    blue: 'bg-blue-500/10 text-blue-400',
+    green: 'bg-green-500/10 text-green-400',
+    cyan: 'bg-cyan-500/10 text-cyan-400',
+  };
+
   return (
     <div className="bg-white/5 rounded-xl p-4 border border-cyan-500/20 shadow-[0_0_30px_rgba(6,182,212,0.1)]">
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm text-gray-400">Trust Score</span>
-        <span className="px-2 py-0.5 bg-green-500/10 text-green-400 rounded text-xs font-medium">
-          L4 {tier}
+        <span className={`px-2 py-0.5 rounded text-xs font-medium ${tierColors[tier.color]}`}>
+          L{tier.level} {tier.name}
         </span>
       </div>
       <div className="flex items-end gap-2 mb-2">
@@ -408,7 +432,7 @@ function generateMockResponse(userInput: string): Message {
       id: Date.now().toString(),
       role: 'assistant',
       content:
-        "I'd like to help with financial operations, but that capability requires trust level L5 (833+). My current trust score is 687 (L4). I can provide information about payments or help you prepare documentation instead.",
+        "I'd like to help with financial operations, but that capability requires trust level L5 Sovereign (900+). My current trust score is 687 (L3 Trusted). I can provide information about payments or help you prepare documentation instead.",
       timestamp: new Date(),
       governance: {
         decision: 'DENY',
@@ -442,7 +466,7 @@ function generateMockResponse(userInput: string): Message {
       id: Date.now().toString(),
       role: 'assistant',
       content:
-        "I can help you draft and send messages! My trust level (L4) allows external communication. Would you like me to compose something for you?",
+        "I can help you draft and send messages! My trust level (L3 Trusted) allows external communication. Would you like me to compose something for you?",
       timestamp: new Date(),
       governance: {
         decision: 'ALLOW',
@@ -458,7 +482,7 @@ function generateMockResponse(userInput: string): Message {
       id: Date.now().toString(),
       role: 'assistant',
       content:
-        "I can help you schedule tasks and meetings. My L4 trust level includes calendar access. What would you like me to schedule?",
+        "I can help you schedule tasks and meetings. My L3 Trusted level includes calendar access. What would you like me to schedule?",
       timestamp: new Date(),
       governance: {
         decision: 'ALLOW',
