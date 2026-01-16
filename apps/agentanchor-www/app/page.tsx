@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { urls } from '../lib/config'
 
 export default function Home() {
@@ -17,9 +18,9 @@ export default function Home() {
             </div>
             <div className="hidden md:flex items-center gap-8">
               <a href="#platform" className="text-gray-400 hover:text-white transition text-sm font-medium">Platform</a>
-              <a href="#safety" className="text-gray-400 hover:text-white transition text-sm font-medium">Safety</a>
               <a href="#trust" className="text-gray-400 hover:text-white transition text-sm font-medium">Trust</a>
               <a href="#developers" className="text-gray-400 hover:text-white transition text-sm font-medium">Developers</a>
+              <Link href="/pricing" className="text-gray-400 hover:text-white transition text-sm font-medium">Pricing</Link>
               <a
                 href="https://discord.gg/basis-protocol"
                 target="_blank"
