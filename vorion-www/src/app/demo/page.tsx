@@ -59,7 +59,7 @@ export default function DemoPage() {
               </button>
             </div>
             <pre className="p-4 text-sm overflow-x-auto">
-              <code className="text-emerald-400">npm install @vorion/atsf-core</code>
+              <code className="text-emerald-400">npm install @vorionsys/atsf-core</code>
             </pre>
           </div>
         </section>
@@ -78,7 +78,7 @@ export default function DemoPage() {
               <span className="text-xs text-neutral-500 font-mono">demo.ts</span>
             </div>
             <pre className="p-4 text-sm overflow-x-auto">
-              <code className="text-neutral-300">{`import { createTrustEngine } from '@vorion/atsf-core';
+              <code className="text-neutral-300">{`import { createTrustEngine } from '@vorionsys/atsf-core';
 
 async function main() {
   const engine = createTrustEngine();
@@ -212,7 +212,7 @@ main();`}</code>
               icon={<Package className="w-5 h-5 text-indigo-400" />}
               title="npm Documentation"
               description="Full API reference and advanced configuration"
-              href="https://npmjs.com/package/@vorion/atsf-core"
+              href="https://npmjs.com/package/@vorionsys/atsf-core"
             />
             <NextStepCard
               icon={<Book className="w-5 h-5 text-indigo-400" />}
