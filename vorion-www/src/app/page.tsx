@@ -403,13 +403,13 @@ function AnimatedDemo() {
         <div className="w-52 border-r border-white/10 p-4 flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <Shield className="w-5 h-5 text-indigo-400" />
-            <span className="font-bold text-white text-sm">TrustBot</span>
+            <span className="font-bold text-white text-sm">Aurais</span>
           </div>
           <div className="bg-neutral-800 rounded-lg p-4 border border-white/5 mb-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-neutral-400">Trust Score</span>
-              <span className={`px-2 py-0.5 rounded text-xs ${trustScore >= 666 ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
-                {trustScore >= 666 ? 'L4 Trusted' : 'L3 Standard'}
+              <span className={`px-2 py-0.5 rounded text-xs ${trustScore >= 700 ? 'bg-green-500/10 text-green-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                {trustScore >= 700 ? 'L4 Verified' : 'L3 Trusted'}
               </span>
             </div>
             <div className="flex items-end gap-1 mb-2">

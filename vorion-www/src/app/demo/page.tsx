@@ -84,13 +84,13 @@ async function main() {
   const engine = createTrustEngine();
 
   // Initialize an AI agent at Level 2 (Limited)
-  const agent = await engine.initializeEntity('trustbot-001', 2);
+  const agent = await engine.initializeEntity('aurais-001', 2);
   console.log(\`🤖 Agent initialized: Score \${agent.score}/1000 (L\${agent.level})\`);
 
   // Simulate successful task
   await engine.recordSignal({
     id: crypto.randomUUID(),
-    entityId: 'trustbot-001',
+    entityId: 'aurais-001',
     type: 'behavioral.task_success',
     value: 0.95, // High success
     source: 'demo',
@@ -98,13 +98,13 @@ async function main() {
     metadata: { task: 'send_email' },
   });
 
-  const afterSuccess = await engine.getScore('trustbot-001');
+  const afterSuccess = await engine.getScore('aurais-001');
   console.log(\`✅ After success: Score \${afterSuccess?.score}/1000\`);
 
   // Simulate failure
   await engine.recordSignal({
     id: crypto.randomUUID(),
-    entityId: 'trustbot-001',
+    entityId: 'aurais-001',
     type: 'behavioral.task_failure',
     value: 0.1, // Low value = failure
     source: 'demo',
@@ -112,11 +112,11 @@ async function main() {
     metadata: { task: 'unauthorized_action' },
   });
 
-  const afterFailure = await engine.getScore('trustbot-001');
+  const afterFailure = await engine.getScore('aurais-001');
   console.log(\`❌ After failure: Score \${afterFailure?.score}/1000 (L\${afterFailure?.level})\`);
 
   // Check if accelerated decay is active
-  const isAccelerated = engine.isAcceleratedDecayActive('trustbot-001');
+  const isAccelerated = engine.isAcceleratedDecayActive('aurais-001');
   console.log(\`⚡ Accelerated decay: \${isAccelerated ? 'ACTIVE' : 'inactive'}\`);
 }
 
@@ -193,12 +193,12 @@ main();`}</code>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                <TrustRow level="L0" name="Untrusted" score="0-166" capabilities="Sandbox only" color="red" />
-                <TrustRow level="L1" name="Observed" score="167-332" capabilities="Read-only operations" color="orange" />
-                <TrustRow level="L2" name="Limited" score="333-499" capabilities="Basic write operations" color="yellow" />
-                <TrustRow level="L3" name="Standard" score="500-665" capabilities="Standard operations" color="green" />
-                <TrustRow level="L4" name="Trusted" score="666-832" capabilities="Elevated operations" color="blue" />
-                <TrustRow level="L5" name="Certified" score="833-1000" capabilities="Full autonomy" color="purple" />
+                <TrustRow level="L0" name="Unverified" score="0-99" capabilities="Sandbox only" color="red" />
+                <TrustRow level="L1" name="Provisional" score="100-299" capabilities="Read-only operations" color="orange" />
+                <TrustRow level="L2" name="Certified" score="300-499" capabilities="Basic write operations" color="yellow" />
+                <TrustRow level="L3" name="Trusted" score="500-699" capabilities="Standard operations" color="green" />
+                <TrustRow level="L4" name="Verified" score="700-899" capabilities="Elevated operations" color="blue" />
+                <TrustRow level="L5" name="Sovereign" score="900-1000" capabilities="Full autonomy" color="purple" />
               </tbody>
             </table>
           </div>
