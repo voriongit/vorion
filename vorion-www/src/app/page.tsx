@@ -21,6 +21,7 @@ export default function Home() {
             <span className="font-bold text-xl tracking-tighter text-white">VORION</span>
           </div>
           <div className="hidden md:flex gap-6 text-sm font-medium text-neutral-400">
+            <Link href="/basis" className="hover:text-white transition-colors">BASIS</Link>
             <Link href="#platform" className="hover:text-white transition-colors">Platform</Link>
             <Link href="/demo" className="hover:text-white transition-colors">Try Demo</Link>
             <Link href="https://cognigate.dev" className="hover:text-white transition-colors">Developers</Link>

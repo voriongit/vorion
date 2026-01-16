@@ -14,7 +14,7 @@ Thank you for your interest in contributing to the BASIS standard. This document
 
 ### 1. Reporting Issues
 
-Found a bug in the schema? Unclear specification language? [Open an issue](https://github.com/vorion-org/basis-core/issues) with:
+Found a bug in the schema? Unclear specification language? [Open an issue](https://github.com/voriongit/basis-core/issues) with:
 
 - Clear description of the problem
 - Relevant section of the spec or schema
@@ -125,7 +125,7 @@ Steering Committee decisions require a 2/3 majority for specification changes an
 
 ## Questions?
 
-- **General**: Open a [Discussion](https://github.com/vorion-org/basis-core/discussions)
+- **General**: Open a [Discussion](https://github.com/voriongit/basis-core/discussions)
 - **Security**: Email security@vorion.org (do not open public issues for vulnerabilities)
 - **Commercial**: Contact partners@vorion.org
 

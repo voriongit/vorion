@@ -64,7 +64,7 @@ BASIS is jurisdiction-agnostic. A policy bundle created by a healthcare organiza
 
 ### Installation
 
-> **Note:** This is a standard specification. For the operational engine, see [Cognigate](https://github.com/vorion-org/cognigate-engine).
+> **Note:** This is a standard specification. For the operational engine, see [Cognigate](https://github.com/voriongit/cognigate).
 
 You can use the reference validators to check if your Policy Bundles comply with the BASIS schema:
 

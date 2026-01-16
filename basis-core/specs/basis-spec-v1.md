@@ -431,7 +431,7 @@ Conforming implementations MUST:
 ### 10.2 Conformance Testing
 
 Implementations SHOULD pass the BASIS Conformance Test Suite available at:
-`https://github.com/vorion-org/basis-conformance`
+`https://github.com/voriongit/basis-conformance`
 
 ---
 

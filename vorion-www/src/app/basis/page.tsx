@@ -83,32 +83,24 @@ export default function BASISPage() {
               name="INTENT"
               subtitle="Parse & Plan"
               description="Understand what the agent wants to do. Parse, plan, and classify risk."
-              href="https://vorion.org/basis/layers/intent"
-              color="blue"
             />
             <LayerCard
               icon={<Shield className="w-6 h-6 text-indigo-400" />}
               name="ENFORCE"
               subtitle="Trust & Gate"
               description="Check if it's allowed based on trust score and policy."
-              href="https://vorion.org/basis/layers/enforce"
-              color="indigo"
             />
             <LayerCard
               icon={<Database className="w-6 h-6 text-emerald-400" />}
               name="PROOF"
               subtitle="Log & Audit"
               description="Create immutable, cryptographically chained audit trail."
-              href="https://vorion.org/basis/layers/proof"
-              color="emerald"
             />
             <LayerCard
               icon={<Link2 className="w-6 h-6 text-purple-400" />}
               name="CHAIN"
               subtitle="Anchor & Verify"
               description="Commit proofs to blockchain for independent verification."
-              href="https://vorion.org/basis/layers/chain"
-              color="purple"
             />
           </div>
         </section>
@@ -169,16 +161,16 @@ export default function BASISPage() {
           <h2 className="text-2xl font-bold text-white mb-6">Get Started</h2>
           <div className="flex flex-wrap gap-4">
             <Link
-              href="https://vorion.org/basis"
+              href="https://cognigate.dev"
               className="px-6 py-3 bg-white text-black font-semibold rounded hover:bg-neutral-200 transition-colors flex items-center gap-2"
             >
-              Read the Full Spec <ArrowRight className="w-4 h-4" />
+              Cognigate (Reference Implementation) <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
-              href="https://vorion.org/basis/implement/getting-started"
+              href="https://learn.vorion.org"
               className="px-6 py-3 border border-white/10 rounded text-white hover:bg-white/5 transition-colors flex items-center gap-2"
             >
-              Implementation Guide <ExternalLink className="w-4 h-4" />
+              Documentation <ExternalLink className="w-4 h-4" />
             </Link>
             <Link
               href="https://github.com/voriongit/cognigate"
@@ -206,31 +198,20 @@ interface LayerCardProps {
   name: string;
   subtitle: string;
   description: string;
-  href: string;
-  color: string;
 }
 
-function LayerCard({ icon, name, subtitle, description, href }: LayerCardProps) {
-  const isExternal = href.startsWith('http');
+function LayerCard({ icon, name, subtitle, description }: LayerCardProps) {
   return (
-    <Link
-      href={href}
-      target={isExternal ? "_blank" : undefined}
-      rel={isExternal ? "noopener noreferrer" : undefined}
-      className="block p-6 rounded-xl bg-white/5 border border-white/5 hover:border-indigo-500/50 transition-all hover:translate-y-[-2px] group"
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-white/5 rounded-lg">{icon}</div>
-          <div>
-            <h3 className="text-lg font-bold text-white">{name}</h3>
-            <p className="text-xs font-mono text-neutral-500 uppercase">{subtitle}</p>
-          </div>
+    <div className="block p-6 rounded-xl bg-white/5 border border-white/5">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="p-2 bg-white/5 rounded-lg">{icon}</div>
+        <div>
+          <h3 className="text-lg font-bold text-white">{name}</h3>
+          <p className="text-xs font-mono text-neutral-500 uppercase">{subtitle}</p>
         </div>
-        {isExternal && <ExternalLink className="w-4 h-4 text-neutral-600 group-hover:text-neutral-400 transition-colors" />}
       </div>
       <p className="text-sm text-neutral-400">{description}</p>
-    </Link>
+    </div>
   );
 }
 
