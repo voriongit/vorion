@@ -17,6 +17,7 @@ export default function Home() {
               <span className="text-xl font-semibold text-white">AgentAnchor</span>
             </div>
             <div className="hidden md:flex items-center gap-8">
+              <Link href="/demo" className="text-cyan-400 hover:text-cyan-300 transition text-sm font-medium">Try Demo</Link>
               <a href="#platform" className="text-gray-400 hover:text-white transition text-sm font-medium">Platform</a>
               <a href="#trust" className="text-gray-400 hover:text-white transition text-sm font-medium">Trust</a>
               <a href="#developers" className="text-gray-400 hover:text-white transition text-sm font-medium">Developers</a>
