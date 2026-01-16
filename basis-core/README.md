@@ -1,30 +1,34 @@
 # BASIS (Baseline Authority for Safe & Interoperable Systems)
 
-[![Status](https://img.shields.io/badge/Status-Draft%20V1-orange)]()
+[![Status](https://img.shields.io/badge/Status-V1.0.0-green)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)]()
+[![Docs](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey)]()
 [![Steward](https://img.shields.io/badge/Steward-VORION-black)](https://vorion.org)
 
-**BASIS** is an open governance standard that defines the immutable baseline rules autonomous systems must follow before reasoning, execution, or automation is permitted.
+**BASIS** is an open governance standard for AI agent systems. It defines how autonomous systems must be controlled, monitored, and audited before taking action.
 
-It provides a universal schema for defining **Constraints**, **Obligations**, and **Permissions** that decouple *what an agent wants to do* from *what an agent is allowed to do*.
+The standard establishes a universal framework for:
+- **Trust Quantification** — 0-1000 scoring with 6 tiers (Sandbox → Autonomous)
+- **Capability Gating** — 100+ hierarchical permissions across 7 namespaces
+- **Immutable Audit Trails** — Cryptographic proof chains with optional blockchain anchoring
 
 ---
 
-## 🏗 The Architecture
+## 📐 The Four-Layer Architecture
 
-BASIS operates as the "Constitution" in the **Vorion Cohesive Stack**. It does not execute code; it defines the boundaries within which code executes.
+```
+┌─────────────────────────────────────────────────────────────┐
+│  LAYER 1: INTENT    → Parse & classify action requests      │
+├─────────────────────────────────────────────────────────────┤
+│  LAYER 2: ENFORCE   → Evaluate against trust & policies     │
+├─────────────────────────────────────────────────────────────┤
+│  LAYER 3: PROOF     → Log with cryptographic integrity      │
+├─────────────────────────────────────────────────────────────┤
+│  LAYER 4: CHAIN     → Anchor to blockchain (optional)       │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### The Problem
-In traditional agent architectures, safety and logic are often entangled in the same prompt or codebase ("System Prompt Injection"). If the reasoning layer fails, the safety layer fails.
-
-### The Solution
-BASIS enforces a hard separation of concerns:
-1.  **Reasoning (INTENT)** generates a plan.
-2.  **BASIS** provides the rules.
-3.  **Enforcement (ENFORCE)** validates the plan against the rules.
-4.  **Audit (PROOF)** records the result.
-
-This repository (`basis-core`) contains the definitions, schemas, and reference implementations for **Layer 2 (The Rules)**.
+**Governance Before Execution**: No autonomous action proceeds without passing through governance checks.
 
 ---
 
@@ -32,62 +36,86 @@ This repository (`basis-core`) contains the definitions, schemas, and reference 
 
 ```text
 basis-core/
-├── schemas/           # JSON/YAML schemas for defining BASIS Policy Bundles
-├── specs/             # Formal specification documents (RFC-style)
-├── examples/          # Reference policy sets (e.g., GDPR-Lite, Finance-Safe)
-├── lib/               # Lightweight validation libraries (Python/TS)
-└── proposals/         # Community Request for Comments (CRC)
+├── specs/             # Complete specification documents
+│   ├── BASIS-SPECIFICATION.md        # Core normative spec
+│   ├── BASIS-CAPABILITY-TAXONOMY.md  # 100+ capabilities reference
+│   ├── BASIS-JSON-SCHEMAS.md         # Wire protocol schemas
+│   ├── BASIS-ERROR-CODES.md          # 60+ error codes
+│   ├── BASIS-THREAT-MODEL.md         # Security analysis
+│   ├── BASIS-FAILURE-MODES.md        # Failure handling
+│   ├── BASIS-COMPLIANCE-MAPPING.md   # SOC2, ISO, GDPR, HIPAA mapping
+│   └── BASIS-MIGRATION-GUIDE.md      # Adoption roadmap
+├── schemas/           # JSON Schema definitions
+├── examples/          # Reference policy sets
+├── lib/               # Validation libraries (Python/TS)
+└── proposals/         # Community RFCs
 ```
 
 ---
 
-## ⚡ Core Concepts
+## 📚 Specification Documents
 
-### 1. The Policy Bundle
-A machine-readable artifact (JSON/YAML) that declares the operational boundaries for an agent.
-
-- **Allow**: Whitelisted domains, tools, or API endpoints.
-- **Block**: Prohibited actions, PII patterns, or sensitive data egress.
-- **Require**: Mandatory human-in-the-loop triggers or specific audit logging levels.
-
-### 2. The Handshake
-Agents adopting BASIS must perform a "handshake" before execution:
-
-> "Here is my Intent. Here is the BASIS Policy. Does this comport?"
-
-### 3. Interoperability
-BASIS is jurisdiction-agnostic. A policy bundle created by a healthcare organization in the EU can be read and respected by an agent deployed in a US cloud infrastructure, provided they both speak BASIS.
+| Document | Size | Description |
+|----------|------|-------------|
+| [BASIS-SPECIFICATION.md](specs/BASIS-SPECIFICATION.md) | 28K | Core spec: architecture, trust model, conformance levels |
+| [BASIS-CAPABILITY-TAXONOMY.md](specs/BASIS-CAPABILITY-TAXONOMY.md) | 18K | 100+ capabilities across 7 namespaces |
+| [BASIS-JSON-SCHEMAS.md](specs/BASIS-JSON-SCHEMAS.md) | 28K | Complete wire protocol schemas |
+| [BASIS-ERROR-CODES.md](specs/BASIS-ERROR-CODES.md) | 16K | 60+ error codes in 12 categories |
+| [BASIS-THREAT-MODEL.md](specs/BASIS-THREAT-MODEL.md) | 20K | STRIDE analysis, 20+ threats with mitigations |
+| [BASIS-FAILURE-MODES.md](specs/BASIS-FAILURE-MODES.md) | 16K | Layer-by-layer failure handling |
+| [BASIS-COMPLIANCE-MAPPING.md](specs/BASIS-COMPLIANCE-MAPPING.md) | 17K | SOC 2, ISO 27001, GDPR, HIPAA, EU AI Act |
+| [BASIS-MIGRATION-GUIDE.md](specs/BASIS-MIGRATION-GUIDE.md) | 21K | 5-phase adoption roadmap |
 
 ---
 
-## 🚀 Getting Started
+## ⚡ Quick Start
 
-### Installation
+### Conformance Levels
 
-> **Note:** This is a standard specification. For the operational engine, see [Cognigate](https://github.com/voriongit/cognigate).
+| Level | Requirements |
+|-------|--------------|
+| **BASIS Core** | INTENT + ENFORCE + PROOF layers |
+| **BASIS Complete** | + CHAIN layer + full capability taxonomy |
+| **BASIS Extended** | + optional modules (multi-tenant, federated trust) |
 
-You can use the reference validators to check if your Policy Bundles comply with the BASIS schema:
+### Trust Tiers
 
-```bash
-npm install @vorion/basis-core
-# or
-pip install basis-core
-```
+| Tier | Score | Default Capabilities |
+|------|-------|---------------------|
+| Sandbox | 0-99 | Isolated testing only |
+| Provisional | 100-299 | Read public data, internal messaging |
+| Standard | 300-499 | Limited external communication |
+| Trusted | 500-699 | External API calls |
+| Certified | 700-899 | Financial transactions |
+| Autonomous | 900-1000 | Full autonomy within policy |
 
-### Example Policy Snippet (YAML)
+### Example Policy Snippet
 
 ```yaml
 basis_version: "1.0"
 policy_id: "corp-finance-limited"
 constraints:
-  - type: "egress_whitelist"
-    values: ["*.internal-api.com", "stripe.com"]
-  - type: "data_protection"
-    pattern: "ssn_us"
-    action: "redact"
+  - type: "capability_gate"
+    capabilities: ["financial:transaction/medium"]
+    minimum_tier: "certified"
+  - type: "escalation_required"
+    capabilities: ["admin:policy/modify"]
 obligations:
-  - trigger: "transaction_value > 1000"
+  - trigger: "transaction_value > 10000"
     action: "require_human_approval"
+```
+
+---
+
+## 🚀 Reference Implementation
+
+For the operational engine implementing BASIS, see [Cognigate](https://github.com/voriongit/cognigate).
+
+Validation libraries:
+```bash
+npm install @vorion/basis-core
+# or
+pip install basis-core
 ```
 
 ---
@@ -96,9 +124,9 @@ obligations:
 
 **VORION** serves as the commercial steward of the BASIS standard, ensuring it remains:
 
-- **Free**: No licensing fees for the standard itself.
-- **Adoptable**: Easy to integrate into existing LLM/Agent stacks.
-- **Capture-Resistant**: Governance is separated from tooling vendors.
+- **Free**: No licensing fees for the standard itself
+- **Adoptable**: Easy to integrate into existing LLM/Agent stacks
+- **Capture-Resistant**: Governance is separated from tooling vendors
 
 To contribute to the specification, please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -106,4 +134,9 @@ To contribute to the specification, please see [CONTRIBUTING.md](CONTRIBUTING.md
 
 ## 📜 License
 
-This standard and its schemas are licensed under **Apache 2.0**. Documentation is licensed under **CC-BY 4.0**.
+- Standard and schemas: **Apache 2.0**
+- Documentation: **CC BY 4.0**
+
+---
+
+*Copyright © 2026 Vorion Risk, LLC*
