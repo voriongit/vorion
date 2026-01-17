@@ -1,6 +1,88 @@
-# Docs Directory Index
+# Vorion Documentation Hub
 
-Comprehensive documentation for the Vorion autonomous agent governance platform and ATSF trust scoring framework.
+**Last Updated:** January 17, 2026
+
+Comprehensive documentation for the Vorion autonomous agent governance platform, BASIS standard, and ATSF trust scoring framework.
+
+---
+
+## Quick Navigation
+
+| Resource | Description |
+|----------|-------------|
+| [MASTER-PROJECT-INVENTORY.md](./MASTER-PROJECT-INVENTORY.md) | **NEW** - Complete inventory of all projects (axiom, bai, S_A) |
+| [VORION-ECOSYSTEM-ALIGNMENT.md](./VORION-ECOSYSTEM-ALIGNMENT.md) | Product hierarchy & naming conventions |
+| [SESSION-PROGRESS-2026-01-17.md](./SESSION-PROGRESS-2026-01-17.md) | Current session progress |
+| [nist-cyber-ai-profile-comment-2026-01.md](./nist-cyber-ai-profile-comment-2026-01.md) | NIST submission draft (due Jan 30) |
+
+---
+
+## Live Deployments
+
+| Site | URL | Source |
+|------|-----|--------|
+| AgentAnchor App | [app.agentanchorai.com](https://app.agentanchorai.com) | apps/agentanchor |
+| AgentAnchor WWW | [agentanchorai.com](https://agentanchorai.com) | apps/agentanchor-www |
+| BASIS Documentation | [basis.vorion.org](https://basis.vorion.org) | docs/basis-docs |
+| Vorion Corporate | [vorion.org](https://vorion.org) | vorion-www |
+| Omniscience | [learn.vorion.org](https://learn.vorion.org) | omniscience |
+
+---
+
+## BASIS Specifications
+
+Located in: `../basis-core/specs/`
+
+| Specification | Version | Description |
+|---------------|---------|-------------|
+| [BASIS-SPECIFICATION.md](../basis-core/specs/BASIS-SPECIFICATION.md) | v1.0.0 | Core architecture & trust model |
+| [BASIS-CAPABILITY-TAXONOMY.md](../basis-core/specs/BASIS-CAPABILITY-TAXONOMY.md) | v1.0.0 | 100+ capabilities across 8 namespaces |
+| [BASIS-EFFICIENCY.md](../basis-core/specs/BASIS-EFFICIENCY.md) | v1.0.0 | Resource manifests & cost governance |
+| [BASIS-COMPLIANCE-MAPPING.md](../basis-core/specs/BASIS-COMPLIANCE-MAPPING.md) | v1.0.0 | SOC2, ISO, GDPR, EU AI Act mappings |
+| [BASIS-ERROR-CODES.md](../basis-core/specs/BASIS-ERROR-CODES.md) | v1.0.0 | 60+ error codes in 12 categories |
+| [BASIS-THREAT-MODEL.md](../basis-core/specs/BASIS-THREAT-MODEL.md) | v1.0.0 | STRIDE security analysis |
+| [BASIS-FAILURE-MODES.md](../basis-core/specs/BASIS-FAILURE-MODES.md) | v1.0.0 | Layer-by-layer failure handling |
+| [BASIS-JSON-SCHEMAS.md](../basis-core/specs/BASIS-JSON-SCHEMAS.md) | v1.0.0 | Wire protocol schemas |
+| [BASIS-MIGRATION-GUIDE.md](../basis-core/specs/BASIS-MIGRATION-GUIDE.md) | v1.0.0 | 5-phase adoption roadmap |
+
+---
+
+## Platform Architecture
+
+| Document | Location | Description |
+|----------|----------|-------------|
+| TrustBot/Aurais Architecture | [trustbot/docs/ARCHITECTURE.md](../trustbot/docs/ARCHITECTURE.md) | Governance demo platform design |
+| TrustBot Product Spec | [trustbot/docs/PRODUCT_SPEC.md](../trustbot/docs/PRODUCT_SPEC.md) | Feature specification |
+| TrustBot Agent SDK | [trustbot/docs/AGENT_SDK.md](../trustbot/docs/AGENT_SDK.md) | Developer integration guide |
+| AgentAnchor Context | [apps/agentanchor/CLAUDE.md](../apps/agentanchor/CLAUDE.md) | AgentAnchor project context |
+
+---
+
+## BMAD Outputs (Generated Planning)
+
+Located in: `../_bmad-output/planning-artifacts/`
+
+| Document | Type | Description |
+|----------|------|-------------|
+| ORION-BUILD-PLAN.md | Product Brief | ORION platform overview |
+| prd-orion-platform.md | PRD | Product requirements document |
+| architecture.md | Architecture | System design |
+| epics-and-stories.md | Planning | 40 stories across 6 epics |
+| prd-atsf-core.md | PRD | ATSF Core requirements |
+| architecture-atsf-core.md | Architecture | ATSF Core design |
+
+---
+
+## Related Documentation (External)
+
+### BAI Ecosystem (C:\bai)
+
+| Document | Location | Description |
+|----------|----------|-------------|
+| BAI Platform Vision | C:\bai\docs\strategic\BAI-PLATFORM-VISION.md | Hospitality SaaS strategy |
+| AIQ README | C:\bai\aiq\README.md | Equipment planning docs |
+| AIP README | C:\bai\aip\README.md | BEO generation docs |
+| BMAD Framework | C:\bai\bmad\README.md | Development methodology |
 
 ---
 
