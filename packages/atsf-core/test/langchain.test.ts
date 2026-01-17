@@ -254,7 +254,7 @@ describe('LangChain Integration', () => {
 
       expect(result.agentId).toBe('tool-agent');
       expect(result.level).toBe(3);
-      expect(result.levelName).toBe('Standard');
+      expect(result.levelName).toBe('Trusted'); // BASIS spec: L3 = Trusted
     });
 
     it('should check_trust_requirements evaluate action requirements', async () => {
@@ -277,8 +277,8 @@ describe('LangChain Integration', () => {
       const result = JSON.parse(await getLevels.func(''));
 
       expect(result.levels).toHaveLength(6);
-      expect(result.levels[0].name).toBe('Untrusted');
-      expect(result.levels[5].name).toBe('Certified');
+      expect(result.levels[0].name).toBe('Sandbox'); // BASIS spec: L0 = Sandbox
+      expect(result.levels[5].name).toBe('Autonomous'); // BASIS spec: L5 = Autonomous
     });
 
     it('should report_task_success record positive signal', async () => {
@@ -314,7 +314,7 @@ describe('LangChain Integration', () => {
 
       expect(result.entityId).toBe('other-agent');
       expect(result.level).toBe(4);
-      expect(result.levelName).toBe('Trusted');
+      expect(result.levelName).toBe('Certified'); // BASIS spec: L4 = Certified
     });
 
     it('should handle non-existent entity in query tool', async () => {

@@ -2,14 +2,47 @@
  * PROOF - Immutable Evidence System
  *
  * Creates and maintains cryptographically sealed records of all governance decisions.
+ * Uses Ed25519 for cryptographic signing of proof records.
  *
  * @packageDocumentation
  */
 
+import * as nodeCrypto from 'node:crypto';
 import { createLogger } from '../common/logger.js';
 import type { Proof, Decision, Intent, ID } from '../common/types.js';
 
 const logger = createLogger({ component: 'proof' });
+
+/**
+ * Ed25519 key pair for signing proofs
+ */
+export interface SigningKeyPair {
+  publicKey: string; // Base64-encoded public key
+  privateKey: string; // Base64-encoded private key
+}
+
+/**
+ * Signing configuration for proof service
+ */
+export interface SigningConfig {
+  /** Private key for signing (base64-encoded Ed25519) */
+  privateKey?: string;
+  /** Public key for verification (base64-encoded Ed25519) */
+  publicKey?: string;
+  /** Key ID for multi-key scenarios */
+  keyId?: string;
+}
+
+/**
+ * Generate a new Ed25519 key pair for signing
+ */
+export function generateKeyPair(): SigningKeyPair {
+  const { publicKey, privateKey } = nodeCrypto.generateKeyPairSync('ed25519');
+  return {
+    publicKey: publicKey.export({ type: 'spki', format: 'der' }).toString('base64'),
+    privateKey: privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64'),
+  };
+}
 
 /**
  * Proof creation request
@@ -51,6 +84,33 @@ export class ProofService {
   private proofs: Map<ID, Proof> = new Map();
   private chain: Proof[] = [];
   private lastHash: string = '0'.repeat(64);
+  private privateKey: nodeCrypto.KeyObject | null = null;
+  private publicKey: nodeCrypto.KeyObject | null = null;
+  private keyId: string;
+
+  constructor(config?: SigningConfig) {
+    this.keyId = config?.keyId ?? 'default';
+
+    if (config?.privateKey) {
+      this.privateKey = nodeCrypto.createPrivateKey({
+        key: Buffer.from(config.privateKey, 'base64'),
+        format: 'der',
+        type: 'pkcs8',
+      });
+      // Derive public key from private key
+      this.publicKey = nodeCrypto.createPublicKey(this.privateKey);
+      logger.info({ keyId: this.keyId }, 'Signing key loaded');
+    } else if (config?.publicKey) {
+      this.publicKey = nodeCrypto.createPublicKey({
+        key: Buffer.from(config.publicKey, 'base64'),
+        format: 'der',
+        type: 'spki',
+      });
+      logger.info({ keyId: this.keyId }, 'Verification-only key loaded');
+    } else {
+      logger.warn('No signing key configured - proofs will not be signed');
+    }
+  }
 
   /**
    * Create a new proof record
@@ -66,13 +126,16 @@ export class ProofService {
       outputs: request.outputs,
       hash: '', // Will be calculated
       previousHash: this.lastHash,
-      signature: '', // TODO: Implement signing
+      signature: '', // Will be signed after hash calculation
       createdAt: new Date().toISOString(),
     };
 
     // Calculate hash
     proof.hash = await this.calculateHash(proof);
     this.lastHash = proof.hash;
+
+    // Sign the proof hash
+    proof.signature = this.sign(proof.hash);
 
     // Store
     this.proofs.set(proof.id, proof);
@@ -151,6 +214,16 @@ export class ProofService {
 
     if (proof.hash !== expectedHash) {
       issues.push('Hash mismatch');
+    }
+
+    // Verify signature
+    if (proof.signature) {
+      if (!this.verifySignature(proof.hash, proof.signature)) {
+        issues.push('Invalid signature');
+      }
+    } else if (this.publicKey) {
+      // Signature missing but we have a key configured
+      issues.push('Signature missing');
     }
 
     // Verify chain linkage
@@ -234,6 +307,59 @@ export class ProofService {
   }
 
   /**
+   * Sign data with Ed25519 private key
+   * @returns Base64-encoded signature, or empty string if no key configured
+   */
+  private sign(data: string): string {
+    if (!this.privateKey) {
+      return '';
+    }
+
+    const signature = nodeCrypto.sign(null, Buffer.from(data), this.privateKey);
+    return signature.toString('base64');
+  }
+
+  /**
+   * Verify Ed25519 signature
+   * @returns true if valid, false if invalid or no public key
+   */
+  private verifySignature(data: string, signature: string): boolean {
+    if (!this.publicKey) {
+      // No key to verify with - skip signature verification
+      return true;
+    }
+
+    try {
+      return nodeCrypto.verify(
+        null,
+        Buffer.from(data),
+        this.publicKey,
+        Buffer.from(signature, 'base64')
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get the public key for external verification
+   * @returns Base64-encoded public key, or null if not configured
+   */
+  getPublicKey(): string | null {
+    if (!this.publicKey) {
+      return null;
+    }
+    return this.publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+  }
+
+  /**
+   * Check if signing is enabled
+   */
+  isSigningEnabled(): boolean {
+    return this.privateKey !== null;
+  }
+
+  /**
    * Get chain statistics
    */
   getStats(): {
@@ -253,7 +379,8 @@ export class ProofService {
 
 /**
  * Create a new PROOF service instance
+ * @param config Optional signing configuration
  */
-export function createProofService(): ProofService {
-  return new ProofService();
+export function createProofService(config?: SigningConfig): ProofService {
+  return new ProofService(config);
 }

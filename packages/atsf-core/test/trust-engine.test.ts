@@ -75,12 +75,13 @@ describe('TrustEngine', () => {
     });
 
     it('should have correct level names', () => {
-      expect(TRUST_LEVEL_NAMES[0]).toBe('Untrusted');
-      expect(TRUST_LEVEL_NAMES[1]).toBe('Observed');
-      expect(TRUST_LEVEL_NAMES[2]).toBe('Limited');
-      expect(TRUST_LEVEL_NAMES[3]).toBe('Standard');
-      expect(TRUST_LEVEL_NAMES[4]).toBe('Trusted');
-      expect(TRUST_LEVEL_NAMES[5]).toBe('Certified');
+      // BASIS spec tier names
+      expect(TRUST_LEVEL_NAMES[0]).toBe('Sandbox');
+      expect(TRUST_LEVEL_NAMES[1]).toBe('Provisional');
+      expect(TRUST_LEVEL_NAMES[2]).toBe('Standard');
+      expect(TRUST_LEVEL_NAMES[3]).toBe('Trusted');
+      expect(TRUST_LEVEL_NAMES[4]).toBe('Certified');
+      expect(TRUST_LEVEL_NAMES[5]).toBe('Autonomous');
     });
 
     it('should have non-overlapping score ranges', () => {

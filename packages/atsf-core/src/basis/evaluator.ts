@@ -219,8 +219,6 @@ export class RuleEvaluator {
 
     // Evaluate each evaluation step
     for (const evaluation of rule.evaluate) {
-      // TODO: Implement expression evaluation
-      // For now, use simple condition matching
       const conditionMet = this.evaluateExpression(evaluation.condition, context);
 
       if (conditionMet) {
@@ -248,19 +246,258 @@ export class RuleEvaluator {
 
   /**
    * Evaluate a condition expression string
+   * Supports: boolean literals, field comparisons, logical operators (AND, OR, NOT)
+   * Examples:
+   *   - "true", "false"
+   *   - "entity.trustScore > 300"
+   *   - "intent.context.amount <= 1000"
+   *   - "entity.type == 'agent' AND entity.trustScore >= 500"
+   *   - "NOT intent.context.restricted"
    */
   private evaluateExpression(
     expression: string,
-    _context: EvaluationContext
+    context: EvaluationContext
   ): boolean {
-    // Simple implementation - expand as needed
-    // Supports: "true", "false", field comparisons
-    if (expression === 'true') return true;
-    if (expression === 'false') return false;
+    const trimmed = expression.trim();
 
-    // TODO: Implement full expression parser
-    // For now, return true to allow
-    return true;
+    // Handle boolean literals
+    if (trimmed === 'true') return true;
+    if (trimmed === 'false') return false;
+
+    // Tokenize
+    const tokens = this.tokenize(trimmed);
+    if (tokens.length === 0) {
+      logger.warn({ expression }, 'Empty expression');
+      return true;
+    }
+
+    // Parse and evaluate
+    try {
+      const result = this.parseOrExpression(tokens, context);
+      return result.value;
+    } catch (error) {
+      logger.error({ expression, error }, 'Expression evaluation failed');
+      return false;
+    }
+  }
+
+  /**
+   * Tokenize expression string
+   */
+  private tokenize(expr: string): string[] {
+    const tokens: string[] = [];
+    let i = 0;
+
+    while (i < expr.length) {
+      // Skip whitespace
+      if (/\s/.test(expr[i]!)) {
+        i++;
+        continue;
+      }
+
+      // String literals
+      if (expr[i] === "'" || expr[i] === '"') {
+        const quote = expr[i];
+        let str = '';
+        i++; // Skip opening quote
+        while (i < expr.length && expr[i] !== quote) {
+          str += expr[i];
+          i++;
+        }
+        i++; // Skip closing quote
+        tokens.push(`'${str}'`);
+        continue;
+      }
+
+      // Multi-char operators
+      const twoChar = expr.substring(i, i + 2);
+      if (['==', '!=', '>=', '<=', '&&', '||'].includes(twoChar)) {
+        tokens.push(twoChar);
+        i += 2;
+        continue;
+      }
+
+      // Single-char operators and parens
+      if (['>', '<', '(', ')', '!'].includes(expr[i]!)) {
+        tokens.push(expr[i]!);
+        i++;
+        continue;
+      }
+
+      // Words (identifiers, keywords, numbers)
+      let word = '';
+      while (i < expr.length && /[a-zA-Z0-9_.]/.test(expr[i]!)) {
+        word += expr[i];
+        i++;
+      }
+      if (word) {
+        tokens.push(word);
+      }
+    }
+
+    return tokens;
+  }
+
+  /**
+   * Parse OR expression (lowest precedence)
+   */
+  private parseOrExpression(
+    tokens: string[],
+    context: EvaluationContext,
+    pos: { index: number } = { index: 0 }
+  ): { value: boolean; pos: number } {
+    let left = this.parseAndExpression(tokens, context, pos);
+
+    while (pos.index < tokens.length) {
+      const token = tokens[pos.index];
+      if (token === 'OR' || token === '||') {
+        pos.index++;
+        const right = this.parseAndExpression(tokens, context, pos);
+        left = { value: left.value || right.value, pos: pos.index };
+      } else {
+        break;
+      }
+    }
+
+    return left;
+  }
+
+  /**
+   * Parse AND expression
+   */
+  private parseAndExpression(
+    tokens: string[],
+    context: EvaluationContext,
+    pos: { index: number }
+  ): { value: boolean; pos: number } {
+    let left = this.parseNotExpression(tokens, context, pos);
+
+    while (pos.index < tokens.length) {
+      const token = tokens[pos.index];
+      if (token === 'AND' || token === '&&') {
+        pos.index++;
+        const right = this.parseNotExpression(tokens, context, pos);
+        left = { value: left.value && right.value, pos: pos.index };
+      } else {
+        break;
+      }
+    }
+
+    return left;
+  }
+
+  /**
+   * Parse NOT expression
+   */
+  private parseNotExpression(
+    tokens: string[],
+    context: EvaluationContext,
+    pos: { index: number }
+  ): { value: boolean; pos: number } {
+    if (tokens[pos.index] === 'NOT' || tokens[pos.index] === '!') {
+      pos.index++;
+      const inner = this.parseNotExpression(tokens, context, pos);
+      return { value: !inner.value, pos: pos.index };
+    }
+
+    return this.parseComparison(tokens, context, pos);
+  }
+
+  /**
+   * Parse comparison expression
+   */
+  private parseComparison(
+    tokens: string[],
+    context: EvaluationContext,
+    pos: { index: number }
+  ): { value: boolean; pos: number } {
+    // Handle parentheses
+    if (tokens[pos.index] === '(') {
+      pos.index++;
+      const inner = this.parseOrExpression(tokens, context, pos);
+      if (tokens[pos.index] === ')') {
+        pos.index++;
+      }
+      return inner;
+    }
+
+    // Get left operand
+    const left = this.parseValue(tokens, context, pos);
+
+    // Check for comparison operator
+    const op = tokens[pos.index];
+    if (!op || !['==', '!=', '>', '<', '>=', '<=', 'in', 'contains'].includes(op)) {
+      // Truthiness check
+      return { value: Boolean(left), pos: pos.index };
+    }
+
+    pos.index++;
+    const right = this.parseValue(tokens, context, pos);
+
+    // Evaluate comparison
+    let result: boolean;
+    switch (op) {
+      case '==':
+        result = left === right;
+        break;
+      case '!=':
+        result = left !== right;
+        break;
+      case '>':
+        result = (left as number) > (right as number);
+        break;
+      case '<':
+        result = (left as number) < (right as number);
+        break;
+      case '>=':
+        result = (left as number) >= (right as number);
+        break;
+      case '<=':
+        result = (left as number) <= (right as number);
+        break;
+      case 'in':
+        result = Array.isArray(right) && right.includes(left);
+        break;
+      case 'contains':
+        result = String(left).includes(String(right));
+        break;
+      default:
+        result = false;
+    }
+
+    return { value: result, pos: pos.index };
+  }
+
+  /**
+   * Parse a value (field path, literal, or number)
+   */
+  private parseValue(
+    tokens: string[],
+    context: EvaluationContext,
+    pos: { index: number }
+  ): unknown {
+    const token = tokens[pos.index];
+    if (!token) return undefined;
+
+    pos.index++;
+
+    // String literal
+    if (token.startsWith("'") && token.endsWith("'")) {
+      return token.slice(1, -1);
+    }
+
+    // Boolean literal
+    if (token === 'true') return true;
+    if (token === 'false') return false;
+    if (token === 'null') return null;
+
+    // Number literal
+    if (/^-?\d+(\.\d+)?$/.test(token)) {
+      return parseFloat(token);
+    }
+
+    // Field path (e.g., entity.trustScore, intent.context.amount)
+    return this.resolveField(token, context);
   }
 
   /**
