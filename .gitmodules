@@ -1,0 +1,3 @@
+[submodule "trustbot"]
+	path = trustbot
+	url = https://github.com/BanquetAI/trustbot.git
