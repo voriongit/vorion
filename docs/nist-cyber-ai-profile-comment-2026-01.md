@@ -2,7 +2,7 @@
 ## Public Comment Submission
 
 **Document:** NIST IR 8596 (Preliminary Draft)
-**Submission Date:** January 2026
+**Submission Date:** January 17, 2026
 **Comment Deadline:** January 30, 2026
 **Submit To:** cyberaiprofile@nist.gov
 
@@ -89,7 +89,7 @@ We recommend the profile reference quantified trust scoring as a best practice f
 > - Amplify negative impacts from failures to incentivize reliable behavior"
 
 **Supporting Framework:**
-The BASIS Trust Model (https://basis.vorion.org/trust) provides:
+The BASIS Trust Model (https://basis.vorion.org/spec/trust-scoring) provides:
 
 | Tier | Score Range | Default Capabilities |
 |------|-------------|---------------------|
@@ -237,11 +237,11 @@ The following open resources are available for NIST review:
 | Resource | URL | License |
 |----------|-----|---------|
 | BASIS Specification | https://basis.vorion.org | CC BY 4.0 |
-| Core Specification | https://basis.vorion.org/spec | CC BY 4.0 |
+| Core Specification | https://basis.vorion.org/spec/overview | CC BY 4.0 |
 | Efficiency Specification | https://github.com/voriongit/vorion/blob/master/basis-core/specs/BASIS-EFFICIENCY.md | Apache 2.0 |
-| Capability Taxonomy | https://basis.vorion.org/capabilities | CC BY 4.0 |
-| JSON Schemas | https://basis.vorion.org/schemas | Apache 2.0 |
-| Compliance Mapping | https://basis.vorion.org/compliance | CC BY 4.0 |
+| Capability Taxonomy | https://basis.vorion.org/spec/capabilities | CC BY 4.0 |
+| JSON Schemas | https://github.com/voriongit/vorion/blob/master/basis-core/specs/BASIS-JSON-SCHEMAS.md | Apache 2.0 |
+| Compliance Mapping | https://github.com/voriongit/vorion/blob/master/basis-core/specs/BASIS-COMPLIANCE-MAPPING.md | CC BY 4.0 |
 | Reference Implementation | https://cognigate.dev | Apache 2.0 |
 
 ---
@@ -352,5 +352,5 @@ https://basis.vorion.org
 ---
 
 *Document Version: 1.0*
-*Prepared: January 2026*
-*For submission to: cyberaiprofile@nist.gov*
+*Prepared: January 17, 2026*
+*For submission to: cyberaiprofile@nist.gov by January 30, 2026*
