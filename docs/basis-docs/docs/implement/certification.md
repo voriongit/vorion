@@ -23,7 +23,7 @@ Certification validates that your agent implementation complies with BASIS and c
 
 ### 1. Register
 
-Create an account at [AgentAnchor](https://agentanchor.ai/register).
+Create an account at [AgentAnchor](https://agentanchorai.com/register).
 
 ### 2. Submit Agent
 
@@ -81,4 +81,4 @@ You receive:
 
 ## Get Started
 
-[Apply at AgentAnchor →](https://agentanchor.ai/register)
+[Apply at AgentAnchor →](https://agentanchorai.com/register)

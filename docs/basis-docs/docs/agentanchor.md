@@ -10,7 +10,7 @@ description: The certification authority for AI agents
 
 **Trust scores. Certification. Registry. The UL Listing for AI.**
 
-[Platform](https://agentanchor.ai) · [Registry](https://agentanchor.ai/registry) · [API](https://agentanchor.ai/api)
+[Platform](https://agentanchorai.com) · [Registry](https://agentanchorai.com/registry) · [API](https://agentanchorai.com/api)
 
 ---
 
@@ -108,7 +108,7 @@ Browse the public registry:
 ### Verify an Agent
 
 ```bash
-curl https://api.agentanchor.ai/v1/verify/ag_vendor_agent
+curl https://api.agentanchorai.com/v1/verify/ag_vendor_agent
 
 {
   "valid": true,
@@ -165,9 +165,9 @@ GET  /v1/verify/{id}         # Verify
 
 ## Get Started
 
-- **Developers**: [agentanchor.ai/register](https://agentanchor.ai/register)
-- **Enterprises**: [agentanchor.ai/demo](https://agentanchor.ai/demo)
-- **Documentation**: [agentanchor.ai/docs](https://agentanchor.ai/docs)
+- **Developers**: [agentanchorai.com/register](https://agentanchorai.com/register)
+- **Enterprises**: [agentanchorai.com/demo](https://agentanchorai.com/demo)
+- **Documentation**: [agentanchorai.com/docs](https://agentanchorai.com/docs)
 
 ---
 

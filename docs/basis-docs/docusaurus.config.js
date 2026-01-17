@@ -103,7 +103,7 @@ const config = {
             title: 'Products',
             items: [
               { label: 'Cognigate', to: '/cognigate' },
-              { label: 'AgentAnchor', href: 'https://agentanchor.ai' },
+              { label: 'AgentAnchor', href: 'https://agentanchorai.com' },
             ],
           },
           {
