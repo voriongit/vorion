@@ -11,8 +11,8 @@
 ## Submitter Information
 
 **Organization:** Vorion Risk, LLC
-**Contact:** [Your Name]
-**Email:** [contact@vorion.org]
+**Contact:** Ryan Cason and Alex Blanc
+**Email:** contact@vorion.org
 **Website:** https://vorion.org
 **Relevant Standard:** BASIS (Behavioral Agent Safety and Interoperability Standard)
 **Standard URL:** https://basis.vorion.org
