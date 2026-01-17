@@ -19,8 +19,8 @@ sources:
 
 maintainers:
   - name: AgentAnchor
-    email: ops@agentanchor.ai
-    url: https://agentanchor.ai
+    email: ops@agentanchorai.com
+    url: https://agentanchorai.com
 
 dependencies:
   - name: redis

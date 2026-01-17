@@ -10,10 +10,10 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
-    {name = "ATSF Development Team", email = "team@agentanchor.ai"}
+    {name = "ATSF Development Team", email = "team@agentanchorai.com"}
 ]
 maintainers = [
-    {name = "ATSF Development Team", email = "team@agentanchor.ai"}
+    {name = "ATSF Development Team", email = "team@agentanchorai.com"}
 ]
 keywords = [
     "ai-safety",
@@ -74,7 +74,7 @@ atsf-server = "atsf.api:run_server"
 
 [project.urls]
 Homepage = "https://github.com/agentanchor/atsf"
-Documentation = "https://docs.agentanchor.ai/atsf"
+Documentation = "https://docs.agentanchorai.com/atsf"
 Repository = "https://github.com/agentanchor/atsf"
 Issues = "https://github.com/agentanchor/atsf/issues"
 Changelog = "https://github.com/agentanchor/atsf/blob/main/CHANGELOG.md"

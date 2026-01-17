@@ -1,6 +1,6 @@
 // AgentAnchor API Client
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.agentanchor.ai/v1'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.agentanchorai.com/v1'
 
 // Types
 export interface Agent {

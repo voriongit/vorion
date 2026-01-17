@@ -219,7 +219,7 @@ Cognigate can fetch trust scores from multiple sources:
 enforce:
   trust_provider: agentanchor
   agentanchor:
-    api_url: https://api.agentanchor.ai/v1
+    api_url: https://api.agentanchorai.com/v1
     api_key: ${AGENTANCHOR_API_KEY}
 ```
 

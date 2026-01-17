@@ -349,7 +349,7 @@ Enable multi-organization deployment with consensus-based governance.
 - **GitHub**: github.com/agentanchor/atsf
 - **Discord**: discord.gg/atsf
 - **Twitter**: @AgentAnchor
-- **Email**: roadmap@agentanchor.ai
+- **Email**: roadmap@agentanchorai.com
 
 ---
 

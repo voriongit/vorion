@@ -547,7 +547,7 @@ export function generateCanaryConfig(): CanaryConfig {
       {
         id: 'fake_email',
         type: 'pii',
-        value: `honeypot-${randomBytes(4).toString('hex')}@trap.agentanchor.ai`,
+        value: `honeypot-${randomBytes(4).toString('hex')}@trap.agentanchorai.com`,
         description: 'Fake email to detect data extraction'
       }
     ]

@@ -373,7 +373,7 @@ export const RATE_LIMITS = {
 
 /** API endpoints */
 export const API_ENDPOINTS = {
-  production: 'https://api.agentanchor.ai/v1',
-  staging: 'https://staging-api.agentanchor.ai/v1',
+  production: 'https://api.agentanchorai.com/v1',
+  staging: 'https://staging-api.agentanchorai.com/v1',
   cognigate: 'https://cognigate.vorion.org/v1',
 } as const;

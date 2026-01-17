@@ -152,7 +152,7 @@ Releases are automated via GitHub Actions:
 
 - **Questions**: Open a GitHub Discussion
 - **Bugs**: Open an Issue
-- **Security**: Email security@agentanchor.ai (do not open public issues)
+- **Security**: Email security@agentanchorai.com (do not open public issues)
 
 ## License
 

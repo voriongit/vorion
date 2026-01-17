@@ -779,4 +779,4 @@ python3 src/run_all_tests.py
 
 ---
 
-*Correspondence: research@agentanchor.ai*
+*Correspondence: research@agentanchorai.com*

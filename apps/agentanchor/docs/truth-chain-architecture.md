@@ -736,7 +736,7 @@ verificationRouter.get('/verify/:recordId', async (req, res) => {
       anchored: false,
       message: 'Record will be anchored in next batch',
     },
-    verificationUrl: `https://verify.agentanchor.ai/${recordId}`,
+    verificationUrl: `https://verify.agentanchorai.com/${recordId}`,
   });
 });
 
@@ -758,10 +758,10 @@ verificationRouter.get('/verify/agent/:agentId', async (req, res) => {
       details: cert.payload.details,
       hash: cert.hash,
       verified: true,
-      verifyUrl: `https://verify.agentanchor.ai/${cert.id}`,
+      verifyUrl: `https://verify.agentanchorai.com/${cert.id}`,
     })),
     trustScore: await trustService.getCurrentScore(agentId),
-    verificationWidget: `<script src="https://agentanchor.ai/widget.js" data-agent="${agentId}"></script>`,
+    verificationWidget: `<script src="https://agentanchorai.com/widget.js" data-agent="${agentId}"></script>`,
   });
 });
 
@@ -801,15 +801,15 @@ const widgetScript = `
 (function() {
   const agentId = document.currentScript.dataset.agent;
 
-  fetch('https://api.agentanchor.ai/verify/agent/' + agentId)
+  fetch('https://api.agentanchorai.com/verify/agent/' + agentId)
     .then(r => r.json())
     .then(data => {
       const container = document.createElement('div');
       container.className = 'agentanchor-badge';
       container.innerHTML = \`
-        <a href="https://verify.agentanchor.ai/agent/\${agentId}" target="_blank">
+        <a href="https://verify.agentanchorai.com/agent/\${agentId}" target="_blank">
           <div class="badge-content">
-            <img src="https://agentanchor.ai/badge-icon.svg" alt="AgentAnchor Verified" />
+            <img src="https://agentanchorai.com/badge-icon.svg" alt="AgentAnchor Verified" />
             <div class="badge-text">
               <span class="badge-title">AgentAnchor Certified</span>
               <span class="badge-score">Trust Score: \${data.trustScore}</span>

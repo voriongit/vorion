@@ -228,7 +228,7 @@ agentanchor_nav:
       - label: Blog
         url: /blog
       - label: Status
-        url: https://status.agentanchor.ai
+        url: https://status.agentanchorai.com
 ```
 
 ---
@@ -360,7 +360,7 @@ module.exports = {
     return [
       {
         source: '/docs/:path*',
-        destination: 'https://docs.agentanchor.ai/:path*',
+        destination: 'https://docs.agentanchorai.com/:path*',
       },
     ];
   },

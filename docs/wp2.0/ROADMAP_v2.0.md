@@ -690,10 +690,10 @@ function getCertificationHistory(bytes32 agentId) external view returns (Certifi
 {
   "@context": [
     "https://www.w3.org/2018/credentials/v1",
-    "https://agentanchor.ai/credentials/v1"
+    "https://agentanchorai.com/credentials/v1"
   ],
   "type": ["VerifiableCredential", "ATSFTrustCredential"],
-  "issuer": "did:web:agentanchor.ai",
+  "issuer": "did:web:agentanchorai.com",
   "issuanceDate": "2026-01-15T00:00:00Z",
   "credentialSubject": {
     "id": "did:agent:12345",
@@ -709,7 +709,7 @@ function getCertificationHistory(bytes32 agentId) external view returns (Certifi
     "type": "EcdsaSecp256k1Signature2019",
     "created": "2026-01-15T00:00:00Z",
     "proofPurpose": "assertionMethod",
-    "verificationMethod": "did:web:agentanchor.ai#key-1",
+    "verificationMethod": "did:web:agentanchorai.com#key-1",
     "jws": "eyJhbGciOiJFUzI1NksifQ..."
   }
 }

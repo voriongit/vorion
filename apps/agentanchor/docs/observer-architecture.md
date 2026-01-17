@@ -728,7 +728,7 @@ function ObserverFeed({ tenantId, filters }: ObserverFeedProps) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const ws = new WebSocket(`wss://api.agentanchor.ai/observer/feed`);
+    const ws = new WebSocket(`wss://api.agentanchorai.com/observer/feed`);
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'subscribe', tenantId, filters }));
@@ -858,7 +858,7 @@ services:
     environment:
       - KAFKA_BROKERS=kafka:9092
       - OBSERVER_DB_URL=postgres://observer_chronicler:***@observer-db:5432/observer
-      - TRUSTED_TIME_URL=https://time.agentanchor.ai
+      - TRUSTED_TIME_URL=https://time.agentanchorai.com
     networks:
       - observer-internal
       - event-bus  # One-way: can only consume

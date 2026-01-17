@@ -41,7 +41,7 @@ async function createSystemUser() {
 
     await client.query(`
       INSERT INTO profiles (id, email, full_name, created_at, updated_at)
-      VALUES ($1, 'bai-system@agentanchor.ai', 'BAI System', NOW(), NOW())
+      VALUES ($1, 'bai-system@agentanchorai.com', 'BAI System', NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `, [systemUserId]);
 

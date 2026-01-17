@@ -1,7 +1,7 @@
 site_name: ATSF Documentation
 site_description: Agentic Trust Scoring Framework - Production-grade AI agent safety
 site_author: AgentAnchor
-site_url: https://docs.agentanchor.ai/atsf
+site_url: https://docs.agentanchorai.com/atsf
 
 repo_name: agentanchor/atsf
 repo_url: https://github.com/agentanchor/atsf

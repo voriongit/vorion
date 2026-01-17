@@ -701,7 +701,7 @@ async def safe_action(action):
 
 ## Support
 
-- **Documentation**: https://docs.agentanchor.ai/atsf
+- **Documentation**: https://docs.agentanchorai.com/atsf
 - **Issues**: https://github.com/agentanchor/atsf/issues
 - **Discord**: https://discord.gg/agentanchor
-- **Email**: support@agentanchor.ai
+- **Email**: support@agentanchorai.com

@@ -440,7 +440,7 @@ A: Q3 2026 will focus on STPA deepening. Q4 on federated nodes. Stay tuned.
 
 - **Discord:** #bounties channel
 - **GitHub:** @agentanchor/atsf discussions
-- **Email:** bounties@agentanchor.ai
+- **Email:** bounties@agentanchorai.com
 
 ---
 

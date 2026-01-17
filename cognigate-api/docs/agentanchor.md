@@ -4,7 +4,7 @@
 
 **Trust scores. Certification. Registry. The UL Listing for AI.**
 
-[Get Certified](https://agentanchor.ai/register) · [Browse Registry](https://agentanchor.ai/registry) · [Documentation](https://agentanchor.ai/docs)
+[Get Certified](https://agentanchorai.com/register) · [Browse Registry](https://agentanchorai.com/registry) · [Documentation](https://agentanchorai.com/docs)
 
 ---
 
@@ -142,7 +142,7 @@ if (check.allowed) {
 Browse the public registry of certified agents:
 
 ```
-https://agentanchor.ai/registry
+https://agentanchorai.com/registry
 ```
 
 Filter by:
@@ -156,7 +156,7 @@ Filter by:
 
 ```bash
 # Verify an agent's certification
-curl https://api.agentanchor.ai/v1/verify/ag_vendor_agent
+curl https://api.agentanchorai.com/v1/verify/ag_vendor_agent
 
 {
   "valid": true,
@@ -235,7 +235,7 @@ POST   /v1/tokens/stake        # Stake for agent
 POST   /v1/tokens/unstake      # Unstake tokens
 ```
 
-[Full API Reference →](https://agentanchor.ai/api)
+[Full API Reference →](https://agentanchorai.com/api)
 
 ---
 
@@ -245,10 +245,10 @@ Embed certification status on your site:
 
 ```html
 <!-- Certification Badge -->
-<script src="https://agentanchor.ai/badge/ag_your_agent.js"></script>
+<script src="https://agentanchorai.com/badge/ag_your_agent.js"></script>
 
 <!-- Or static image -->
-<img src="https://agentanchor.ai/badge/ag_your_agent.png" 
+<img src="https://agentanchorai.com/badge/ag_your_agent.png" 
      alt="AgentAnchor Certified" />
 ```
 
@@ -300,10 +300,10 @@ Paid in TRST tokens:
 ```bash
 npm install @agentanchor/sdk
 ```
-[Developer Guide →](https://agentanchor.ai/docs/developers)
+[Developer Guide →](https://agentanchorai.com/docs/developers)
 
 ### Enterprises
-[Schedule Demo →](https://agentanchor.ai/demo)
+[Schedule Demo →](https://agentanchorai.com/demo)
 
 ### Community
 [Join Discord →](https://discord.gg/basis-protocol)
@@ -312,11 +312,11 @@ npm install @agentanchor/sdk
 
 ## Links
 
-- **Platform**: [agentanchor.ai](https://agentanchor.ai)
-- **Registry**: [agentanchor.ai/registry](https://agentanchor.ai/registry)
-- **Documentation**: [agentanchor.ai/docs](https://agentanchor.ai/docs)
-- **API Reference**: [agentanchor.ai/api](https://agentanchor.ai/api)
-- **Status**: [status.agentanchor.ai](https://status.agentanchor.ai)
+- **Platform**: [agentanchorai.com](https://agentanchorai.com)
+- **Registry**: [agentanchorai.com/registry](https://agentanchorai.com/registry)
+- **Documentation**: [agentanchorai.com/docs](https://agentanchorai.com/docs)
+- **API Reference**: [agentanchorai.com/api](https://agentanchorai.com/api)
+- **Status**: [status.agentanchorai.com](https://status.agentanchorai.com)
 
 ---
 
