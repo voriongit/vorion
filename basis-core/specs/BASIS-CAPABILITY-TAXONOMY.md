@@ -58,6 +58,7 @@ custom:acme/special_workflow        # Organization-specific
 | execute | Code and process execution | High |
 | financial | Monetary operations | Critical |
 | admin | Administrative functions | Critical |
+| efficiency | Resource optimization and sustainability | Low-Medium |
 | custom | Organization-defined | Variable |
 
 ---
@@ -299,24 +300,80 @@ Capabilities for administrative and configuration operations.
 
 ---
 
-### 3.7 Custom Namespace (`custom:`)
+### 3.7 Efficiency Namespace (`efficiency:`)
+
+Capabilities for resource-efficient operations and sustainability certification.
+
+#### 3.7.1 Certification Tiers
+
+Hardware tier certification based on MLPerf methodology and AI Energy Score standards.
+
+| Capability | Description | Risk | Min Tier |
+|------------|-------------|------|----------|
+| `efficiency:certified/tier-a` | Certified for consumer GPU (≤24GB VRAM) | Low | Provisional |
+| `efficiency:certified/tier-b` | Certified for cloud GPU (≤80GB VRAM) | Low | Provisional |
+| `efficiency:certified/tier-c` | Certified for multi-GPU clusters | Low | Provisional |
+| `efficiency:certified/reasoning` | Certified with reasoning mode efficiency | Medium | Standard |
+| `efficiency:certified/sustainable` | SCI-compliant sustainability certification | Low | Provisional |
+
+#### 3.7.2 Resource Monitoring
+
+| Capability | Description | Risk | Min Tier |
+|------------|-------------|------|----------|
+| `efficiency:monitor/usage` | Monitor own resource consumption | Minimal | Sandbox |
+| `efficiency:monitor/cost` | Access cost-per-operation metrics | Low | Provisional |
+| `efficiency:monitor/carbon` | Access carbon intensity metrics | Low | Provisional |
+| `efficiency:report/metrics` | Generate efficiency reports | Low | Standard |
+
+#### 3.7.3 Adaptive Operations
+
+Capabilities for cost-aware and value-optimized execution.
+
+| Capability | Description | Risk | Min Tier |
+|------------|-------------|------|----------|
+| `efficiency:adapt/model-select` | Auto-select optimal model for task | Medium | Standard |
+| `efficiency:adapt/batch` | Batch operations for efficiency | Low | Standard |
+| `efficiency:adapt/defer` | Defer to low-carbon periods | Low | Standard |
+| `efficiency:adapt/degrade-graceful` | Accept graceful degradation | Low | Provisional |
+
+#### 3.7.4 Cost-to-Value Governance
+
+These capabilities enable automatic efficiency governance based on value delivered.
+
+| Capability | Description | Risk | Min Tier |
+|------------|-------------|------|----------|
+| `efficiency:govern/ctv-monitor` | Monitor cost-to-value ratio | Low | Standard |
+| `efficiency:govern/ctv-alert` | Receive alerts for low-value operations | Low | Standard |
+| `efficiency:govern/ctv-throttle` | Accept automatic throttling | Medium | Trusted |
+| `efficiency:govern/ctv-stop` | Accept automatic stop for negative ROI | Medium | Trusted |
+
+**Wildcards:**
+- `efficiency:certified/*` — All certification capabilities
+- `efficiency:monitor/*` — All monitoring capabilities
+- `efficiency:adapt/*` — All adaptive capabilities
+- `efficiency:govern/*` — All governance capabilities
+- `efficiency:*` — All efficiency capabilities
+
+---
+
+### 3.8 Custom Namespace (`custom:`)
 
 Organization-defined capabilities.
 
-#### 3.7.1 Format
+#### 3.8.1 Format
 
 ```
 custom:{organization}/{category}/{action}
 ```
 
-#### 3.7.2 Requirements
+#### 3.8.2 Requirements
 
 - MUST use `custom:` prefix
 - MUST NOT conflict with standard namespaces
 - SHOULD be documented in organization policy
 - SHOULD specify minimum tier requirements
 
-#### 3.7.3 Examples
+#### 3.8.3 Examples
 
 ```
 custom:acme/billing/generate_invoice

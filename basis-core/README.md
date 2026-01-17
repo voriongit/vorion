@@ -9,8 +9,9 @@
 
 The standard establishes a universal framework for:
 - **Trust Quantification** — 0-1000 scoring with 6 tiers (Sandbox → Autonomous)
-- **Capability Gating** — 100+ hierarchical permissions across 7 namespaces
+- **Capability Gating** — 100+ hierarchical permissions across 8 namespaces
 - **Immutable Audit Trails** — Cryptographic proof chains with optional blockchain anchoring
+- **Efficiency Governance** — Cost-to-value monitoring with adaptive throttling and auto-stop
 
 ---
 
@@ -39,6 +40,7 @@ basis-core/
 ├── specs/             # Complete specification documents
 │   ├── BASIS-SPECIFICATION.md        # Core normative spec
 │   ├── BASIS-CAPABILITY-TAXONOMY.md  # 100+ capabilities reference
+│   ├── BASIS-EFFICIENCY.md           # Cost-to-value governance
 │   ├── BASIS-JSON-SCHEMAS.md         # Wire protocol schemas
 │   ├── BASIS-ERROR-CODES.md          # 60+ error codes
 │   ├── BASIS-THREAT-MODEL.md         # Security analysis
@@ -58,7 +60,8 @@ basis-core/
 | Document | Size | Description |
 |----------|------|-------------|
 | [BASIS-SPECIFICATION.md](specs/BASIS-SPECIFICATION.md) | 28K | Core spec: architecture, trust model, conformance levels |
-| [BASIS-CAPABILITY-TAXONOMY.md](specs/BASIS-CAPABILITY-TAXONOMY.md) | 18K | 100+ capabilities across 7 namespaces |
+| [BASIS-CAPABILITY-TAXONOMY.md](specs/BASIS-CAPABILITY-TAXONOMY.md) | 20K | 100+ capabilities across 8 namespaces |
+| [BASIS-EFFICIENCY.md](specs/BASIS-EFFICIENCY.md) | 18K | Resource manifests, cost-to-value governance, auto-stop |
 | [BASIS-JSON-SCHEMAS.md](specs/BASIS-JSON-SCHEMAS.md) | 28K | Complete wire protocol schemas |
 | [BASIS-ERROR-CODES.md](specs/BASIS-ERROR-CODES.md) | 16K | 60+ error codes in 12 categories |
 | [BASIS-THREAT-MODEL.md](specs/BASIS-THREAT-MODEL.md) | 20K | STRIDE analysis, 20+ threats with mitigations |
