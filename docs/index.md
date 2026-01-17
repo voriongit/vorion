@@ -10,7 +10,8 @@ Comprehensive documentation for the Vorion autonomous agent governance platform,
 
 | Resource | Description |
 |----------|-------------|
-| [MASTER-PROJECT-INVENTORY.md](./MASTER-PROJECT-INVENTORY.md) | **NEW** - Complete inventory of all projects (axiom, bai, S_A) |
+| [MASTER-PROJECT-INVENTORY.md](./MASTER-PROJECT-INVENTORY.md) | Complete inventory of all projects (axiom, bai, S_A) |
+| [UNIFIED-REPOS-AND-WEBSITES.md](./UNIFIED-REPOS-AND-WEBSITES.md) | **NEW** - All repos, domains, deployments |
 | [VORION-ECOSYSTEM-ALIGNMENT.md](./VORION-ECOSYSTEM-ALIGNMENT.md) | Product hierarchy & naming conventions |
 | [SESSION-PROGRESS-2026-01-17.md](./SESSION-PROGRESS-2026-01-17.md) | Current session progress |
 | [nist-cyber-ai-profile-comment-2026-01.md](./nist-cyber-ai-profile-comment-2026-01.md) | NIST submission draft (due Jan 30) |
