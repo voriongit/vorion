@@ -63,7 +63,9 @@ export type TrustEventType =
   | 'trust:score_changed'
   | 'trust:tier_changed'
   | 'trust:decay_applied'
-  | 'trust:failure_detected';
+  | 'trust:failure_detected'
+  | 'trust:recovery_applied'
+  | 'trust:recovery_milestone';
 
 /**
  * Base trust event
@@ -139,6 +141,30 @@ export interface TrustFailureDetectedEvent extends TrustEvent {
 }
 
 /**
+ * Recovery applied event
+ */
+export interface TrustRecoveryAppliedEvent extends TrustEvent {
+  type: 'trust:recovery_applied';
+  signal: TrustSignal;
+  previousScore: TrustScore;
+  newScore: TrustScore;
+  recoveryAmount: number;
+  consecutiveSuccesses: number;
+  acceleratedRecoveryActive: boolean;
+}
+
+/**
+ * Recovery milestone event (e.g., restored to previous tier)
+ */
+export interface TrustRecoveryMilestoneEvent extends TrustEvent {
+  type: 'trust:recovery_milestone';
+  milestone: 'tier_restored' | 'full_recovery' | 'accelerated_recovery_earned';
+  previousScore: TrustScore;
+  newScore: TrustScore;
+  details: string;
+}
+
+/**
  * Union of all trust events
  */
 export type AnyTrustEvent =
@@ -147,7 +173,9 @@ export type AnyTrustEvent =
   | TrustScoreChangedEvent
   | TrustTierChangedEvent
   | TrustDecayAppliedEvent
-  | TrustFailureDetectedEvent;
+  | TrustFailureDetectedEvent
+  | TrustRecoveryAppliedEvent
+  | TrustRecoveryMilestoneEvent;
 
 /**
  * Entity trust record
@@ -162,6 +190,12 @@ export interface TrustRecord {
   history: TrustHistoryEntry[];
   /** Recent failure timestamps for accelerated decay */
   recentFailures: string[];
+  /** Recent success timestamps for recovery */
+  recentSuccesses: string[];
+  /** Peak score achieved (for recovery milestone tracking) */
+  peakScore: TrustScore;
+  /** Consecutive successful signals count */
+  consecutiveSuccesses: number;
 }
 
 /**
@@ -204,6 +238,20 @@ export interface TrustEngineConfig {
   persistence?: PersistenceProvider;
   /** Auto-persist changes (default: true when persistence is provided) */
   autoPersist?: boolean;
+
+  // Recovery configuration
+  /** Signal value threshold above which a signal is considered a success (default: 0.7) */
+  successThreshold?: number;
+  /** Base recovery rate per successful signal (default: 0.02 = 2%) */
+  recoveryRate?: number;
+  /** Multiplier for recovery when entity has consecutive successes (default: 1.5) */
+  acceleratedRecoveryMultiplier?: number;
+  /** Minimum consecutive successes to trigger accelerated recovery (default: 3) */
+  minSuccessesForAcceleration?: number;
+  /** Time window in ms to consider successes as "recent" (default: 3600000 = 1 hour) */
+  successWindowMs?: number;
+  /** Maximum score boost per recovery signal (default: 50 points) */
+  maxRecoveryPerSignal?: number;
 }
 
 /**
@@ -220,6 +268,14 @@ export class TrustEngine extends EventEmitter {
   private _persistence?: PersistenceProvider;
   private _autoPersist: boolean;
 
+  // Recovery configuration
+  private _successThreshold: number;
+  private _recoveryRate: number;
+  private _acceleratedRecoveryMultiplier: number;
+  private _minSuccessesForAcceleration: number;
+  private _successWindowMs: number;
+  private _maxRecoveryPerSignal: number;
+
   constructor(config: TrustEngineConfig = {}) {
     super();
     this._decayRate = config.decayRate ?? 0.01;
@@ -230,6 +286,14 @@ export class TrustEngine extends EventEmitter {
     this._minFailuresForAcceleration = config.minFailuresForAcceleration ?? 2;
     this._persistence = config.persistence;
     this._autoPersist = config.autoPersist ?? (config.persistence !== undefined);
+
+    // Recovery configuration
+    this._successThreshold = config.successThreshold ?? 0.7;
+    this._recoveryRate = config.recoveryRate ?? 0.02;
+    this._acceleratedRecoveryMultiplier = config.acceleratedRecoveryMultiplier ?? 1.5;
+    this._minSuccessesForAcceleration = config.minSuccessesForAcceleration ?? 3;
+    this._successWindowMs = config.successWindowMs ?? 3600000; // 1 hour
+    this._maxRecoveryPerSignal = config.maxRecoveryPerSignal ?? 50;
   }
 
   /**
@@ -265,6 +329,27 @@ export class TrustEngine extends EventEmitter {
    */
   get persistence(): PersistenceProvider | undefined {
     return this._persistence;
+  }
+
+  /**
+   * Get the success threshold
+   */
+  get successThreshold(): number {
+    return this._successThreshold;
+  }
+
+  /**
+   * Get the recovery rate
+   */
+  get recoveryRate(): number {
+    return this._recoveryRate;
+  }
+
+  /**
+   * Get the accelerated recovery multiplier
+   */
+  get acceleratedRecoveryMultiplier(): number {
+    return this._acceleratedRecoveryMultiplier;
   }
 
   /**
@@ -391,6 +476,127 @@ export class TrustEngine extends EventEmitter {
   }
 
   /**
+   * Clean up old success timestamps outside the window
+   */
+  private cleanupSuccesses(record: TrustRecord): void {
+    const now = Date.now();
+    record.recentSuccesses = record.recentSuccesses.filter(
+      (timestamp) => now - new Date(timestamp).getTime() < this._successWindowMs
+    );
+  }
+
+  /**
+   * Check if an entity has accelerated recovery active
+   */
+  private hasAcceleratedRecovery(record: TrustRecord): boolean {
+    return record.consecutiveSuccesses >= this._minSuccessesForAcceleration;
+  }
+
+  /**
+   * Calculate recovery amount for a success signal
+   */
+  private calculateRecoveryAmount(record: TrustRecord, signalValue: number): number {
+    // Base recovery based on signal strength
+    const signalStrength = (signalValue - this._successThreshold) / (1 - this._successThreshold);
+    let baseRecovery = Math.round(this._recoveryRate * 1000 * signalStrength);
+
+    // Apply accelerated recovery if earned
+    if (this.hasAcceleratedRecovery(record)) {
+      baseRecovery = Math.round(baseRecovery * this._acceleratedRecoveryMultiplier);
+    }
+
+    // Cap at maximum recovery per signal
+    return Math.min(baseRecovery, this._maxRecoveryPerSignal);
+  }
+
+  /**
+   * Apply recovery to a trust record
+   */
+  private async applyRecovery(
+    record: TrustRecord,
+    signal: TrustSignal,
+    recoveryAmount: number
+  ): Promise<void> {
+    const previousScore = record.score;
+    const previousLevel = record.level;
+    const accelerated = this.hasAcceleratedRecovery(record);
+
+    // Apply recovery (don't exceed 1000)
+    record.score = Math.min(1000, record.score + recoveryAmount);
+    record.level = this.scoreToLevel(record.score);
+
+    // Track peak score
+    if (record.score > record.peakScore) {
+      record.peakScore = record.score;
+    }
+
+    record.lastCalculatedAt = new Date().toISOString();
+
+    // Emit recovery event
+    this.emitTrustEvent({
+      type: 'trust:recovery_applied',
+      entityId: record.entityId,
+      timestamp: new Date().toISOString(),
+      signal,
+      previousScore,
+      newScore: record.score,
+      recoveryAmount,
+      consecutiveSuccesses: record.consecutiveSuccesses,
+      acceleratedRecoveryActive: accelerated,
+    });
+
+    // Check for milestones
+    if (previousLevel !== record.level && record.level > previousLevel) {
+      this.emitTrustEvent({
+        type: 'trust:recovery_milestone',
+        entityId: record.entityId,
+        timestamp: new Date().toISOString(),
+        milestone: 'tier_restored',
+        previousScore,
+        newScore: record.score,
+        details: `Promoted from ${TRUST_LEVEL_NAMES[previousLevel]} to ${TRUST_LEVEL_NAMES[record.level]}`,
+      });
+    }
+
+    // Check if accelerated recovery was just earned
+    if (record.consecutiveSuccesses === this._minSuccessesForAcceleration) {
+      this.emitTrustEvent({
+        type: 'trust:recovery_milestone',
+        entityId: record.entityId,
+        timestamp: new Date().toISOString(),
+        milestone: 'accelerated_recovery_earned',
+        previousScore,
+        newScore: record.score,
+        details: `Earned accelerated recovery after ${this._minSuccessesForAcceleration} consecutive successes`,
+      });
+    }
+
+    // Check for full recovery
+    if (record.score >= record.peakScore && previousScore < record.peakScore) {
+      this.emitTrustEvent({
+        type: 'trust:recovery_milestone',
+        entityId: record.entityId,
+        timestamp: new Date().toISOString(),
+        milestone: 'full_recovery',
+        previousScore,
+        newScore: record.score,
+        details: `Fully recovered to peak score of ${record.peakScore}`,
+      });
+    }
+
+    logger.info(
+      {
+        entityId: record.entityId,
+        previousScore,
+        newScore: record.score,
+        recoveryAmount,
+        accelerated,
+      },
+      'Trust recovery applied'
+    );
+  }
+
+  /**
    * Get trust score for an entity (with automatic decay)
    */
   async getScore(entityId: ID): Promise<TrustRecord | undefined> {
@@ -479,6 +685,9 @@ export class TrustEngine extends EventEmitter {
       record.recentFailures.push(signal.timestamp);
       this.cleanupFailures(record);
 
+      // Reset consecutive successes on failure
+      record.consecutiveSuccesses = 0;
+
       const acceleratedDecayActive = this.hasAcceleratedDecay(record);
 
       this.emitTrustEvent({
@@ -499,6 +708,30 @@ export class TrustEngine extends EventEmitter {
           acceleratedDecayActive,
         },
         'Failure signal detected'
+      );
+    }
+
+    // Detect success signals and apply recovery
+    if (signal.value >= this._successThreshold) {
+      record.recentSuccesses.push(signal.timestamp);
+      record.consecutiveSuccesses++;
+      this.cleanupSuccesses(record);
+
+      // Calculate and apply recovery
+      const recoveryAmount = this.calculateRecoveryAmount(record, signal.value);
+      if (recoveryAmount > 0) {
+        await this.applyRecovery(record, signal, recoveryAmount);
+      }
+
+      logger.info(
+        {
+          entityId: signal.entityId,
+          signalType: signal.type,
+          signalValue: signal.value,
+          consecutiveSuccesses: record.consecutiveSuccesses,
+          recoveryAmount,
+        },
+        'Success signal detected'
       );
     }
 
@@ -610,6 +843,9 @@ export class TrustEngine extends EventEmitter {
         },
       ],
       recentFailures: [],
+      recentSuccesses: [],
+      peakScore: score,
+      consecutiveSuccesses: 0,
     };
 
     this.records.set(entityId, record);
@@ -722,9 +958,10 @@ export class TrustEngine extends EventEmitter {
    * Create initial trust record
    */
   private createInitialRecord(entityId: ID): TrustRecord {
+    const initialScore = TRUST_THRESHOLDS[1].min;
     return {
       entityId,
-      score: TRUST_THRESHOLDS[1].min, // Start at L1 (Provisional) minimum
+      score: initialScore, // Start at L1 (Provisional) minimum
       level: 1,
       components: {
         behavioral: 0.5,
@@ -736,6 +973,9 @@ export class TrustEngine extends EventEmitter {
       lastCalculatedAt: new Date().toISOString(),
       history: [],
       recentFailures: [],
+      recentSuccesses: [],
+      peakScore: initialScore,
+      consecutiveSuccesses: 0,
     };
   }
 
@@ -749,6 +989,15 @@ export class TrustEngine extends EventEmitter {
   }
 
   /**
+   * Check if accelerated recovery is currently active for an entity
+   */
+  isAcceleratedRecoveryActive(entityId: ID): boolean {
+    const record = this.records.get(entityId);
+    if (!record) return false;
+    return this.hasAcceleratedRecovery(record);
+  }
+
+  /**
    * Get current failure count for an entity
    */
   getFailureCount(entityId: ID): number {
@@ -756,6 +1005,24 @@ export class TrustEngine extends EventEmitter {
     if (!record) return 0;
     this.cleanupFailures(record);
     return record.recentFailures.length;
+  }
+
+  /**
+   * Get consecutive success count for an entity
+   */
+  getConsecutiveSuccessCount(entityId: ID): number {
+    const record = this.records.get(entityId);
+    if (!record) return 0;
+    return record.consecutiveSuccesses;
+  }
+
+  /**
+   * Get peak score for an entity
+   */
+  getPeakScore(entityId: ID): TrustScore {
+    const record = this.records.get(entityId);
+    if (!record) return 0;
+    return record.peakScore;
   }
 }
 

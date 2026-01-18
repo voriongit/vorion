@@ -94,9 +94,13 @@ export interface PersistenceProvider {
  */
 export interface PersistenceConfig {
   /** Provider type */
-  type: 'memory' | 'file' | 'sqlite';
+  type: 'memory' | 'file' | 'sqlite' | 'supabase';
   /** File path for file/sqlite providers */
   path?: string;
   /** Auto-save interval in ms (0 = disabled) */
   autoSaveIntervalMs?: number;
+  /** Database client for supabase provider */
+  client?: unknown;
+  /** Table name for supabase provider */
+  tableName?: string;
 }
