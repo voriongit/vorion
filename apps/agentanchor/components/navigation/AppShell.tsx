@@ -12,8 +12,6 @@ import {
   MiniMap,
   QuickTravelProvider,
   FloorMemoryProvider,
-  TourStartButton,
-  hasCompletedTour
 } from '@/components/building'
 
 interface AppShellProps {
@@ -26,16 +24,10 @@ export default function AppShell({ children, userRole = 'consumer' }: AppShellPr
   const isMobile = useIsMobile()
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
-  const [showTourPrompt, setShowTourPrompt] = useState(false)
 
   // Handle hydration
   useEffect(() => {
     setMounted(true)
-    // Show tour prompt for first-time users after a short delay
-    if (!hasCompletedTour()) {
-      const timer = setTimeout(() => setShowTourPrompt(true), 2000)
-      return () => clearTimeout(timer)
-    }
   }, [])
 
   // Close mobile sidebar on route change
@@ -106,13 +98,6 @@ export default function AppShell({ children, userRole = 'consumer' }: AppShellPr
 
           {/* Building Navigation - MiniMap (bottom-right corner) */}
           {!isMobile && <MiniMap position="bottom-right" showActivity />}
-
-          {/* Tour prompt for first-time users */}
-          {showTourPrompt && (
-            <div className="fixed bottom-24 right-6 z-40 animate-in slide-in-from-bottom-4">
-              <TourStartButton tourType="quick" />
-            </div>
-          )}
         </div>
       </QuickTravelProvider>
     </FloorMemoryProvider>

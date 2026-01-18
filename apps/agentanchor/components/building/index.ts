@@ -41,14 +41,6 @@ export {
   QuickTravelHint
 } from './QuickTravel'
 
-// Guided tours with Aria
-export {
-  GuidedTour,
-  TourStartButton,
-  hasCompletedTour,
-  resetTourState
-} from './GuidedTour'
-
 // Floor landing with themed decorations
 export { FloorLanding } from './FloorLanding'
 

@@ -22,11 +22,11 @@ export async function GET(request: NextRequest) {
         id: councilDecisions.id,
         agent_id: councilDecisions.agentId,
         agent_name: agents.name,
-        action_type: councilDecisions.decisionType,
-        decision: councilDecisions.outcome,
+        action_type: councilDecisions.subjectAction,
+        decision: councilDecisions.status,
         risk_level: councilDecisions.riskLevel,
         reasoning: councilDecisions.reasoning,
-        constraints: councilDecisions.modificationDetails,
+        constraints: councilDecisions.subjectContext,
         created_at: councilDecisions.createdAt,
       })
       .from(councilDecisions)
@@ -35,10 +35,10 @@ export async function GET(request: NextRequest) {
       .orderBy(desc(councilDecisions.createdAt))
       .limit(limit)
 
-    // Map outcomes to B2B decision types
+    // Map status to B2B decision types
     const mappedDecisions = decisions.map((d) => ({
       ...d,
-      decision: mapOutcomeToDecision(d.decision),
+      decision: mapStatusToDecision(d.decision),
     }))
 
     // Calculate stats
@@ -49,8 +49,8 @@ export async function GET(request: NextRequest) {
       .select({
         total_decisions: sql<number>`count(*)::int`,
         decisions_today: sql<number>`count(*) filter (where ${councilDecisions.createdAt} >= ${today})::int`,
-        allow_count: sql<number>`count(*) filter (where ${councilDecisions.outcome} = 'approved')::int`,
-        escalation_count: sql<number>`count(*) filter (where ${councilDecisions.outcome} = 'escalated')::int`,
+        allow_count: sql<number>`count(*) filter (where ${councilDecisions.status} = 'approved')::int`,
+        escalation_count: sql<number>`count(*) filter (where ${councilDecisions.status} = 'escalated')::int`,
       })
       .from(councilDecisions)
 
@@ -76,16 +76,18 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function mapOutcomeToDecision(outcome: string | null): string {
-  switch (outcome) {
+function mapStatusToDecision(status: string | null): string {
+  switch (status) {
     case 'approved':
       return 'allow'
     case 'rejected':
       return 'deny'
     case 'escalated':
       return 'escalate'
-    case 'modified':
+    case 'overridden':
       return 'degrade'
+    case 'pending':
+      return 'pending'
     default:
       return 'allow'
   }
