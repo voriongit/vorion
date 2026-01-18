@@ -1,31 +1,33 @@
 ---
 sidebar_position: 7
 title: AgentAnchor
-description: The certification authority for AI agents
+description: Enterprise AI Agent Governance Platform
 ---
 
 # AgentAnchor
 
-## The Certification Authority for AI Agents
+## Enterprise AI Agent Governance Platform
 
-**Trust scores. Certification. Registry. The UL Listing for AI.**
+**Deploy governed AI agents with trust scoring, policy enforcement, and complete auditability.**
 
-[Platform](https://agentanchorai.com) · [Registry](https://agentanchorai.com/registry) · [API](https://agentanchorai.com/api)
+[Platform](https://agentanchorai.com) · [Documentation](https://agentanchorai.com/docs) · [API](https://agentanchorai.com/api)
 
 ---
 
 ## What is AgentAnchor?
 
-AgentAnchor is the certification platform for BASIS-compliant AI agents:
+AgentAnchor is the enterprise platform for deploying and governing AI agents using the BASIS standard:
 
-- **Trust Scores** — Quantified trustworthiness (0-1000)
-- **Certification** — Third-party validation of compliance
-- **Registry** — Public directory of certified agents
-- **Staking** — Economic skin-in-the-game
+- **Trust Scoring** — Quantified trustworthiness (0-1000) with behavioral tracking
+- **Policy Enforcement** — Real-time governance with capability gating
+- **Audit Trails** — Immutable proof chains for every decision
+- **Compliance Ready** — EU AI Act, ISO 42001, NIST AI RMF aligned
 
 ---
 
-## Trust Scores
+## Core Capabilities
+
+### Trust Engine
 
 Every agent gets a dynamic trust score (0-1000) based on:
 
@@ -33,46 +35,63 @@ Every agent gets a dynamic trust score (0-1000) based on:
 |-----------|--------|------------------|
 | **Compliance** | 25% | BASIS standard adherence |
 | **Performance** | 20% | Runtime reliability |
-| **Reputation** | 15% | Community feedback |
-| **Stake** | 15% | Economic commitment |
+| **Reputation** | 15% | Organizational feedback |
 | **History** | 15% | Track record |
 | **Verification** | 10% | Identity confirmation |
+| **Context** | 15% | Environmental factors |
 
 ### Trust Tiers
 
-| Tier | Score | Badge |
-|------|-------|-------|
-| 🔴 Unverified | 0-99 | — |
-| 🟠 Provisional | 100-299 | Bronze |
-| 🟡 Certified | 300-499 | Silver |
-| 🟢 Trusted | 500-699 | Gold |
-| 🔵 Verified | 700-899 | Platinum |
-| 💎 Sovereign | 900-1000 | Diamond |
+| Tier | Score | Capabilities |
+|------|-------|--------------|
+| Sandbox | [0, 100) | Isolated testing only |
+| Provisional | [100, 300) | Read public data, internal messaging |
+| Standard | [300, 500) | Limited external communication |
+| Trusted | [500, 700) | External API calls |
+| Certified | [700, 900) | Financial transactions |
+| Autonomous | [900, 1000] | Full autonomy within policy bounds |
+
+### Trust Decay
+
+Inactive agents experience automatic trust decay:
+- **Default:** 7-day half-life
+- **Enterprise:** 14-day half-life (configurable)
+- **Maintenance Mode:** Pauses decay during planned downtime
 
 ---
 
-## Certification Levels
+## Governance Architecture
 
-| Level | Requirements | Cost |
-|-------|--------------|------|
-| **Bronze** | Basic compliance | $99/mo |
-| **Silver** | + Audit, 30-day history | $299/mo |
-| **Gold** | + Extended audit, 90-day | $799/mo |
-| **Platinum** | + Full audit, 180-day | $1,999/mo |
+AgentAnchor implements the BASIS four-layer governance model:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    HUMAN LAYER                               │
+│   Escalation for high-risk decisions                        │
+└─────────────────────────────────────────────────────────────┘
+                              ▲
+┌─────────────────────────────────────────────────────────────┐
+│                    ENFORCE LAYER                             │
+│   Policy evaluation against trust scores and constraints     │
+│   Output: ALLOW, DENY, ESCALATE, or DEGRADE                 │
+└─────────────────────────────────────────────────────────────┘
+                              ▲
+┌─────────────────────────────────────────────────────────────┐
+│                    INTENT LAYER                              │
+│   Parse and classify agent action requests                   │
+│   Risk classification and capability mapping                 │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                    PROOF LAYER                               │
+│   SHA-256 chained audit records for every decision          │
+│   Ed25519 signatures for tamper detection                   │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## For Developers
-
-### Get Your Agent Certified
-
-```
-1. REGISTER   → Create account, submit manifest
-2. STAKE      → Lock ANCR tokens
-3. TEST       → Automated compliance testing
-4. CERTIFY    → Review and certification
-5. MONITOR    → Ongoing compliance
-```
 
 ### SDK Integration
 
@@ -83,29 +102,68 @@ const anchor = new AgentAnchor({
   apiKey: process.env.AGENTANCHOR_API_KEY
 });
 
-// Get trust score
-const trust = await anchor.trust.getScore('ag_your_agent');
-console.log(`Trust: ${trust.composite} (${trust.tier})`);
+// Register an agent
+const agent = await anchor.agents.register({
+  name: 'my-agent',
+  capabilities: ['data/read_public', 'communication/internal']
+});
 
-// Check capability
-const check = await anchor.capabilities.check(
-  'ag_your_agent',
-  'communication/send_external'
-);
+// Check trust before action
+const decision = await anchor.enforce.check({
+  agentId: agent.id,
+  action: 'communication/send_external',
+  context: { recipient: 'partner@example.com' }
+});
+
+if (decision.action === 'allow') {
+  // Execute action
+} else if (decision.action === 'escalate') {
+  // Request human approval
+}
+```
+
+### Cognigate Integration
+
+AgentAnchor uses [Cognigate](/cognigate) as its constrained execution runtime:
+
+```typescript
+import { createGateway } from '@vorion/atsf-core/cognigate';
+
+const gateway = createGateway({
+  maxMemoryMb: 512,
+  timeoutMs: 30000
+});
+
+// Execute within resource limits
+const result = await gateway.execute({
+  intent,
+  decision,
+  resourceLimits: { maxMemoryMb: 256 }
+});
 ```
 
 ---
 
 ## For Enterprises
 
-### Discover Certified Agents
+### Deploy Governed Agents
 
-Browse the public registry:
-- Filter by category, trust score, certification level
-- Verify before you trust
-- Access audit trails
+1. **Register** — Define agents with capability manifests
+2. **Configure** — Set trust thresholds and policies
+3. **Deploy** — Run agents through AgentAnchor governance
+4. **Monitor** — Real-time dashboards and alerts
+5. **Audit** — Complete proof chains for compliance
 
-### Verify an Agent
+### Compliance Features
+
+| Requirement | AgentAnchor Capability |
+|-------------|------------------------|
+| EU AI Act Article 19 | Immutable audit trails, 6+ month retention |
+| ISO 42001 | AI management system integration |
+| NIST AI RMF | Risk management, measurement, governance |
+| SOC 2 Type II | Security controls, access logging |
+
+### API Verification
 
 ```bash
 curl https://api.agentanchorai.com/v1/verify/ag_vendor_agent
@@ -113,31 +171,21 @@ curl https://api.agentanchorai.com/v1/verify/ag_vendor_agent
 {
   "valid": true,
   "trustScore": 687,
-  "certification": "gold",
-  "lastAudit": "2026-01-02"
+  "tier": "trusted",
+  "lastAction": "2026-01-18T10:30:00Z",
+  "complianceStatus": "active"
 }
 ```
 
 ---
 
-## Token Economy
+## Pricing
 
-### ANCR (Anchor Token)
-- **Purpose**: Governance, staking
-- **Use**: Stake to certify, vote on protocol
-
-### TRST (Trust Token)  
-- **Purpose**: Utility, API fees
-- **Use**: Pay for services, earn rewards
-
-### Staking Requirements
-
-| Certification | Stake | Lock Period |
-|---------------|-------|-------------|
-| Bronze | 1,000 ANCR | 30 days |
-| Silver | 5,000 ANCR | 60 days |
-| Gold | 25,000 ANCR | 90 days |
-| Platinum | 100,000 ANCR | 180 days |
+| Plan | Agents | Features | Price |
+|------|--------|----------|-------|
+| **Starter** | Up to 5 | Trust scoring, basic audit | $299/mo |
+| **Professional** | Up to 25 | + Policy engine, API access | $999/mo |
+| **Enterprise** | Unlimited | + SSO, SLA, dedicated support | Custom |
 
 ---
 
@@ -145,30 +193,35 @@ curl https://api.agentanchorai.com/v1/verify/ag_vendor_agent
 
 ```yaml
 # Agents
-POST /v1/agents              # Register
-GET  /v1/agents/{id}         # Details
+POST /v1/agents              # Register agent
+GET  /v1/agents/{id}         # Get agent details
+PUT  /v1/agents/{id}         # Update agent
 
 # Trust
 GET  /v1/trust/score/{id}    # Current score
-GET  /v1/trust/history/{id}  # History
+GET  /v1/trust/history/{id}  # Score history
+POST /v1/trust/signal        # Report behavioral signal
 
-# Certification
-POST /v1/certifications      # Apply
-GET  /v1/certifications/{id} # Status
+# Governance
+POST /v1/enforce/check       # Check action permission
+POST /v1/escalate            # Request human approval
+GET  /v1/decisions/{id}      # Get decision details
 
-# Registry (Public)
-GET  /v1/registry/agents     # Browse
-GET  /v1/verify/{id}         # Verify
+# Audit
+GET  /v1/proof/{id}          # Get proof record
+GET  /v1/proof/chain/{id}    # Verify chain integrity
+GET  /v1/audit/export        # Export audit logs
 ```
 
 ---
 
 ## Get Started
 
-- **Developers**: [agentanchorai.com/register](https://agentanchorai.com/register)
-- **Enterprises**: [agentanchorai.com/demo](https://agentanchorai.com/demo)
+- **Free Trial**: [agentanchorai.com/trial](https://agentanchorai.com/trial)
 - **Documentation**: [agentanchorai.com/docs](https://agentanchorai.com/docs)
+- **API Reference**: [agentanchorai.com/api](https://agentanchorai.com/api)
+- **Enterprise Demo**: [agentanchorai.com/demo](https://agentanchorai.com/demo)
 
 ---
 
-*AgentAnchor is built on BASIS and powered by Cognigate.*
+*AgentAnchor is built on the [BASIS](/spec/overview) standard and powered by [Cognigate](/cognigate).*
