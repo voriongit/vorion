@@ -1,7 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { FileCheck, Shield, CheckCircle, Search, RefreshCw, ExternalLink } from 'lucide-react'
+import {
+  FileCheck,
+  Shield,
+  CheckCircle,
+  Search,
+  RefreshCw,
+  ExternalLink,
+  Hash,
+  Clock,
+  Link as LinkIcon,
+  AlertTriangle,
+} from 'lucide-react'
 
 interface AuditRecord {
   id: string
@@ -34,15 +45,17 @@ const recordTypeLabels: Record<string, string> = {
   escalation_resolved: 'Escalation Resolved',
 }
 
-const recordTypeColors: Record<string, string> = {
-  governance_decision: 'bg-blue-900/30 text-blue-400 border-blue-800',
-  council_decision: 'bg-blue-900/30 text-blue-400 border-blue-800',
-  certification: 'bg-green-900/30 text-green-400 border-green-800',
-  human_override: 'bg-orange-900/30 text-orange-400 border-orange-800',
-  trust_change: 'bg-purple-900/30 text-purple-400 border-purple-800',
-  agent_creation: 'bg-cyan-900/30 text-cyan-400 border-cyan-800',
-  policy_violation: 'bg-red-900/30 text-red-400 border-red-800',
-  escalation_resolved: 'bg-yellow-900/30 text-yellow-400 border-yellow-800',
+const recordTypeGradients: Record<string, string> = {
+  governance_decision: 'from-blue-500 to-indigo-600',
+  council_decision: 'from-blue-500 to-indigo-600',
+  certification: 'from-green-500 to-emerald-600',
+  human_override: 'from-orange-500 to-amber-600',
+  trust_change: 'from-purple-500 to-indigo-600',
+  agent_creation: 'from-cyan-500 to-blue-600',
+  agent_archive: 'from-gray-500 to-gray-600',
+  trust_milestone: 'from-green-500 to-emerald-600',
+  policy_violation: 'from-red-500 to-rose-600',
+  escalation_resolved: 'from-amber-500 to-orange-600',
 }
 
 export default function AuditPage() {
@@ -54,31 +67,32 @@ export default function AuditPage() {
   const [verifying, setVerifying] = useState(false)
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [recordsRes, statsRes] = await Promise.all([
-          fetch('/api/truth-chain?limit=50'),
-          fetch('/api/truth-chain?stats=true'),
-        ])
-
-        if (recordsRes.ok) {
-          const data = await recordsRes.json()
-          setRecords(data.records || [])
-        }
-
-        if (statsRes.ok) {
-          const data = await statsRes.json()
-          setStats(data)
-        }
-      } catch (err) {
-        console.error('Failed to fetch audit data:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchData()
   }, [])
+
+  async function fetchData() {
+    setLoading(true)
+    try {
+      const [recordsRes, statsRes] = await Promise.all([
+        fetch('/api/truth-chain?limit=50'),
+        fetch('/api/truth-chain?stats=true'),
+      ])
+
+      if (recordsRes.ok) {
+        const data = await recordsRes.json()
+        setRecords(data.records || [])
+      }
+
+      if (statsRes.ok) {
+        const data = await statsRes.json()
+        setStats(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch audit data:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleVerify = async () => {
     if (!verifyHash || verifyHash.length < 8) return
@@ -98,189 +112,284 @@ export default function AuditPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 sm:space-y-8 pb-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-neutral-100 flex items-center gap-3">
-          <FileCheck className="w-7 h-7 text-purple-400" />
-          Audit Trail
-        </h1>
-        <p className="text-neutral-400 mt-1">
-          Immutable, cryptographically-verified records of all governance decisions and agent actions
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg shadow-purple-500/25">
+            <FileCheck className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+              Audit Trail
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 hidden sm:block">
+              Cryptographically-verified governance records
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => fetchData()}
+          className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors active:scale-95 touch-manipulation"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          <span className="hidden sm:inline">Refresh</span>
+        </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-4">
-          <p className="text-2xl font-bold text-neutral-100">
-            {stats?.total_records.toLocaleString() || '—'}
-          </p>
-          <p className="text-xs text-neutral-500">Total Records</p>
-        </div>
-        <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-4">
-          <p className="text-2xl font-bold text-neutral-100">
-            #{stats?.latest_sequence || '—'}
-          </p>
-          <p className="text-xs text-neutral-500">Latest Sequence</p>
-        </div>
-        <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-4">
-          <p className="text-2xl font-bold text-neutral-100">
-            {(stats?.records_by_type?.governance_decision || 0) + (stats?.records_by_type?.council_decision || 0)}
-          </p>
-          <p className="text-xs text-neutral-500">Governance Decisions</p>
-        </div>
-        <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-4">
-          <div className="flex items-center gap-2">
-            {stats?.chain_valid ? (
-              <CheckCircle className="w-6 h-6 text-green-400" />
-            ) : (
-              <Shield className="w-6 h-6 text-red-400" />
-            )}
-            <span className={stats?.chain_valid ? 'text-green-400' : 'text-red-400'}>
-              {stats?.chain_valid ? 'Valid' : 'Invalid'}
-            </span>
-          </div>
-          <p className="text-xs text-neutral-500">Chain Integrity</p>
+      {/* Stats - Horizontal scroll on mobile */}
+      <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 pb-2">
+        <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 min-w-max sm:min-w-0">
+          <StatCard
+            label="Total Records"
+            value={stats?.total_records?.toLocaleString() || '—'}
+            icon={FileCheck}
+            gradient="from-purple-500 to-indigo-600"
+          />
+          <StatCard
+            label="Latest Sequence"
+            value={stats?.latest_sequence ? `#${stats.latest_sequence}` : '—'}
+            icon={Hash}
+            gradient="from-blue-500 to-cyan-600"
+          />
+          <StatCard
+            label="Governance Decisions"
+            value={String((stats?.records_by_type?.governance_decision || 0) + (stats?.records_by_type?.council_decision || 0))}
+            icon={Shield}
+            gradient="from-green-500 to-emerald-600"
+          />
+          <ChainIntegrityCard valid={stats?.chain_valid ?? null} />
         </div>
       </div>
 
       {/* Verification Tool */}
-      <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-6">
-        <h2 className="text-lg font-semibold text-neutral-100 mb-4 flex items-center gap-2">
-          <Search className="w-5 h-5 text-blue-400" />
-          Verify Proof Record
-        </h2>
-        <p className="text-sm text-neutral-400 mb-4">
-          Enter a hash or record ID to verify its authenticity against the proof chain.
-        </p>
-        <div className="flex gap-3">
-          <input
-            type="text"
-            value={verifyHash}
-            onChange={(e) => setVerifyHash(e.target.value)}
-            placeholder="Enter SHA-256 hash or record ID..."
-            className="flex-1 bg-neutral-800 border border-neutral-700 text-neutral-100 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <button
-            onClick={handleVerify}
-            disabled={verifying || verifyHash.length < 8}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
-          >
-            {verifying ? 'Verifying...' : 'Verify'}
-          </button>
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+              <Search className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-900 dark:text-white">
+                Verify Proof Record
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+                Enter a hash or record ID to verify authenticity
+              </p>
+            </div>
+          </div>
         </div>
 
-        {verifyResult && (
-          <div className={`mt-4 p-4 rounded-lg ${
-            verifyResult.verified
-              ? 'bg-green-900/20 border border-green-800'
-              : 'bg-red-900/20 border border-red-800'
-          }`}>
-            {verifyResult.verified ? (
-              <div>
-                <div className="flex items-center gap-2 text-green-400 mb-2">
-                  <CheckCircle className="w-5 h-5" />
-                  <span className="font-medium">Record Verified</span>
-                </div>
-                <dl className="text-sm space-y-1">
-                  <div className="flex gap-2">
-                    <dt className="text-neutral-500">Type:</dt>
-                    <dd className="text-neutral-100">
-                      {recordTypeLabels[verifyResult.record?.record_type] || verifyResult.record?.record_type}
-                    </dd>
-                  </div>
-                  <div className="flex gap-2">
-                    <dt className="text-neutral-500">Sequence:</dt>
-                    <dd className="text-neutral-100">#{verifyResult.record?.sequence}</dd>
-                  </div>
-                  <div className="flex gap-2">
-                    <dt className="text-neutral-500">Timestamp:</dt>
-                    <dd className="text-neutral-100">
-                      {new Date(verifyResult.record?.timestamp).toLocaleString()}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            ) : (
-              <div className="text-red-400">
-                Verification failed: {verifyResult.error}
-              </div>
-            )}
+        <div className="p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              value={verifyHash}
+              onChange={(e) => setVerifyHash(e.target.value)}
+              placeholder="Enter SHA-256 hash or record ID..."
+              className="flex-1 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
+            <button
+              onClick={handleVerify}
+              disabled={verifying || verifyHash.length < 8}
+              className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-medium transition-all disabled:opacity-50 active:scale-95 touch-manipulation shadow-lg shadow-blue-500/25"
+            >
+              {verifying ? 'Verifying...' : 'Verify'}
+            </button>
           </div>
-        )}
+
+          {verifyResult && (
+            <div className={`mt-4 p-4 rounded-xl ${
+              verifyResult.verified
+                ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+            }`}>
+              {verifyResult.verified ? (
+                <div>
+                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-3">
+                    <CheckCircle className="w-5 h-5" />
+                    <span className="font-medium">Record Verified</span>
+                  </div>
+                  <dl className="text-sm space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:gap-2">
+                      <dt className="text-gray-500 dark:text-gray-400">Type:</dt>
+                      <dd className="text-gray-900 dark:text-white font-medium">
+                        {recordTypeLabels[verifyResult.record?.record_type] || verifyResult.record?.record_type}
+                      </dd>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:gap-2">
+                      <dt className="text-gray-500 dark:text-gray-400">Sequence:</dt>
+                      <dd className="text-gray-900 dark:text-white font-medium">#{verifyResult.record?.sequence}</dd>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:gap-2">
+                      <dt className="text-gray-500 dark:text-gray-400">Timestamp:</dt>
+                      <dd className="text-gray-900 dark:text-white font-medium">
+                        {new Date(verifyResult.record?.timestamp).toLocaleString()}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                  <span>Verification failed: {verifyResult.error}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Records List */}
-      <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-6">
-        <h2 className="text-lg font-semibold text-neutral-100 mb-4">
-          Recent Audit Records
-        </h2>
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600">
+              <Clock className="w-4 h-4 text-white" />
+            </div>
+            <h2 className="font-semibold text-gray-900 dark:text-white">
+              Recent Audit Records
+            </h2>
+          </div>
+        </div>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="w-8 h-8 animate-spin text-neutral-500" />
-          </div>
-        ) : records.length === 0 ? (
-          <div className="text-center py-12 text-neutral-500">
-            <FileCheck className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>No audit records yet</p>
-            <p className="text-sm mt-1">
-              Governance decisions and agent actions will be recorded here
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {records.map((record) => (
-              <div
-                key={record.id}
-                className={`rounded-lg border p-4 ${
-                  recordTypeColors[record.record_type] || 'bg-neutral-800 border-neutral-700'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-neutral-100">
-                        {recordTypeLabels[record.record_type] || record.record_type}
-                      </span>
-                      <span className="text-xs text-neutral-500">
-                        #{record.sequence}
-                      </span>
-                    </div>
-                    <p className="text-xs text-neutral-500 mt-1 font-mono">
-                      {record.hash.substring(0, 32)}...
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-neutral-500">
-                      {new Date(record.timestamp).toLocaleString()}
-                    </p>
-                    {record.verification_url && (
-                      <a
-                        href={record.verification_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-blue-400 hover:underline mt-1"
-                      >
-                        Verify <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
-                  </div>
-                </div>
+        <div className="p-4 sm:p-5">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <RefreshCw className="w-8 h-8 animate-spin text-purple-500 mb-3" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">Loading records...</p>
+            </div>
+          ) : records.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="p-4 rounded-2xl bg-gray-100 dark:bg-gray-700 inline-block mb-4">
+                <FileCheck className="w-10 h-10 text-gray-400" />
               </div>
-            ))}
-          </div>
-        )}
+              <p className="text-gray-700 dark:text-gray-300 font-medium">No audit records yet</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Governance decisions and actions will appear here
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {records.map((record) => (
+                <AuditRecordCard key={record.id} record={record} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Compliance Note */}
-      <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
-        <p className="text-sm text-neutral-400">
-          <strong className="text-neutral-300">Compliance Note:</strong> This audit trail maintains
-          SHA-256 chained records with Ed25519 signatures, supporting EU AI Act Article 19 requirements
-          for immutable audit trails with 6+ month retention.
-        </p>
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex-shrink-0">
+            <Shield className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+              Compliance Note
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              This audit trail maintains SHA-256 chained records with Ed25519 signatures,
+              supporting EU AI Act Article 19 requirements for immutable audit trails with 6+ month retention.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  gradient,
+}: {
+  label: string
+  value: string
+  icon: React.ElementType
+  gradient: string
+}) {
+  return (
+    <div className="flex-shrink-0 w-[140px] sm:w-auto bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 sm:p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate pr-2">{label}</span>
+        <div className={`p-1.5 sm:p-2 rounded-lg bg-gradient-to-br ${gradient} flex-shrink-0`}>
+          <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+        </div>
+      </div>
+      <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+    </div>
+  )
+}
+
+function ChainIntegrityCard({ valid }: { valid: boolean | null }) {
+  return (
+    <div className="flex-shrink-0 w-[140px] sm:w-auto bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 sm:p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Chain Integrity</span>
+        <div className={`p-1.5 sm:p-2 rounded-lg bg-gradient-to-br ${valid ? 'from-green-500 to-emerald-600' : 'from-red-500 to-rose-600'} flex-shrink-0`}>
+          {valid ? (
+            <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+          ) : (
+            <AlertTriangle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className={`text-xl sm:text-2xl font-bold ${valid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+          {valid === null ? '—' : valid ? 'Valid' : 'Invalid'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function AuditRecordCard({ record }: { record: AuditRecord }) {
+  const gradient = recordTypeGradients[record.record_type] || 'from-gray-500 to-gray-600'
+  const label = recordTypeLabels[record.record_type] || record.record_type
+
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 p-3 sm:p-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className={`p-2 rounded-lg bg-gradient-to-br ${gradient} flex-shrink-0`}>
+            <FileCheck className="w-4 h-4 text-white" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium text-gray-900 dark:text-white text-sm">
+                {label}
+              </span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">
+                #{record.sequence}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 font-mono truncate">
+              {record.hash.substring(0, 24)}...
+            </p>
+          </div>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {new Date(record.timestamp).toLocaleDateString()}
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 hidden sm:block">
+            {new Date(record.timestamp).toLocaleTimeString()}
+          </p>
+          {record.verification_url && (
+            <a
+              href={record.verification_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
+            >
+              <LinkIcon className="w-3 h-3" />
+              <span className="hidden sm:inline">Verify</span>
+            </a>
+          )}
+        </div>
       </div>
     </div>
   )
