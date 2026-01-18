@@ -37,7 +37,7 @@ These requirements could be implemented through existing tooling, custom develop
 
 ### Comment 1: Incorporating Operational Efficiency into "Secure AI Systems"
 
-**Reference:** Cyber AI Profile, AI Focus Area: "Secure AI Systems"
+**Reference:** Cyber AI Profile, AI Focus Area: "Secure AI Systems"; CSF Subcategories: ID.AM-05, PR.PS-05
 
 **Current State:**
 The profile appropriately emphasizes securing AI systems against adversarial threats, data poisoning, and model manipulation. However, it does not address the operational efficiency of AI systems as a security-adjacent concern.
@@ -76,7 +76,7 @@ Organizations could implement cost-to-value (CTV) monitoring with defined respon
 
 ### Comment 2: Quantified Trust Scoring for AI Agent Governance
 
-**Reference:** Cyber AI Profile, mapping to CSF Govern and Manage functions
+**Reference:** Cyber AI Profile, mapping to CSF Govern and Manage functions; CSF Subcategories: GV.*, PR.AA-05
 
 **Current State:**
 The AI RMF and Cyber AI Profile establish governance structures and risk management processes but do not prescribe specific mechanisms for quantifying AI system trustworthiness at runtime.
@@ -118,7 +118,9 @@ Organizations should define explicit signal impacts. One possible approach:
 
 **Initial Trust Score:** Entities should initialize at score 0 (Sandbox tier) unless explicitly promoted by an administrator with appropriate authority. This ensures new agents demonstrate trustworthiness before gaining capabilities.
 
-**Trust Decay Considerations:** A 14-day half-life for inactive agents balances security (preventing stale high-trust entities) with operational practicality (allowing for maintenance windows). Organizations may wish to implement a "Maintenance" status that pauses decay during planned downtime, preventing penalization for scheduled maintenance.
+**Trust Decay Considerations:** A 14-day half-life for inactive agents balances security (preventing stale high-trust entities) with operational practicality (allowing for maintenance windows). Organizations may wish to implement a "Maintenance" status that pauses decay during planned downtime, preventing penalization for scheduled maintenance.[3]
+
+[3] Note: The BASIS specification default is 7-day half-life; the 14-day recommendation accommodates enterprise maintenance cycles. Organizations may adjust based on their agent velocity and risk tolerance.
 
 ---
 
@@ -226,7 +228,7 @@ Where:
 
 For robust efficiency measurement, we recommend explicitly excluding market-based measures (carbon offsets, RECs) from efficiency scoring, focusing instead on actual emissions reduction.
 
-[1] Microsoft 2024 Environmental Sustainability Report, May 2024.
+[1] [Microsoft 2024 Environmental Sustainability Report](https://www.microsoft.com/en-us/corporate-responsibility/sustainability/report), May 2024.
 
 ---
 
@@ -238,7 +240,7 @@ For robust efficiency measurement, we recommend explicitly excluding market-base
 The Generative AI Profile (NIST AI 600-1) addresses unique GenAI risks but does not specifically address the operational cost implications of reasoning-enabled models.
 
 **Gap Identified:**
-Research from the AI Energy Score project (co-led by Hugging Face and Salesforce) found that reasoning-enabled models consume on average **30x more energy** than standard inference, with individual models ranging from 2x to over 6,000x depending on task complexity and model architecture.[2] Without governance:
+Research from the AI Energy Score project (co-led by Hugging Face and Salesforce) found that reasoning-enabled models consume on average **30x more energy** than standard inference, with extreme cases exceeding 500x (e.g., Phi-4-reasoning-plus at 514x in January 2026 benchmarks). Individual models range from approximately 150x to 700x depending on task complexity and model architecture.[2] Without governance:
 
 - Agents may use expensive reasoning for trivial tasks
 - Organizations lack visibility into reasoning mode cost
@@ -261,7 +263,7 @@ Organizations could implement reasoning mode governance including:
 - Automatic model selection based on task complexity
 - Separate cost-to-value calculations for reasoning operations
 
-[2] Luccioni, S. and Gamazaychikov, B. "AI Energy Score v2: Refreshed Leaderboard, now with Reasoning." Hugging Face Blog, December 2025.
+[2] Luccioni, S. and Gamazaychikov, B. "[AI Energy Score v2: Refreshed Leaderboard, now with Reasoning](https://huggingface.co/blog/ai-energy-score-v2-reasoning)." Hugging Face Blog, January 2026.
 
 ---
 
@@ -278,6 +280,8 @@ We recognize that implementing efficiency and trust controls introduces complexi
 **Cross-Organizational Trust:** Organizations may need mechanisms for sharing trust assessments across boundaries. Standardized scoring methodologies and cryptographic attestations could enable portable trust, though this remains an evolving area.
 
 **Phased Adoption:** We recommend organizations prioritize governance controls for high-risk autonomous agents before extending to lower-risk AI applications. This allows validation of governance approaches while managing implementation complexity.
+
+**Alignment with Existing Tools:** Organizations can leverage cloud-native monitoring capabilities (e.g., Kubernetes resource quotas, AWS/GCP cost allocation tags, Azure Monitor) to minimize custom development when implementing efficiency governance.
 
 ---
 
@@ -320,7 +324,7 @@ The NIST Cybersecurity Framework Profile for Artificial Intelligence advances AI
 3. **Sustainability metrics** aligned with ISO/IEC 21031:2024 and emerging regulatory requirements
 4. **Reasoning mode governance** that addresses the significant energy cost differential of reasoning models
 
-These requirements can be satisfied through various implementation approaches. We welcome the opportunity to discuss integration strategies with NIST staff and contribute to the ongoing development of AI governance standards.
+These requirements can be satisfied through various implementation approaches. These proposals draw from emerging practices and open standards; alternative approaches (e.g., MLPerf benchmarks for efficiency measurement, existing trustworthiness frameworks) may also apply. We welcome the opportunity to discuss integration strategies with NIST staff and contribute to the ongoing development of AI governance standards.
 
 We are committed to supporting NIST's mission of promoting U.S. innovation and industrial competitiveness through responsible AI governance that balances security, efficiency, and sustainability.
 
@@ -401,6 +405,6 @@ Source: EU AI Act (Regulation (EU) 2024/1689), Articles 40 and 113
 
 ---
 
-*Document Version: 2.0*
+*Document Version: 3.0*
 *Prepared: January 18, 2026*
 *For submission to: cyberaiprofile@nist.gov by January 30, 2026*
