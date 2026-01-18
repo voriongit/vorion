@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   LayoutDashboard,
   Bot,
-  GraduationCap,
+  Shield,
   Eye,
   TrendingUp,
   Activity,
@@ -14,24 +14,19 @@ import {
   RefreshCw,
   ArrowRight,
   Scale,
-  Link2,
+  FileCheck,
 } from 'lucide-react'
 
 interface DashboardStats {
-  // Your agents (created/trained)
+  // Agents
   my_agents: number
-  agents_in_training: number
-  agents_published: number
+  agents_active: number
+  agents_sandbox: number
   average_trust_score: number
-  // Acquired agents
-  acquired_agents: number
-  active_acquisitions: number
-  // Earnings & spending
-  total_earnings: number
-  available_earnings: number
-  this_month_earnings: number
-  total_spent: number
-  this_month_spent: number
+  // Governance
+  total_decisions: number
+  decisions_today: number
+  allow_rate: number
   // Activity
   total_tasks: number
   this_month_tasks: number
@@ -94,35 +89,35 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* User Journey Quick Actions */}
+      {/* B2B Journey Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <JourneyCard
           step={1}
-          title="Monitor"
-          description="View & manage your agents"
+          title="Agents"
+          description="Register & manage agents"
           href="/agents"
           icon={Bot}
           color="blue"
         />
         <JourneyCard
           step={2}
-          title="Test"
-          description="Sandbox & shadow training"
+          title="Sandbox"
+          description="Test in isolated environment"
           href="/sandbox"
           icon={Eye}
           color="green"
         />
         <JourneyCard
           step={3}
-          title="Govern"
-          description="Council & trust verification"
-          href="/council"
+          title="Governance"
+          description="Policies & enforcement"
+          href="/governance"
           icon={Scale}
           color="purple"
         />
         <JourneyCard
           step={4}
-          title="Analyze"
+          title="Analytics"
           description="Usage & performance"
           href="/usage"
           icon={TrendingUp}
@@ -135,7 +130,7 @@ export default function DashboardPage() {
         <StatCard
           title="Total Agents"
           value={stats?.my_agents?.toString() || '0'}
-          subtitle={`${stats?.agents_in_training || 0} in training`}
+          subtitle={`${stats?.agents_active || 0} active`}
           icon={Bot}
           color="blue"
           href="/agents"
@@ -148,12 +143,12 @@ export default function DashboardPage() {
           color="green"
         />
         <StatCard
-          title="Tasks"
-          value={stats?.this_month_tasks?.toString() || '0'}
-          subtitle="This month"
-          icon={Activity}
+          title="Decisions"
+          value={stats?.decisions_today?.toString() || '0'}
+          subtitle="Today"
+          icon={Scale}
           color="purple"
-          href="/usage"
+          href="/governance"
         />
         <StatCard
           title="Escalations"
@@ -162,7 +157,7 @@ export default function DashboardPage() {
           icon={AlertTriangle}
           color="yellow"
           alert={stats?.pending_escalations ? stats.pending_escalations > 0 : false}
-          href="/council"
+          href="/escalations"
         />
       </div>
 
@@ -219,15 +214,22 @@ export default function DashboardPage() {
         <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-6">
           <h2 className="text-lg font-semibold text-neutral-100 mb-4 flex items-center gap-2">
             <Scale className="w-5 h-5 text-purple-400" />
-            Governance Health
+            Governance Status
           </h2>
 
           <div className="space-y-4">
             <GovernanceItem
-              title="Council"
-              description="Democratic oversight of AI agents"
-              href="/council"
+              title="Governance"
+              description="Policy enforcement & decisions"
+              href="/governance"
               icon={Scale}
+              status="active"
+            />
+            <GovernanceItem
+              title="Escalations"
+              description="Pending human review"
+              href="/escalations"
+              icon={AlertTriangle}
               status="active"
             />
             <GovernanceItem
@@ -238,17 +240,17 @@ export default function DashboardPage() {
               status="active"
             />
             <GovernanceItem
-              title="Truth Chain"
-              description="Immutable audit trail"
-              href="/truth-chain"
-              icon={Link2}
+              title="Audit Trail"
+              description="Cryptographic proof chain"
+              href="/audit"
+              icon={FileCheck}
               status="active"
             />
             <GovernanceItem
-              title="Academy"
-              description="Agent training & certification"
-              href="/academy"
-              icon={GraduationCap}
+              title="Compliance"
+              description="EU AI Act, ISO 42001 reports"
+              href="/compliance"
+              icon={Shield}
               status="active"
             />
           </div>
@@ -390,13 +392,15 @@ function GovernanceItem({
 function ActivityIcon({ type }: { type: string }) {
   const icons: Record<string, { icon: React.ElementType; color: string }> = {
     agent_created: { icon: Bot, color: 'text-blue-400' },
-    training_started: { icon: GraduationCap, color: 'text-purple-400' },
-    graduation: { icon: GraduationCap, color: 'text-green-400' },
+    agent_registered: { icon: Bot, color: 'text-blue-400' },
     task_completed: { icon: Activity, color: 'text-blue-400' },
     feedback: { icon: MessageSquare, color: 'text-yellow-400' },
+    governance_decision: { icon: Scale, color: 'text-purple-400' },
     council_decision: { icon: Scale, color: 'text-purple-400' },
     trust_change: { icon: TrendingUp, color: 'text-green-400' },
     escalation: { icon: AlertTriangle, color: 'text-yellow-400' },
+    policy_violation: { icon: Shield, color: 'text-red-400' },
+    compliance_check: { icon: FileCheck, color: 'text-green-400' },
   }
 
   const config = icons[type] || { icon: Activity, color: 'text-neutral-400' }

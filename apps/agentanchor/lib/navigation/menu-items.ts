@@ -3,16 +3,14 @@ import {
   Bot,
   Scale,
   Eye,
-  Link2,
+  FileCheck,
   BarChart3,
   Settings,
   HelpCircle,
   LucideIcon,
   Shield,
   FlaskConical,
-  GitCompare,
-  Globe,
-  Swords,
+  AlertTriangle,
 } from 'lucide-react'
 
 export type UserRole = 'trainer' | 'consumer' | 'both'
@@ -33,10 +31,10 @@ export interface MenuSection {
   items: MenuItem[]
 }
 
-// User Journey Navigation (Trust-Focused):
-// 1. HOME - Your command center
+// B2B Navigation (Enterprise Agent Governance):
+// 1. HOME - Command center
 // 2. MONITOR - Agent oversight & testing
-// 3. GOVERN - Trust verification & compliance
+// 3. GOVERN - Trust, policies, escalations, audit
 // 4. ANALYTICS - Usage & performance
 // 5. SYSTEM - Settings & help
 
@@ -52,7 +50,7 @@ export const menuItems: MenuItem[] = [
 
   // === MONITOR - Agent oversight ===
   {
-    id: 'my-agents',
+    id: 'agents',
     label: 'Agents',
     href: '/agents',
     icon: Bot,
@@ -65,20 +63,20 @@ export const menuItems: MenuItem[] = [
     icon: FlaskConical,
     section: 'discover',
   },
-  {
-    id: 'shadow-training',
-    label: 'Shadow Training',
-    href: '/shadow-training',
-    icon: GitCompare,
-    section: 'discover',
-  },
 
-  // === GOVERN - Trust & verification ===
+  // === GOVERN - Trust, policies, escalations, audit ===
   {
-    id: 'council',
-    label: 'Council',
-    href: '/council',
+    id: 'governance',
+    label: 'Governance',
+    href: '/governance',
     icon: Scale,
+    section: 'govern',
+  },
+  {
+    id: 'escalations',
+    label: 'Escalations',
+    href: '/escalations',
+    icon: AlertTriangle,
     section: 'govern',
   },
   {
@@ -89,24 +87,10 @@ export const menuItems: MenuItem[] = [
     section: 'govern',
   },
   {
-    id: 'truth-chain',
-    label: 'Truth Chain',
-    href: '/truth-chain',
-    icon: Link2,
-    section: 'govern',
-  },
-  {
-    id: 'testing-studio',
-    label: 'Testing Studio',
-    href: '/testing-studio',
-    icon: Swords,
-    section: 'govern',
-  },
-  {
-    id: 'trust-bridge',
-    label: 'Trust Bridge',
-    href: '/trust-bridge',
-    icon: Globe,
+    id: 'audit',
+    label: 'Audit',
+    href: '/audit',
+    icon: FileCheck,
     section: 'govern',
   },
   {
