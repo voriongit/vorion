@@ -6,20 +6,45 @@
  * @packageDocumentation
  */
 
-import Fastify, { FastifyInstance } from 'fastify';
+import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { createLogger, logger } from '../common/logger.js';
 import { getConfig } from '../common/config.js';
+import { createIntentService } from '../intent/index.js';
+import { createProofService } from '../proof/index.js';
+import { createTrustEngine } from '../trust-engine/index.js';
+import { createEvaluator } from '../basis/evaluator.js';
+import type { ID } from '../common/types.js';
 
 const apiLogger = createLogger({ component: 'api' });
+
+// Request body types
+interface IntentSubmitBody {
+  entityId: ID;
+  goal: string;
+  context?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+interface ConstraintValidateBody {
+  entityId: ID;
+  intentType: string;
+  context?: Record<string, unknown>;
+}
 
 /**
  * Create and configure the API server
  */
 export async function createServer(): Promise<FastifyInstance> {
   const config = getConfig();
+
+  // Initialize services
+  const intentService = createIntentService();
+  const proofService = createProofService();
+  const trustEngine = createTrustEngine();
+  const evaluator = createEvaluator();
 
   const server = Fastify({
     logger: logger,
@@ -64,38 +89,158 @@ export async function createServer(): Promise<FastifyInstance> {
   server.register(
     async (api) => {
       // Intent routes
-      api.post('/intents', async (_request, _reply) => {
-        // TODO: Implement intent submission
-        return { message: 'Intent submission - not implemented' };
-      });
+      api.post<{ Body: IntentSubmitBody }>(
+        '/intents',
+        async (request: FastifyRequest<{ Body: IntentSubmitBody }>, reply: FastifyReply) => {
+          const { entityId, goal, context, metadata } = request.body;
 
-      api.get('/intents/:id', async (_request, _reply) => {
-        // TODO: Implement intent retrieval
-        return { message: 'Intent retrieval - not implemented' };
-      });
+          if (!entityId || !goal) {
+            return reply.status(400).send({
+              error: { code: 'INVALID_REQUEST', message: 'Missing required fields: entityId, goal' },
+            });
+          }
+
+          const intent = await intentService.submit({
+            entityId,
+            goal,
+            context: context ?? {},
+            metadata,
+          });
+
+          apiLogger.info({ intentId: intent.id, entityId }, 'Intent submitted');
+          return reply.status(201).send({ intent });
+        }
+      );
+
+      api.get<{ Params: { id: ID } }>(
+        '/intents/:id',
+        async (request: FastifyRequest<{ Params: { id: ID } }>, reply: FastifyReply) => {
+          const intent = await intentService.get(request.params.id);
+
+          if (!intent) {
+            return reply.status(404).send({
+              error: { code: 'NOT_FOUND', message: 'Intent not found' },
+            });
+          }
+
+          return { intent };
+        }
+      );
 
       // Proof routes
-      api.get('/proofs/:id', async (_request, _reply) => {
-        // TODO: Implement proof retrieval
-        return { message: 'Proof retrieval - not implemented' };
-      });
+      api.get<{ Params: { id: ID } }>(
+        '/proofs/:id',
+        async (request: FastifyRequest<{ Params: { id: ID } }>, reply: FastifyReply) => {
+          const proof = await proofService.get(request.params.id);
 
-      api.post('/proofs/:id/verify', async (_request, _reply) => {
-        // TODO: Implement proof verification
-        return { message: 'Proof verification - not implemented' };
-      });
+          if (!proof) {
+            return reply.status(404).send({
+              error: { code: 'NOT_FOUND', message: 'Proof not found' },
+            });
+          }
+
+          return { proof };
+        }
+      );
+
+      api.post<{ Params: { id: ID } }>(
+        '/proofs/:id/verify',
+        async (request: FastifyRequest<{ Params: { id: ID } }>, reply: FastifyReply) => {
+          const result = await proofService.verify(request.params.id);
+
+          if (result.chainPosition === -1) {
+            return reply.status(404).send({
+              error: { code: 'NOT_FOUND', message: 'Proof not found' },
+            });
+          }
+
+          return { verification: result };
+        }
+      );
 
       // Trust routes
-      api.get('/trust/:entityId', async (_request, _reply) => {
-        // TODO: Implement trust retrieval
-        return { message: 'Trust retrieval - not implemented' };
-      });
+      api.get<{ Params: { entityId: ID } }>(
+        '/trust/:entityId',
+        async (request: FastifyRequest<{ Params: { entityId: ID } }>, reply: FastifyReply) => {
+          const record = await trustEngine.getScore(request.params.entityId);
+
+          if (!record) {
+            return reply.status(404).send({
+              error: { code: 'NOT_FOUND', message: 'Entity trust record not found' },
+            });
+          }
+
+          return {
+            trust: {
+              entityId: record.entityId,
+              score: record.score,
+              level: record.level,
+              levelName: trustEngine.getLevelName(record.level),
+              lastCalculatedAt: record.lastCalculatedAt,
+            },
+          };
+        }
+      );
 
       // Constraint routes
-      api.post('/constraints/validate', async (_request, _reply) => {
-        // TODO: Implement constraint validation
-        return { message: 'Constraint validation - not implemented' };
-      });
+      api.post<{ Body: ConstraintValidateBody }>(
+        '/constraints/validate',
+        async (request: FastifyRequest<{ Body: ConstraintValidateBody }>, reply: FastifyReply) => {
+          const { entityId, intentType, context } = request.body;
+
+          if (!entityId || !intentType) {
+            return reply.status(400).send({
+              error: { code: 'INVALID_REQUEST', message: 'Missing required fields' },
+            });
+          }
+
+          // Get entity trust record
+          const trustRecord = await trustEngine.getScore(entityId);
+          if (!trustRecord) {
+            return reply.status(404).send({
+              error: { code: 'NOT_FOUND', message: 'Entity not found' },
+            });
+          }
+
+          // Create evaluation context
+          const evalContext = {
+            intent: {
+              id: 'validation-check',
+              type: intentType,
+              goal: 'constraint-validation',
+              context: context ?? {},
+            },
+            entity: {
+              id: entityId,
+              type: 'agent',
+              trustScore: trustRecord.score,
+              trustLevel: trustRecord.level,
+              attributes: {},
+            },
+            environment: {
+              timestamp: new Date().toISOString(),
+              timezone: 'UTC',
+              requestId: request.id,
+            },
+            custom: {},
+          };
+
+          // Evaluate constraints
+          const result = await evaluator.evaluate(evalContext);
+
+          return {
+            validation: {
+              passed: result.passed,
+              action: result.finalAction,
+              rulesEvaluated: result.rulesEvaluated.length,
+              violations: result.violatedRules.map((r) => ({
+                ruleId: r.ruleId,
+                reason: r.reason,
+              })),
+            },
+          };
+        }
+      );
     },
     { prefix: config.api.basePath }
   );
