@@ -30,17 +30,24 @@ export type TrustScore = number;
 export type EntityType = 'agent' | 'user' | 'service' | 'system';
 
 /**
+ * Allowed intent statuses.
+ */
+export const INTENT_STATUSES = [
+  'pending',
+  'evaluating',
+  'approved',
+  'denied',
+  'escalated',
+  'executing',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+
+/**
  * Intent status
  */
-export type IntentStatus =
-  | 'pending'
-  | 'evaluating'
-  | 'approved'
-  | 'denied'
-  | 'escalated'
-  | 'executing'
-  | 'completed'
-  | 'failed';
+export type IntentStatus = (typeof INTENT_STATUSES)[number];
 
 /**
  * Control action types
@@ -72,13 +79,56 @@ export interface Entity {
  */
 export interface Intent {
   id: ID;
+  tenantId: ID;
   entityId: ID;
   goal: string;
+  intentType?: string | null;
   context: Record<string, unknown>;
   metadata: Record<string, unknown>;
+  priority?: number;
+  trustSnapshot?: Record<string, unknown> | null;
+  trustLevel?: TrustLevel | null;
+  trustScore?: TrustScore | null;
   status: IntentStatus;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  /** Soft delete timestamp for GDPR compliance */
+  deletedAt?: Timestamp | null;
+  /** Reason for cancellation if status is 'cancelled' */
+  cancellationReason?: string | null;
+}
+
+/**
+ * Evaluation stages in the intent lifecycle
+ */
+export type EvaluationStage =
+  | 'trust-snapshot'
+  | 'trust-gate'
+  | 'basis'
+  | 'decision'
+  | 'error'
+  | 'cancelled';
+
+/**
+ * Strongly typed evaluation result by stage
+ * Note: basis.evaluation and decision.decision use unknown to accept
+ * external types (EvaluationResult from BASIS, Decision from ENFORCE)
+ */
+export type EvaluationPayload =
+  | { stage: 'trust-snapshot'; result: Record<string, unknown> | null }
+  | { stage: 'trust-gate'; passed: boolean; requiredLevel: number; actualLevel: number }
+  | { stage: 'basis'; evaluation: unknown; namespace: string }
+  | { stage: 'decision'; decision: unknown }
+  | { stage: 'error'; error: { message: string; timestamp: string } }
+  | { stage: 'cancelled'; reason: string; cancelledBy?: string };
+
+export interface IntentEvaluationRecord {
+  id: ID;
+  intentId: ID;
+  tenantId: ID;
+  /** Strongly typed result payload */
+  result: EvaluationPayload;
+  createdAt: Timestamp;
 }
 
 /**
@@ -123,9 +173,9 @@ export interface ConstraintEvaluation {
 }
 
 /**
- * Evaluation result from BASIS
+ * Result of evaluating a single constraint/rule
  */
-export interface EvaluationResult {
+export interface ConstraintEvaluationResult {
   constraintId: ID;
   passed: boolean;
   action: ControlAction;
@@ -141,7 +191,7 @@ export interface EvaluationResult {
 export interface Decision {
   intentId: ID;
   action: ControlAction;
-  constraintsEvaluated: EvaluationResult[];
+  constraintsEvaluated: ConstraintEvaluationResult[];
   trustScore: TrustScore;
   trustLevel: TrustLevel;
   escalation?: EscalationRequest;

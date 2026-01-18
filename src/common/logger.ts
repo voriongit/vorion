@@ -6,24 +6,27 @@ import pino from 'pino';
 
 const level = process.env['VORION_LOG_LEVEL'] ?? 'info';
 
-export const logger = pino({
+const pinoOptions: pino.LoggerOptions = {
   level,
-  transport:
-    process.env['NODE_ENV'] !== 'production'
-      ? {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'SYS:standard',
-            ignore: 'pid,hostname',
-          },
-        }
-      : undefined,
   base: {
     service: 'vorion',
     version: process.env['npm_package_version'],
   },
-});
+};
+
+// Add pretty printing in development
+if (process.env['NODE_ENV'] !== 'production') {
+  pinoOptions.transport = {
+    target: 'pino-pretty',
+    options: {
+      colorize: true,
+      translateTime: 'SYS:standard',
+      ignore: 'pid,hostname',
+    },
+  };
+}
+
+export const logger = pino(pinoOptions);
 
 export type Logger = typeof logger;
 

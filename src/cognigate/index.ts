@@ -7,7 +7,7 @@
  */
 
 import { createLogger } from '../common/logger.js';
-import type { Intent, Decision, ID, Proof } from '../common/types.js';
+import type { Intent, Decision, ID } from '../common/types.js';
 
 const logger = createLogger({ component: 'cognigate' });
 

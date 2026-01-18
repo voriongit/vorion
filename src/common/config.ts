@@ -11,6 +11,20 @@ const configSchema = z.object({
   env: z.enum(['development', 'staging', 'production']).default('development'),
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 
+  app: z.object({
+    name: z.string().default('vorion'),
+    version: z.string().default('0.1.0'),
+    environment: z.string().default('development'),
+  }),
+
+  telemetry: z.object({
+    enabled: z.coerce.boolean().default(false),
+    serviceName: z.string().default('vorion-intent'),
+    otlpEndpoint: z.string().default('http://localhost:4318/v1/traces'),
+    otlpHeaders: z.record(z.string()).default({}),
+    sampleRate: z.coerce.number().min(0).max(1).default(1.0),
+  }),
+
   api: z.object({
     port: z.coerce.number().default(3000),
     host: z.string().default('localhost'),
@@ -66,6 +80,62 @@ const configSchema = z.object({
     maxMemoryMb: z.coerce.number().default(512),
     maxCpuPercent: z.coerce.number().default(50),
   }),
+
+  intent: z.object({
+    defaultNamespace: z.string().default('default'),
+    namespaceRouting: z.record(z.string(), z.string()).default({}),
+    dedupeTtlSeconds: z.coerce.number().default(600),
+    sensitivePaths: z.array(z.string()).default([
+      'password',
+      'secret',
+      'token',
+      'apiKey',
+      'api_key',
+      'accessToken',
+      'access_token',
+      'refreshToken',
+      'refresh_token',
+      'credential',
+      'ssn',
+      'socialSecurityNumber',
+      'creditCard',
+      'credit_card',
+      'cardNumber',
+      'card_number',
+      'cvv',
+      'pin',
+      'privateKey',
+      'private_key',
+    ]),
+    defaultMaxInFlight: z.coerce.number().default(1000),
+    tenantMaxInFlight: z.record(z.coerce.number()).default({}),
+    // Queue configuration
+    queueConcurrency: z.coerce.number().default(5),
+    jobTimeoutMs: z.coerce.number().default(30000),
+    maxRetries: z.coerce.number().default(3),
+    retryBackoffMs: z.coerce.number().default(1000),
+    eventRetentionDays: z.coerce.number().default(90),
+    // Encryption at rest
+    encryptContext: z.coerce.boolean().default(true),
+    // Trust gates: minimum trust level required per intent type
+    trustGates: z.record(z.coerce.number().min(0).max(4)).default({}),
+    defaultMinTrustLevel: z.coerce.number().min(0).max(4).default(0),
+    // Re-validate trust at decision stage
+    revalidateTrustAtDecision: z.coerce.boolean().default(true),
+    // GDPR compliance
+    softDeleteRetentionDays: z.coerce.number().default(30),
+    // Escalation settings
+    escalationTimeout: z.string().default('PT1H'), // ISO 8601 duration (1 hour)
+    escalationDefaultRecipient: z.string().default('governance-team'),
+    // Scheduled jobs
+    cleanupCronSchedule: z.string().default('0 2 * * *'), // 2 AM daily
+    timeoutCheckCronSchedule: z.string().default('*/5 * * * *'), // Every 5 minutes
+  }),
+
+  encryption: z.object({
+    key: z.string().min(32).optional(),
+    algorithm: z.string().default('aes-256-gcm'),
+  }).default({}),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -77,6 +147,20 @@ export function loadConfig(): Config {
   return configSchema.parse({
     env: process.env['VORION_ENV'],
     logLevel: process.env['VORION_LOG_LEVEL'],
+
+    app: {
+      name: process.env['VORION_APP_NAME'],
+      version: process.env['VORION_APP_VERSION'],
+      environment: process.env['VORION_ENV'],
+    },
+
+    telemetry: {
+      enabled: process.env['VORION_TELEMETRY_ENABLED'],
+      serviceName: process.env['VORION_TELEMETRY_SERVICE_NAME'],
+      otlpEndpoint: process.env['VORION_OTLP_ENDPOINT'],
+      otlpHeaders: parseJsonRecord(process.env['VORION_OTLP_HEADERS']),
+      sampleRate: process.env['VORION_TELEMETRY_SAMPLE_RATE'],
+    },
 
     api: {
       port: process.env['VORION_API_PORT'],
@@ -133,6 +217,36 @@ export function loadConfig(): Config {
       maxMemoryMb: process.env['VORION_COGNIGATE_MAX_MEMORY_MB'],
       maxCpuPercent: process.env['VORION_COGNIGATE_MAX_CPU_PERCENT'],
     },
+
+    intent: {
+      defaultNamespace: process.env['VORION_INTENT_DEFAULT_NAMESPACE'],
+      namespaceRouting: parseJsonRecord(process.env['VORION_INTENT_NAMESPACE_ROUTING']),
+      dedupeTtlSeconds: process.env['VORION_INTENT_DEDUPE_TTL'],
+      sensitivePaths: parseList(process.env['VORION_INTENT_SENSITIVE_PATHS']),
+      defaultMaxInFlight: process.env['VORION_INTENT_DEFAULT_MAX_IN_FLIGHT'],
+      tenantMaxInFlight: parseNumberRecord(
+        process.env['VORION_INTENT_TENANT_LIMITS']
+      ),
+      queueConcurrency: process.env['VORION_INTENT_QUEUE_CONCURRENCY'],
+      jobTimeoutMs: process.env['VORION_INTENT_JOB_TIMEOUT_MS'],
+      maxRetries: process.env['VORION_INTENT_MAX_RETRIES'],
+      retryBackoffMs: process.env['VORION_INTENT_RETRY_BACKOFF_MS'],
+      eventRetentionDays: process.env['VORION_INTENT_EVENT_RETENTION_DAYS'],
+      encryptContext: process.env['VORION_INTENT_ENCRYPT_CONTEXT'],
+      trustGates: parseNumberRecord(process.env['VORION_INTENT_TRUST_GATES']),
+      defaultMinTrustLevel: process.env['VORION_INTENT_DEFAULT_MIN_TRUST_LEVEL'],
+      revalidateTrustAtDecision: process.env['VORION_INTENT_REVALIDATE_TRUST'],
+      softDeleteRetentionDays: process.env['VORION_INTENT_SOFT_DELETE_RETENTION_DAYS'],
+      escalationTimeout: process.env['VORION_INTENT_ESCALATION_TIMEOUT'],
+      escalationDefaultRecipient: process.env['VORION_INTENT_ESCALATION_RECIPIENT'],
+      cleanupCronSchedule: process.env['VORION_INTENT_CLEANUP_CRON'],
+      timeoutCheckCronSchedule: process.env['VORION_INTENT_TIMEOUT_CHECK_CRON'],
+    },
+
+    encryption: {
+      key: process.env['VORION_ENCRYPTION_KEY'],
+      algorithm: process.env['VORION_ENCRYPTION_ALGORITHM'],
+    },
   });
 }
 
@@ -147,4 +261,45 @@ export function getConfig(): Config {
     configInstance = loadConfig();
   }
   return configInstance;
+}
+
+function parseJsonRecord(value: string | undefined | null) {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed === 'object' && parsed !== null) {
+      return parsed as Record<string, string>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+function parseList(value: string | undefined | null): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function parseNumberRecord(value: string | undefined | null) {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed === 'object' && parsed !== null) {
+      const result: Record<string, number> = {};
+      for (const [key, val] of Object.entries(parsed)) {
+        const num = Number(val);
+        if (!Number.isNaN(num)) {
+          result[key] = num;
+        }
+      }
+      return result;
+    }
+    return {};
+  } catch {
+    return {};
+  }
 }

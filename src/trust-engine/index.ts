@@ -8,7 +8,6 @@
 
 import { createLogger } from '../common/logger.js';
 import type {
-  Entity,
   TrustScore,
   TrustLevel,
   TrustSignal,
@@ -88,10 +87,17 @@ export interface TrustCalculation {
  */
 export class TrustEngine {
   private records: Map<ID, TrustRecord> = new Map();
-  private decayRate: number;
+  private readonly decayRate: number;
 
   constructor(decayRate: number = 0.01) {
     this.decayRate = decayRate;
+  }
+
+  /**
+   * Get the decay rate used for trust score calculations
+   */
+  getDecayRate(): number {
+    return this.decayRate;
   }
 
   /**

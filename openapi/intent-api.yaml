@@ -1,0 +1,874 @@
+openapi: 3.1.0
+info:
+  title: Vorion Intent API
+  description: |
+    API for managing intents in the Vorion platform.
+
+    Intents represent goal-oriented requests that go through trust evaluation,
+    rule-based policy checks, and human-in-the-loop escalation workflows.
+  version: 1.0.0
+  contact:
+    name: Vorion Platform Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development
+  - url: https://api.vorion.io/api/v1
+    description: Production
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Intents
+    description: Intent submission and lifecycle management
+  - name: Escalations
+    description: Human-in-the-loop approval workflows
+  - name: Webhooks
+    description: Outbound webhook notification management
+  - name: Admin
+    description: Administrative operations
+  - name: Health
+    description: Health and observability endpoints
+
+paths:
+  /intents:
+    post:
+      tags: [Intents]
+      summary: Submit a new intent
+      description: |
+        Submit an intent for processing. The intent goes through:
+        1. Trust gate validation
+        2. Deduplication check
+        3. Queue for evaluation
+      operationId: submitIntent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntentSubmission'
+      responses:
+        '201':
+          description: Intent created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Intent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Trust level insufficient
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+    get:
+      tags: [Intents]
+      summary: List intents
+      description: List intents for the current tenant with optional filtering
+      operationId: listIntents
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/IntentStatus'
+        - name: entityId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of intents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Intent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /intents/{intentId}:
+    get:
+      tags: [Intents]
+      summary: Get intent by ID
+      operationId: getIntent
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+      responses:
+        '200':
+          description: Intent details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntentWithEvents'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    delete:
+      tags: [Intents]
+      summary: Soft delete an intent
+      description: Marks the intent as deleted (GDPR compliant soft delete)
+      operationId: deleteIntent
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+      responses:
+        '200':
+          description: Intent deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Intent'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /intents/{intentId}/cancel:
+    post:
+      tags: [Intents]
+      summary: Cancel an in-flight intent
+      operationId: cancelIntent
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  description: Reason for cancellation
+      responses:
+        '200':
+          description: Intent cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Intent'
+        '400':
+          description: Intent cannot be cancelled (already in terminal state)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /intents/{intentId}/replay:
+    post:
+      tags: [Intents]
+      summary: Replay a failed or denied intent
+      description: Re-queues the intent for processing
+      operationId: replayIntent
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+      responses:
+        '200':
+          description: Intent queued for replay
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  intentId:
+                    type: string
+        '400':
+          description: Intent cannot be replayed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /intents/{intentId}/events:
+    get:
+      tags: [Intents]
+      summary: Get intent event history
+      operationId: getIntentEvents
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+      responses:
+        '200':
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IntentEvent'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /intents/{intentId}/evaluations:
+    get:
+      tags: [Intents]
+      summary: Get intent evaluation history
+      operationId: getIntentEvaluations
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+      responses:
+        '200':
+          description: List of evaluations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IntentEvaluation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /intents/{intentId}/escalations:
+    get:
+      tags: [Escalations]
+      summary: Get escalation history for an intent
+      operationId: getIntentEscalations
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+      responses:
+        '200':
+          description: List of escalations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Escalation'
+
+  /escalations:
+    get:
+      tags: [Escalations]
+      summary: List pending escalations
+      description: List all pending escalations for the current tenant
+      operationId: listEscalations
+      responses:
+        '200':
+          description: List of pending escalations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Escalation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /escalations/{escalationId}:
+    get:
+      tags: [Escalations]
+      summary: Get escalation by ID
+      operationId: getEscalation
+      parameters:
+        - $ref: '#/components/parameters/EscalationId'
+      responses:
+        '200':
+          description: Escalation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Escalation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /escalations/{escalationId}/approve:
+    post:
+      tags: [Escalations]
+      summary: Approve an escalation
+      operationId: approveEscalation
+      parameters:
+        - $ref: '#/components/parameters/EscalationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EscalationResolution'
+      responses:
+        '200':
+          description: Escalation approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Escalation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /escalations/{escalationId}/reject:
+    post:
+      tags: [Escalations]
+      summary: Reject an escalation
+      operationId: rejectEscalation
+      parameters:
+        - $ref: '#/components/parameters/EscalationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EscalationResolution'
+      responses:
+        '200':
+          description: Escalation rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Escalation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List registered webhooks
+      operationId: listWebhooks
+      responses:
+        '200':
+          description: List of webhooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Webhook'
+
+    post:
+      tags: [Webhooks]
+      summary: Register a new webhook
+      operationId: registerWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookConfig'
+      responses:
+        '201':
+          description: Webhook registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /webhooks/{webhookId}:
+    delete:
+      tags: [Webhooks]
+      summary: Unregister a webhook
+      operationId: unregisterWebhook
+      parameters:
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Webhook unregistered
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /metrics:
+    get:
+      tags: [Health]
+      summary: Prometheus metrics
+      description: Returns metrics in Prometheus text format
+      operationId: getMetrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness check
+      operationId: readinessCheck
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /scheduler:
+    get:
+      tags: [Admin]
+      summary: Get scheduler status
+      operationId: getSchedulerStatus
+      responses:
+        '200':
+          description: Scheduler status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        cronExpression:
+                          type: string
+                        running:
+                          type: boolean
+
+  /admin/cleanup:
+    post:
+      tags: [Admin]
+      summary: Trigger cleanup job
+      description: Manually triggers the GDPR cleanup job
+      operationId: triggerCleanup
+      responses:
+        '200':
+          description: Cleanup completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eventsDeleted:
+                    type: integer
+                  intentsPurged:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: string
+
+  /dlq/{jobId}/retry:
+    post:
+      tags: [Admin]
+      summary: Retry a dead letter queue job
+      operationId: retryDlqJob
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job requeued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  jobId:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IntentId:
+      name: intentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    EscalationId:
+      name: escalationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    IntentSubmission:
+      type: object
+      required:
+        - entityId
+        - goal
+        - context
+      properties:
+        entityId:
+          type: string
+          format: uuid
+          description: ID of the entity submitting the intent
+        goal:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          description: Description of the intended action
+        context:
+          type: object
+          additionalProperties: true
+          description: Contextual data for the intent
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata
+        intentType:
+          type: string
+          maxLength: 128
+          description: Type of intent for routing and policy
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 9
+          default: 0
+          description: Priority level (0-9, higher is more urgent)
+        idempotencyKey:
+          type: string
+          maxLength: 128
+          description: Optional key for deduplication
+
+    Intent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+        entityId:
+          type: string
+          format: uuid
+        goal:
+          type: string
+        intentType:
+          type: string
+          nullable: true
+        priority:
+          type: integer
+        status:
+          $ref: '#/components/schemas/IntentStatus'
+        context:
+          type: object
+        metadata:
+          type: object
+        trustSnapshot:
+          type: object
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    IntentWithEvents:
+      allOf:
+        - $ref: '#/components/schemas/Intent'
+        - type: object
+          properties:
+            events:
+              type: array
+              items:
+                $ref: '#/components/schemas/IntentEvent'
+            evaluations:
+              type: array
+              items:
+                $ref: '#/components/schemas/IntentEvaluation'
+
+    IntentStatus:
+      type: string
+      enum:
+        - pending
+        - evaluating
+        - escalated
+        - approved
+        - denied
+        - executing
+        - completed
+        - failed
+        - cancelled
+
+    IntentEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        intentId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        payload:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    IntentEvaluation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        intentId:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+        result:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    Escalation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        intentId:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+        reason:
+          type: string
+        reasonCategory:
+          type: string
+          enum:
+            - trust_insufficient
+            - high_risk
+            - policy_violation
+            - manual_review
+            - constraint_escalate
+        escalatedTo:
+          type: string
+          description: Role or user ID to handle escalation
+        escalatedBy:
+          type: string
+          description: Who/what initiated the escalation
+        status:
+          type: string
+          enum: [pending, approved, rejected, timeout]
+        resolution:
+          type: object
+          properties:
+            resolvedBy:
+              type: string
+            resolvedAt:
+              type: string
+              format: date-time
+            notes:
+              type: string
+        timeout:
+          type: string
+          description: ISO 8601 duration
+        timeoutAt:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    EscalationResolution:
+      type: object
+      properties:
+        notes:
+          type: string
+          description: Optional notes about the resolution
+
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        config:
+          $ref: '#/components/schemas/WebhookConfig'
+
+    WebhookConfig:
+      type: object
+      required:
+        - url
+        - events
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Webhook endpoint URL
+        secret:
+          type: string
+          description: Secret for HMAC signature verification
+        enabled:
+          type: boolean
+          default: true
+        events:
+          type: array
+          items:
+            type: string
+            enum:
+              - escalation.created
+              - escalation.approved
+              - escalation.rejected
+              - escalation.timeout
+              - intent.approved
+              - intent.denied
+              - intent.completed
+        retryAttempts:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 3
+        retryDelayMs:
+          type: integer
+          minimum: 100
+          maximum: 60000
+          default: 1000
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              healthy:
+                type: boolean
+              latencyMs:
+                type: number
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object

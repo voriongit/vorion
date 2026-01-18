@@ -146,10 +146,8 @@ export class ProofService {
     }
 
     // Verify hash
-    const expectedHash = await this.calculateHash({
-      ...proof,
-      hash: '',
-    });
+    const { hash: _existingHash, ...proofWithoutHash } = proof;
+    const expectedHash = await this.calculateHash(proofWithoutHash);
 
     if (proof.hash !== expectedHash) {
       issues.push('Hash mismatch');
