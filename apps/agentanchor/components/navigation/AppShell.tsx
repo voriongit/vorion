@@ -63,14 +63,12 @@ export default function AppShell({ children, userRole = 'consumer' }: AppShellPr
     <FloorMemoryProvider>
       <QuickTravelProvider>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-          {/* Desktop Sidebar */}
-          {!isMobile && (
-            <Sidebar
-              isCollapsed={isCollapsed}
-              onToggleCollapse={toggleCollapse}
-              userRole={userRole}
-            />
-          )}
+          {/* Desktop Sidebar - hidden on mobile via CSS */}
+          <Sidebar
+            isCollapsed={isCollapsed}
+            onToggleCollapse={toggleCollapse}
+            userRole={userRole}
+          />
 
           {/* Mobile Sidebar */}
           <MobileSidebar
@@ -87,11 +85,11 @@ export default function AppShell({ children, userRole = 'consumer' }: AppShellPr
 
           {/* Main Content */}
           <main
-            className={`pt-16 transition-all duration-300 ${
-              !isMobile ? (isCollapsed ? 'lg:ml-16' : 'lg:ml-64') : ''
+            className={`pt-16 min-h-screen transition-all duration-300 ${
+              isCollapsed ? 'lg:ml-16' : 'lg:ml-64'
             }`}
           >
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {children}
             </div>
           </main>
