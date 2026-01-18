@@ -2,7 +2,7 @@
 ## Public Comment Submission
 
 **Document:** NIST IR 8596 (Preliminary Draft)
-**Submission Date:** January 17, 2026
+**Submission Date:** January 18, 2026
 **Comment Deadline:** January 30, 2026
 **Submit To:** cyberaiprofile@nist.gov
 
@@ -12,10 +12,9 @@
 
 **Organization:** Vorion Risk, LLC
 **Contact:** Ryan Cason and Alex Blanc
+**Phone:** [ADD DIRECT CONTACT NUMBER]
 **Email:** contact@vorion.org
 **Website:** https://vorion.org
-**Relevant Standard:** BASIS (Behavioral Agent Safety and Interoperability Standard)
-**Standard URL:** https://basis.vorion.org
 
 ---
 
@@ -23,16 +22,14 @@
 
 Vorion Risk, LLC respectfully submits comments on NIST IR 8596, the Cybersecurity Framework Profile for Artificial Intelligence. We commend NIST's proactive approach to integrating AI-specific risks into the established CSF 2.0 framework.
 
-Our comments focus on a critical gap in current AI governance frameworks: **operational efficiency and sustainability metrics for autonomous AI agents**. We propose that the Cyber AI Profile incorporate quantifiable efficiency requirements that complement its security-focused guidance, enabling organizations to govern AI systems holistically.
+Our comments focus on operational challenges that organizations face when deploying autonomous AI agents—challenges that intersect with but extend beyond traditional cybersecurity concerns. Specifically, we identify opportunities for the Cyber AI Profile to address:
 
-We offer the BASIS (Behavioral Agent Safety and Interoperability Standard) specification as a complementary technical framework that provides:
+1. **Resource exhaustion as a security vector** — inefficient AI agents can be exploited for denial-of-service
+2. **Graduated trust mechanisms** — binary allow/deny decisions are insufficient for autonomous agents
+3. **Cryptographic auditability** — forensic analysis requires tamper-evident decision logs
+4. **Sustainability alignment** — emerging regulations (EU AI Act Article 40) will require efficiency reporting
 
-1. **Quantified trust scoring** for AI agent capability gating
-2. **Resource manifests** aligned with cloud-native operational patterns
-3. **Cost-to-value governance** with automatic throttling mechanisms
-4. **Sustainability metrics** based on ISO/IEC 21031:2024 (SCI specification)
-
-BASIS is an open standard (Apache 2.0 / CC BY 4.0) designed to integrate with NIST AI RMF and the Cyber AI Profile, providing the operational "efficiency layer" that current frameworks leave unspecified.
+These requirements could be implemented through existing tooling, custom development, or emerging standards. As one example implementation approach, we reference the open-source BASIS (Behavioral Agent Safety and Interoperability Standard) specification, which provides technical patterns that organizations can adapt to their specific needs.
 
 ---
 
@@ -47,8 +44,9 @@ The profile appropriately emphasizes securing AI systems against adversarial thr
 
 **Gap Identified:**
 Inefficient AI agents represent a security risk through:
-- **Resource exhaustion attacks** — Agents consuming excessive compute can create denial-of-service conditions
-- **Cost amplification vulnerabilities** — Adversaries can trigger expensive reasoning modes for low-value tasks
+
+- **Resource exhaustion attacks** — Agents consuming excessive compute can create denial-of-service conditions for critical enterprise functions
+- **Cost amplification vulnerabilities** — Adversaries can trigger expensive reasoning modes for low-value tasks, rapidly depleting cloud budgets ("Economic Denial of Service")
 - **Sustainability exposure** — Organizations face regulatory and reputational risk from uncontrolled AI energy consumption
 
 **Proposed Addition:**
@@ -60,12 +58,19 @@ We recommend the profile include guidance on operational efficiency controls as 
 > - Automatic throttling or degradation when resource consumption exceeds justified thresholds
 > - Sustainability metrics aligned with ISO/IEC 21031:2024 (Software Carbon Intensity)"
 
-**Supporting Framework:**
-The BASIS Efficiency Specification (https://basis.vorion.org) provides a complete technical implementation including:
-- Resource Manifest schema following Kubernetes dual-threshold patterns (requests/limits)
-- Cost-to-Value (CTV) ratio algorithms with defined thresholds
-- Degradation cascade: Alert (CTV > 2) → Throttle (CTV > 5) → Degrade (CTV > 10) → Stop (CTV > 20)
-- Integration with the Green Software Foundation's Carbon Aware SDK
+**Example Implementation Approach:**
+Organizations could implement cost-to-value (CTV) monitoring with defined response thresholds. One possible approach uses half-open intervals to ensure unambiguous boundary behavior:
+
+| CTV Ratio | Status | Automated Response |
+|-----------|--------|-------------------|
+| [0, 1.0) | Excellent | Continue (value exceeds cost) |
+| [1.0, 2.0) | Acceptable | Monitor |
+| [2.0, 5.0) | Marginal | Alert, suggest optimization |
+| [5.0, 10.0) | Poor | Throttle (reduce capacity) |
+| [10.0, 20.0) | Unacceptable | Degrade (minimal operations) |
+| [20.0, +inf) | Critical | Stop, require human review |
+
+**Implementation Note:** Defining "value" in CTV calculations requires organizational context. Value metrics might include revenue impact, user satisfaction scores, task completion rates, or custom KPIs. Organizations should establish value definitions appropriate to their domain before implementing CTV monitoring.
 
 ---
 
@@ -88,22 +93,32 @@ We recommend the profile reference quantified trust scoring as a best practice f
 > - Apply trust decay for inactive agents to prevent stale high-trust entities
 > - Amplify negative impacts from failures to incentivize reliable behavior"
 
-**Supporting Framework:**
-The BASIS Trust Model (https://basis.vorion.org/spec/trust-scoring) provides:
+**Example Implementation Approach:**
+Organizations could implement a trust scoring system (e.g., 0-1000 scale) with defined capability tiers:
 
-| Tier | Score Range | Default Capabilities |
+| Tier | Score Range | Example Capabilities |
 |------|-------------|---------------------|
-| Sandbox | 0-99 | Isolated testing only |
-| Provisional | 100-299 | Read public data, internal messaging |
-| Standard | 300-499 | Limited external communication |
-| Trusted | 500-699 | External API calls |
-| Certified | 700-899 | Financial transactions |
-| Autonomous | 900-1000 | Full autonomy within policy bounds |
+| Sandbox | [0, 100) | Isolated testing only |
+| Provisional | [100, 300) | Read public data, internal messaging |
+| Standard | [300, 500) | Limited external communication |
+| Trusted | [500, 700) | External API calls |
+| Certified | [700, 900) | Financial transactions |
+| Autonomous | [900, 1000] | Full autonomy within policy bounds |
 
-The trust score algorithm includes:
-- 7-day half-life decay for inactive agents
-- 3x failure amplification multiplier
-- Tier boundaries that prevent capability skipping
+**Trust Score Calculation Example:**
+Organizations should define explicit signal impacts. One possible approach:
+
+| Signal Type | Base Impact | Rationale |
+|-------------|-------------|-----------|
+| task_completed | +5 points | Positive behavioral signal |
+| task_failed | -15 points | 3x amplification incentivizes reliability |
+| policy_violation | -50 points | Serious compliance breach |
+| compliance_check_passed | +2 points | Periodic verification bonus |
+| human_endorsement | +25 points | Explicit trust delegation |
+
+**Initial Trust Score:** Entities should initialize at score 0 (Sandbox tier) unless explicitly promoted by an administrator with appropriate authority. This ensures new agents demonstrate trustworthiness before gaining capabilities.
+
+**Trust Decay Considerations:** A 14-day half-life for inactive agents balances security (preventing stale high-trust entities) with operational practicality (allowing for maintenance windows). Organizations may wish to implement a "Maintenance" status that pauses decay during planned downtime, preventing penalization for scheduled maintenance.
 
 ---
 
@@ -116,6 +131,7 @@ The profile addresses using AI for cyber defense but does not specifically addre
 
 **Gap Identified:**
 AI agents deployed for cyber defense introduce unique risks:
+
 - **Autonomous action scope** — Defensive agents may block legitimate traffic or isolate systems
 - **Escalation requirements** — Some defensive actions require human oversight
 - **Audit requirements** — Defensive actions must be logged with cryptographic integrity for forensic analysis
@@ -129,14 +145,39 @@ We recommend explicit guidance for agentic AI in cyber defense contexts:
 > - Define clear boundaries between autonomous and human-supervised defensive capabilities
 > - Establish governance checkpoints before agents execute defensive actions"
 
-**Supporting Framework:**
-The BASIS four-layer architecture directly addresses this:
+**Example Implementation Approach:**
+A layered governance architecture could address these requirements:
 
 ```
-LAYER 1: INTENT   → Parse defensive action request, classify risk level
-LAYER 2: ENFORCE  → Evaluate against trust score, apply escalation rules
-LAYER 3: PROOF    → Create SHA-256 chained audit record
-LAYER 4: CHAIN    → Optional blockchain anchoring for independent verification
++---------------------------------------------------------------+
+|                    Agent Action Request                        |
++---------------------------------------------------------------+
+                              |
+                              v
++---------------------------------------------------------------+
+|  LAYER 1: INTENT                                               |
+|  Parse and classify the requested action                       |
+|  Output: Structured intent with risk classification            |
++---------------------------------------------------------------+
+                              |
+                              v
++---------------------------------------------------------------+
+|  LAYER 2: ENFORCE                                              |
+|  Evaluate intent against trust score and policies              |
+|  Output: ALLOW, DENY, ESCALATE, or DEGRADE                     |
++---------------------------------------------------------------+
+                              |
+                              v
++---------------------------------------------------------------+
+|  LAYER 3: PROOF                                                |
+|  Log the decision with cryptographic integrity                 |
+|  Output: SHA-256 chained audit record                          |
++---------------------------------------------------------------+
+                              |
+                              v
++---------------------------------------------------------------+
+|                 Action Execution (if ALLOW)                    |
++---------------------------------------------------------------+
 ```
 
 Governance decisions include: ALLOW, DENY, ESCALATE (require human approval), or DEGRADE (reduced scope).
@@ -148,15 +189,18 @@ Governance decisions include: ALLOW, DENY, ESCALATE (require human approval), or
 **Reference:** Alignment with EU AI Act environmental provisions and CSRD requirements
 
 **Current State:**
-The Cyber AI Profile does not address AI system sustainability or energy efficiency, despite increasing regulatory pressure (EU AI Act Article 40, CSRD disclosure requirements) and enterprise sustainability commitments.
+The Cyber AI Profile does not address AI system sustainability or energy efficiency, despite increasing regulatory pressure and enterprise sustainability commitments.
 
 **Gap Identified:**
 Organizations deploying AI systems face growing requirements to report on:
+
 - Energy consumption of AI workloads
 - Carbon emissions associated with AI operations
 - Computational efficiency relative to value delivered
 
-Microsoft's 30% carbon footprint increase (2020-2023), largely attributed to AI infrastructure, demonstrates the materiality of this concern.
+Microsoft's 2024 Environmental Sustainability Report documented a 29% increase in total emissions from 2020 to fiscal year 2023, with the company attributing this rise to "the construction of more datacenters and the associated embodied carbon in building materials, as well as hardware components such as semiconductors, servers, and racks."[1] This demonstrates the materiality of AI infrastructure's environmental impact.
+
+The EU AI Act (Article 40) establishes a framework for developing harmonized standards to improve AI system resource performance, with a mandate for the European Commission to report on energy-efficient GPAI standards by August 2, 2028.
 
 **Proposed Addition:**
 We recommend the profile include sustainability considerations:
@@ -167,11 +211,11 @@ We recommend the profile include sustainability considerations:
 > - Embodied carbon attribution for AI hardware
 > - Carbon-aware scheduling that shifts workloads to low-carbon periods"
 
-**Supporting Framework:**
-The BASIS Efficiency Specification incorporates the SCI formula:
+**Example Implementation Approach:**
+Organizations could adopt the SCI formula from ISO/IEC 21031:2024:
 
 ```
-SCI = ((E × I) + M) / R
+SCI = ((E x I) + M) / R
 
 Where:
   E = Energy consumption (kWh)
@@ -180,7 +224,9 @@ Where:
   R = Functional unit (per API call, per session, etc.)
 ```
 
-Critically, BASIS explicitly excludes market-based measures (carbon offsets, RECs) from efficiency scoring, focusing on actual emissions reduction.
+For robust efficiency measurement, we recommend explicitly excluding market-based measures (carbon offsets, RECs) from efficiency scoring, focusing instead on actual emissions reduction.
+
+[1] Microsoft 2024 Environmental Sustainability Report, May 2024.
 
 ---
 
@@ -192,7 +238,8 @@ Critically, BASIS explicitly excludes market-based measures (carbon offsets, REC
 The Generative AI Profile (NIST AI 600-1) addresses unique GenAI risks but does not specifically address the operational cost implications of reasoning-enabled models.
 
 **Gap Identified:**
-Recent analysis (AI Energy Score v2, January 2026) found that reasoning-enabled models consume **150-700x more energy** than standard inference, with an average of 30x across tested models. Without governance:
+Research from the AI Energy Score project (co-led by Hugging Face and Salesforce) found that reasoning-enabled models consume on average **30x more energy** than standard inference, with individual models ranging from 2x to over 6,000x depending on task complexity and model architecture.[2] Without governance:
+
 - Agents may use expensive reasoning for trivial tasks
 - Organizations lack visibility into reasoning mode cost
 - No automatic controls exist to optimize reasoning usage
@@ -206,21 +253,40 @@ We recommend explicit guidance for reasoning mode governance:
 > - Establish reasoning token budgets that constrain expensive operations
 > - Enable automatic reasoning mode disabling for simple, routine tasks"
 
-**Supporting Framework:**
-BASIS defines reasoning mode governance including:
-- Task classification (REASONING_JUSTIFIED vs REASONING_WASTEFUL task types)
-- Reasoning budget tracking per agent
+**Example Implementation Approach:**
+Organizations could implement reasoning mode governance including:
+
+- Task classification (e.g., REASONING_JUSTIFIED vs REASONING_UNNECESSARY)
+- Reasoning budget tracking per agent or application
 - Automatic model selection based on task complexity
-- Separate CTV calculation for reasoning operations
+- Separate cost-to-value calculations for reasoning operations
+
+[2] Luccioni, S. and Gamazaychikov, B. "AI Energy Score v2: Refreshed Leaderboard, now with Reasoning." Hugging Face Blog, December 2025.
+
+---
+
+## Implementation Considerations
+
+We recognize that implementing efficiency and trust controls introduces complexity, particularly for organizations with heterogeneous AI deployments. Key considerations include:
+
+**Operational Overhead:** Trust scoring systems and resource monitoring add computational and administrative overhead. Organizations should weigh governance benefits against implementation costs, particularly for low-risk AI applications.
+
+**Measurement Challenges:** Accurate energy and carbon measurement for AI workloads remains technically challenging, especially in shared infrastructure environments. The ISO/IEC 21031:2024 standard provides methodology guidance, but practical implementation requires tooling investment.
+
+**Interoperability:** Different AI platforms and cloud providers offer varying levels of telemetry and control. Standards-based approaches facilitate multi-vendor governance but may require adaptation for specific environments.
+
+**Cross-Organizational Trust:** Organizations may need mechanisms for sharing trust assessments across boundaries. Standardized scoring methodologies and cryptographic attestations could enable portable trust, though this remains an evolving area.
+
+**Phased Adoption:** We recommend organizations prioritize governance controls for high-risk autonomous agents before extending to lower-risk AI applications. This allows validation of governance approaches while managing implementation complexity.
 
 ---
 
 ## Proposed Integration Path
 
-We propose the following integration between BASIS and the NIST Cyber AI Profile:
+We propose the following integration between efficiency/trust controls and the NIST Cyber AI Profile:
 
-| NIST CSF Function | Cyber AI Profile Focus | BASIS Contribution |
-|-------------------|----------------------|-------------------|
+| NIST CSF Function | Cyber AI Profile Focus | Efficiency/Trust Contribution |
+|-------------------|----------------------|-------------------------------|
 | **GOVERN** | Establish AI governance | Trust tiers, capability taxonomy, policy constraints |
 | **IDENTIFY** | Understand AI context | Resource manifests, hardware tier classification |
 | **PROTECT** | Implement safeguards | Capability gating, escalation requirements |
@@ -232,30 +298,29 @@ We propose the following integration between BASIS and the NIST Cyber AI Profile
 
 ## Technical Resources
 
-The following open resources are available for NIST review:
+The following open resources are available for NIST review as example implementations:
 
 | Resource | URL | License |
 |----------|-----|---------|
 | BASIS Specification | https://basis.vorion.org | CC BY 4.0 |
 | Core Specification | https://basis.vorion.org/spec/overview | CC BY 4.0 |
-| Efficiency Specification | https://github.com/voriongit/vorion/blob/master/basis-core/specs/BASIS-EFFICIENCY.md | Apache 2.0 |
-| Capability Taxonomy | https://basis.vorion.org/spec/capabilities | CC BY 4.0 |
-| JSON Schemas | https://github.com/voriongit/vorion/blob/master/basis-core/specs/BASIS-JSON-SCHEMAS.md | Apache 2.0 |
-| Compliance Mapping | https://github.com/voriongit/vorion/blob/master/basis-core/specs/BASIS-COMPLIANCE-MAPPING.md | CC BY 4.0 |
-| Reference Implementation | https://cognigate.dev | Apache 2.0 |
+| Efficiency Specification | https://github.com/voriongit/vorion/tree/master/docs/basis-docs/docs/spec | Apache 2.0 |
+| Reference Implementation | https://github.com/voriongit/vorion | Apache 2.0 |
+
+These represent one possible implementation approach; alternative approaches achieving similar outcomes would also satisfy the proposed guidance.
 
 ---
 
 ## Conclusion
 
-The NIST Cybersecurity Framework Profile for Artificial Intelligence represents an important step toward comprehensive AI governance. We believe the profile would be strengthened by incorporating:
+The NIST Cybersecurity Framework Profile for Artificial Intelligence advances AI governance significantly. The profile may benefit from incorporating:
 
 1. **Operational efficiency requirements** that address resource consumption as a security-adjacent concern
 2. **Quantified trust scoring** that enables graduated capability controls for autonomous agents
 3. **Sustainability metrics** aligned with ISO/IEC 21031:2024 and emerging regulatory requirements
-4. **Reasoning mode governance** that addresses the 150-700x energy cost differential
+4. **Reasoning mode governance** that addresses the significant energy cost differential of reasoning models
 
-The BASIS standard provides ready-to-adopt technical specifications for each of these areas, designed to complement rather than compete with NIST frameworks. We welcome the opportunity to discuss integration approaches with NIST staff and contribute to the ongoing development of AI governance standards.
+These requirements can be satisfied through various implementation approaches. We welcome the opportunity to discuss integration strategies with NIST staff and contribute to the ongoing development of AI governance standards.
 
 We are committed to supporting NIST's mission of promoting U.S. innovation and industrial competitiveness through responsible AI governance that balances security, efficiency, and sustainability.
 
@@ -265,72 +330,23 @@ We are committed to supporting NIST's mission of promoting U.S. innovation and i
 
 Vorion Risk, LLC
 https://vorion.org
-https://basis.vorion.org
 
 ---
 
-## Appendix A: BASIS Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Agent Action Request                      │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  LAYER 0: RESOURCE (Efficiency Extension)                    │
-│  Validate resource manifest, check CTV thresholds            │
-│  Output: Efficiency status, throttle/degrade if needed       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  LAYER 1: INTENT                                             │
-│  Parse and classify the requested action                     │
-│  Output: Structured intent with risk classification          │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  LAYER 2: ENFORCE                                            │
-│  Evaluate intent against trust score and policies            │
-│  Output: ALLOW, DENY, ESCALATE, or DEGRADE                   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  LAYER 3: PROOF                                              │
-│  Log the decision with cryptographic integrity               │
-│  Output: SHA-256 chained proof record                        │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  LAYER 4: CHAIN (Optional)                                   │
-│  Anchor proof to blockchain for independent verification     │
-│  Output: Anchor transaction identifier                       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 Action Execution (if ALLOW)                  │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Appendix B: Cost-to-Value Governance Thresholds
+## Appendix A: Cost-to-Value Governance Thresholds
 
 | CTV Ratio | Status | Automated Response |
 |-----------|--------|-------------------|
-| < 1.0 | Excellent | Continue (value exceeds cost) |
-| 1.0 - 2.0 | Acceptable | Monitor |
-| 2.0 - 5.0 | Marginal | Alert agent, suggest optimization |
-| 5.0 - 10.0 | Poor | Throttle (reduce to 50% capacity) |
-| > 10.0 | Unacceptable | Stop, require human review |
+| [0, 1.0) | Excellent | Continue (value exceeds cost) |
+| [1.0, 2.0) | Acceptable | Monitor |
+| [2.0, 5.0) | Marginal | Alert agent, suggest optimization |
+| [5.0, 10.0) | Poor | Throttle (reduce to 50% capacity) |
+| [10.0, 20.0) | Unacceptable | Degrade (minimal operations only) |
+| [20.0, +inf) | Critical | Stop, require human review |
 
 **Auto-Stop Conditions:**
-- CTV ratio > 10.0 sustained over rolling window
+
+- CTV ratio >= 20.0 sustained over rolling window
 - 5+ consecutive operation failures
 - Rolling average value score < 0 (negative value production)
 - Resource consumption > 150% of declared manifest limits
@@ -338,19 +354,53 @@ https://basis.vorion.org
 
 ---
 
-## Appendix C: Alignment with Existing Standards
+## Appendix B: Trust Scoring Reference
 
-| Standard | BASIS Alignment |
-|----------|----------------|
-| **NIST AI RMF** | BASIS provides quantifiable metrics for Measure function; efficiency controls for Manage function |
-| **ISO/IEC 42001** | BASIS complements AIMS with operational performance certification |
-| **EU AI Act** | BASIS addresses Annex IV documentation requirements; positions for August 2028 efficiency standards |
-| **ISO/IEC 21031:2024 (SCI)** | BASIS adopts SCI formula as canonical sustainability metric |
-| **MLPerf Inference** | BASIS efficiency tiers based on MLPerf methodology (90th percentile latency) |
-| **Kubernetes** | Resource Manifests follow K8s dual-threshold pattern (requests/limits) |
+**Initial State:** All entities initialize at score 0 (Sandbox tier) unless explicitly promoted by authorized administrator.
+
+**Signal Impacts (Example):**
+
+| Signal Type | Impact | Notes |
+|-------------|--------|-------|
+| task_completed | +5 | Standard positive signal |
+| task_failed | -15 | 3x amplification for failures |
+| policy_violation | -50 | Serious compliance breach |
+| compliance_check_passed | +2 | Periodic verification |
+| human_endorsement | +25 | Explicit trust delegation |
+
+**Decay:** 14-day half-life for inactive entities. Maintenance status pauses decay during planned downtime.
+
+**Tier Boundaries:** Use half-open intervals [min, max) to ensure unambiguous classification at boundaries.
 
 ---
 
-*Document Version: 1.0*
-*Prepared: January 17, 2026*
+## Appendix C: Regulatory Timeline Reference
+
+| Date | Milestone |
+|------|-----------|
+| August 1, 2024 | EU AI Act entered into force |
+| February 2, 2025 | Prohibited AI practices provisions apply |
+| August 2, 2025 | GPAI model obligations apply |
+| August 2, 2026 | High-risk AI system requirements fully applicable |
+| **August 2, 2028** | First EU Commission report on energy-efficient GPAI standards due |
+
+Source: EU AI Act (Regulation (EU) 2024/1689), Articles 40 and 113
+
+---
+
+## Appendix D: Alignment with Existing Standards
+
+| Standard | Alignment |
+|----------|-----------|
+| **NIST AI RMF** | Provides quantifiable metrics for Measure function; efficiency controls for Manage function |
+| **ISO/IEC 42001** | Complements AIMS with operational performance measurement |
+| **EU AI Act** | Addresses Article 40 standardization for energy efficiency |
+| **ISO/IEC 21031:2024 (SCI)** | Adopts SCI formula as sustainability metric |
+| **MLPerf Inference** | Efficiency measurement methodology alignment |
+| **Kubernetes** | Resource manifest patterns (requests/limits) |
+
+---
+
+*Document Version: 2.0*
+*Prepared: January 18, 2026*
 *For submission to: cyberaiprofile@nist.gov by January 30, 2026*

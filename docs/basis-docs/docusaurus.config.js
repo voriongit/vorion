@@ -9,12 +9,17 @@ const config = {
 
   url: 'https://basis.vorion.org',
   baseUrl: '/',
+  trailingSlash: false,
 
   organizationName: 'voriongit',
   projectName: 'basis-standard',
 
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
+
+  future: {
+    v4: true,
+  },
 
   i18n: {
     defaultLocale: 'en',
@@ -45,7 +50,7 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      image: 'img/basis-social-card.png',
+      image: 'img/docusaurus-social-card.jpg',
       navbar: {
         title: 'BASIS',
         logo: {
