@@ -2,6 +2,13 @@
  * INTENT Health Check Tests
  *
  * Tests for the health check service providing Kubernetes readiness/liveness probes.
+ * Includes tests for:
+ * - Liveness checks (basic process health)
+ * - Readiness checks (dependency health)
+ * - Global health checks (component aggregation)
+ * - INTENT-specific health checks
+ * - Shutdown handling
+ * - 503 response scenarios
  */
 
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
@@ -10,6 +17,8 @@ import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 const mockPing = vi.fn();
 const mockExists = vi.fn();
 const mockExecute = vi.fn();
+const mockGetQueueHealth = vi.fn();
+const mockGetPolicyLoader = vi.fn();
 
 // Mock dependencies before importing the module
 vi.mock('../../../src/common/redis.js', () => ({
@@ -35,17 +44,47 @@ vi.mock('../../../src/common/logger.js', () => ({
   })),
 }));
 
+vi.mock('../../../src/common/config.js', () => ({
+  getConfig: vi.fn(() => ({
+    env: 'test',
+    health: {
+      checkTimeoutMs: 5000,
+      readyTimeoutMs: 10000,
+      livenessTimeoutMs: 1000,
+    },
+  })),
+}));
+
+vi.mock('../../../src/common/timeout.js', () => ({
+  withTimeout: vi.fn((promise) => promise),
+}));
+
+vi.mock('../../../src/intent/queues.js', () => ({
+  getQueueHealth: () => mockGetQueueHealth(),
+}));
+
+vi.mock('../../../src/policy/loader.js', () => ({
+  getPolicyLoader: () => mockGetPolicyLoader(),
+}));
+
 // Import after mocks are set up
 import {
   checkDatabaseHealth,
   checkRedisHealth,
   checkQueueHealth,
+  checkPolicyLoaderHealth,
+  checkDetailedQueueHealth,
   livenessCheck,
   readinessCheck,
+  intentReadinessCheck,
+  globalHealthCheck,
+  globalReadinessCheck,
   validateStartupDependencies,
   getUptimeSeconds,
   type HealthStatus,
   type ComponentHealth,
+  type GlobalHealthStatus,
+  type ReadinessStatus,
 } from '../../../src/intent/health.js';
 
 describe('INTENT Health Check Service', () => {
@@ -55,6 +94,16 @@ describe('INTENT Health Check Service', () => {
     mockPing.mockResolvedValue('PONG');
     mockExists.mockResolvedValue(1);
     mockExecute.mockResolvedValue({ rows: [{ '?column?': 1 }] });
+    mockGetQueueHealth.mockResolvedValue({
+      intake: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      evaluate: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      decision: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      deadLetter: { waiting: 0, active: 0, completed: 0, failed: 5 },
+    });
+    mockGetPolicyLoader.mockReturnValue({
+      getPolicies: vi.fn().mockResolvedValue([]),
+      invalidateCache: vi.fn().mockResolvedValue(undefined),
+    });
   });
 
   describe('checkDatabaseHealth', () => {
@@ -455,5 +504,336 @@ describe('Kubernetes Probe Compatibility', () => {
 
       await expect(validateStartupDependencies()).rejects.toThrow();
     });
+  });
+});
+
+describe('Policy Loader Health Check', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetPolicyLoader.mockReturnValue({
+      getPolicies: vi.fn().mockResolvedValue([]),
+      invalidateCache: vi.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  describe('checkPolicyLoaderHealth', () => {
+    it('should return ok status when policy loader is accessible', async () => {
+      const result = await checkPolicyLoaderHealth();
+
+      expect(result.status).toBe('ok');
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should return error status when policy loader throws', async () => {
+      mockGetPolicyLoader.mockImplementation(() => {
+        throw new Error('Policy loader not initialized');
+      });
+
+      const result = await checkPolicyLoaderHealth();
+
+      expect(result.status).toBe('error');
+      expect(result.message).toBe('Policy loader not initialized');
+    });
+  });
+});
+
+describe('INTENT Module Readiness Check', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPing.mockResolvedValue('PONG');
+    mockExists.mockResolvedValue(1);
+    mockGetQueueHealth.mockResolvedValue({
+      intake: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      evaluate: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      decision: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      deadLetter: { waiting: 0, active: 0, completed: 0, failed: 5 },
+    });
+    mockGetPolicyLoader.mockReturnValue({
+      getPolicies: vi.fn().mockResolvedValue([]),
+    });
+  });
+
+  describe('intentReadinessCheck', () => {
+    it('should return healthy when queues and policies are ok', async () => {
+      const result = await intentReadinessCheck();
+
+      expect(result.status).toBe('healthy');
+      expect(result.checks.queues.status).toBe('ok');
+      expect(result.checks.policies.status).toBe('ok');
+      expect(result.timestamp).toBeDefined();
+    });
+
+    it('should return unhealthy when queue check fails', async () => {
+      mockExists.mockRejectedValue(new Error('Queue unavailable'));
+
+      const result = await intentReadinessCheck();
+
+      expect(result.status).toBe('unhealthy');
+      expect(result.checks.queues.status).toBe('error');
+    });
+
+    it('should return unhealthy when policy loader fails', async () => {
+      mockGetPolicyLoader.mockImplementation(() => {
+        throw new Error('Policy loader error');
+      });
+
+      const result = await intentReadinessCheck();
+
+      expect(result.status).toBe('unhealthy');
+      expect(result.checks.policies.status).toBe('error');
+    });
+
+    it('should include timestamp in ISO format', async () => {
+      const result = await intentReadinessCheck();
+
+      expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/);
+    });
+  });
+});
+
+describe('Global Health Check', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('globalHealthCheck', () => {
+    it('should return healthy status with process info', async () => {
+      const result = await globalHealthCheck(5, false);
+
+      expect(result.status).toBe('healthy');
+      expect(result.version).toBeDefined();
+      expect(result.environment).toBe('test');
+      expect(result.process.uptimeSeconds).toBeGreaterThanOrEqual(0);
+      expect(result.process.activeRequests).toBe(5);
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should return shutting_down status when server is shutting down', async () => {
+      const result = await globalHealthCheck(10, true);
+
+      expect(result.status).toBe('shutting_down');
+      expect(result.process.activeRequests).toBe(10);
+    });
+
+    it('should include memory usage in MB', async () => {
+      const result = await globalHealthCheck(0, false);
+
+      expect(result.process.memoryUsageMb).toBeDefined();
+      expect(result.process.memoryUsageMb.rss).toBeGreaterThan(0);
+      expect(result.process.memoryUsageMb.heapTotal).toBeGreaterThan(0);
+      expect(result.process.memoryUsageMb.heapUsed).toBeGreaterThan(0);
+      expect(result.process.memoryUsageMb.external).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should include INTENT component status', async () => {
+      const result = await globalHealthCheck(0, false);
+
+      expect(result.components.intent).toBeDefined();
+      expect(result.components.intent.status).toBe('ok');
+    });
+
+    it('should include timestamp in response', async () => {
+      const result = await globalHealthCheck(0, false);
+
+      expect(result.timestamp).toBeDefined();
+      expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/);
+    });
+  });
+});
+
+describe('Global Readiness Check', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPing.mockResolvedValue('PONG');
+    mockExists.mockResolvedValue(1);
+    mockExecute.mockResolvedValue({ rows: [{ '?column?': 1 }] });
+    mockGetQueueHealth.mockResolvedValue({
+      intake: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      evaluate: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      decision: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      deadLetter: { waiting: 0, active: 0, completed: 0, failed: 5 },
+    });
+    mockGetPolicyLoader.mockReturnValue({
+      getPolicies: vi.fn().mockResolvedValue([]),
+    });
+  });
+
+  describe('globalReadinessCheck', () => {
+    it('should return ready status when all components are healthy', async () => {
+      const result = await globalReadinessCheck();
+
+      expect(result.status).toBe('ready');
+      expect(result.checks.database.status).toBe('ok');
+      expect(result.checks.redis.status).toBe('ok');
+      expect(result.checks.queues.status).toBe('ok');
+      expect(result.checks.intent.status).toBe('ok');
+    });
+
+    it('should return unhealthy when database fails', async () => {
+      mockExecute.mockRejectedValue(new Error('DB connection failed'));
+
+      const result = await globalReadinessCheck();
+
+      expect(result.status).toBe('unhealthy');
+      expect(result.checks.database.status).toBe('error');
+    });
+
+    it('should return unhealthy when Redis fails', async () => {
+      mockPing.mockRejectedValue(new Error('Redis unavailable'));
+
+      const result = await globalReadinessCheck();
+
+      expect(result.status).toBe('unhealthy');
+      expect(result.checks.redis.status).toBe('error');
+    });
+
+    it('should include INTENT module check with details', async () => {
+      const result = await globalReadinessCheck();
+
+      expect(result.checks.intent).toBeDefined();
+      expect(result.checks.intent.details).toBeDefined();
+    });
+
+    it('should include queue details', async () => {
+      const result = await globalReadinessCheck();
+
+      expect(result.checks.queues.details).toBeDefined();
+      if (result.checks.queues.details) {
+        expect(result.checks.queues.details).toHaveProperty('intake');
+        expect(result.checks.queues.details).toHaveProperty('evaluate');
+        expect(result.checks.queues.details).toHaveProperty('decision');
+        expect(result.checks.queues.details).toHaveProperty('deadLetter');
+      }
+    });
+
+    it('should include timestamp', async () => {
+      const result = await globalReadinessCheck();
+
+      expect(result.timestamp).toBeDefined();
+      expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/);
+    });
+  });
+});
+
+describe('503 Response Scenarios', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPing.mockResolvedValue('PONG');
+    mockExists.mockResolvedValue(1);
+    mockExecute.mockResolvedValue({ rows: [{ '?column?': 1 }] });
+    mockGetQueueHealth.mockResolvedValue({
+      intake: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      evaluate: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      decision: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      deadLetter: { waiting: 0, active: 0, completed: 0, failed: 5 },
+    });
+    mockGetPolicyLoader.mockReturnValue({
+      getPolicies: vi.fn().mockResolvedValue([]),
+    });
+  });
+
+  it('should indicate unhealthy (503) when database is unavailable', async () => {
+    mockExecute.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    const result = await globalReadinessCheck();
+
+    expect(result.status).toBe('unhealthy');
+    // Server would return 503 for unhealthy status
+  });
+
+  it('should indicate shutting_down (503) during shutdown', async () => {
+    const result = await globalHealthCheck(0, true);
+
+    expect(result.status).toBe('shutting_down');
+    // Server would return 503 for shutting_down status
+  });
+
+  it('should indicate unhealthy (503) when Redis is unavailable', async () => {
+    mockPing.mockRejectedValue(new Error('ECONNREFUSED'));
+    mockExists.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    const result = await globalReadinessCheck();
+
+    expect(result.status).toBe('unhealthy');
+  });
+
+  it('should indicate unhealthy (503) when queue service fails', async () => {
+    mockExists.mockRejectedValue(new Error('Queue service unavailable'));
+
+    const result = await globalReadinessCheck();
+
+    // Queue failure should affect readiness
+    expect(['unhealthy', 'degraded']).toContain(result.status);
+  });
+});
+
+describe('Health Check Response Structure Validation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPing.mockResolvedValue('PONG');
+    mockExists.mockResolvedValue(1);
+    mockExecute.mockResolvedValue({ rows: [{ '?column?': 1 }] });
+    mockGetQueueHealth.mockResolvedValue({
+      intake: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      evaluate: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      decision: { waiting: 0, active: 0, completed: 100, failed: 0 },
+      deadLetter: { waiting: 0, active: 0, completed: 0, failed: 5 },
+    });
+    mockGetPolicyLoader.mockReturnValue({
+      getPolicies: vi.fn().mockResolvedValue([]),
+    });
+  });
+
+  it('GlobalHealthStatus should have all required fields', async () => {
+    const result: GlobalHealthStatus = await globalHealthCheck(0, false);
+
+    // Required fields
+    expect(result).toHaveProperty('status');
+    expect(result).toHaveProperty('version');
+    expect(result).toHaveProperty('environment');
+    expect(result).toHaveProperty('timestamp');
+    expect(result).toHaveProperty('process');
+    expect(result).toHaveProperty('components');
+    expect(result).toHaveProperty('latencyMs');
+
+    // Process sub-fields
+    expect(result.process).toHaveProperty('uptimeSeconds');
+    expect(result.process).toHaveProperty('memoryUsageMb');
+    expect(result.process).toHaveProperty('activeRequests');
+
+    // Memory sub-fields
+    expect(result.process.memoryUsageMb).toHaveProperty('rss');
+    expect(result.process.memoryUsageMb).toHaveProperty('heapTotal');
+    expect(result.process.memoryUsageMb).toHaveProperty('heapUsed');
+    expect(result.process.memoryUsageMb).toHaveProperty('external');
+  });
+
+  it('ReadinessStatus should have all required fields', async () => {
+    const result: ReadinessStatus = await globalReadinessCheck();
+
+    // Required fields
+    expect(result).toHaveProperty('status');
+    expect(result).toHaveProperty('timestamp');
+    expect(result).toHaveProperty('checks');
+
+    // Checks sub-fields
+    expect(result.checks).toHaveProperty('database');
+    expect(result.checks).toHaveProperty('redis');
+    expect(result.checks).toHaveProperty('queues');
+    expect(result.checks).toHaveProperty('intent');
+
+    // Each check should have status
+    expect(result.checks.database).toHaveProperty('status');
+    expect(result.checks.redis).toHaveProperty('status');
+    expect(result.checks.queues).toHaveProperty('status');
+    expect(result.checks.intent).toHaveProperty('status');
+  });
+
+  it('Status values should be valid enum values', async () => {
+    const healthResult = await globalHealthCheck(0, false);
+    const readyResult = await globalReadinessCheck();
+
+    expect(['healthy', 'degraded', 'unhealthy', 'shutting_down']).toContain(healthResult.status);
+    expect(['ready', 'degraded', 'unhealthy']).toContain(readyResult.status);
   });
 });

@@ -19,6 +19,7 @@ import {
   MAX_PAGE_SIZE,
 } from './index.js';
 import { createEscalationService, type EscalationStatus } from './escalation.js';
+import { createWebhookService } from './webhooks.js';
 import type { IntentStatus } from '../common/types.js';
 import { INTENT_STATUSES } from '../common/types.js';
 import {
@@ -46,6 +47,7 @@ declare module 'fastify' {
 // Lazy-initialized services to avoid database connections at module load
 let _intentService: ReturnType<typeof createIntentService> | null = null;
 let _escalationService: ReturnType<typeof createEscalationService> | null = null;
+let _webhookService: ReturnType<typeof createWebhookService> | null = null;
 
 function getIntentService() {
   if (!_intentService) {
@@ -59,6 +61,13 @@ function getEscalationService() {
     _escalationService = createEscalationService();
   }
   return _escalationService;
+}
+
+function getWebhookService() {
+  if (!_webhookService) {
+    _webhookService = createWebhookService();
+  }
+  return _webhookService;
 }
 
 // ============================================================================
@@ -139,6 +148,22 @@ const auditQuerySchema = z.object({
   to: z.coerce.date().optional(),
   limit: z.coerce.number().int().min(1).max(1000).optional(),
   offset: z.coerce.number().int().min(0).optional(),
+});
+
+// Webhook delivery schemas
+const webhookIdParamsSchema = z.object({
+  webhookId: z.string().uuid(),
+});
+
+const deliveryIdParamsSchema = z.object({
+  webhookId: z.string().uuid(),
+  deliveryId: z.string().uuid(),
+});
+
+const deliveryHistoryQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+  status: z.enum(['pending', 'delivered', 'failed', 'retrying']).optional(),
 });
 
 // ============================================================================
@@ -693,6 +718,228 @@ export async function registerIntentRoutes(
             hasMore: result.hasMore,
             offset: query.offset ?? 0,
             limit: query.limit ?? 50,
+          },
+        });
+      });
+
+      // ========================================================================
+      // Webhook Delivery Endpoints
+      // ========================================================================
+
+      /**
+       * GET /webhooks/:webhookId/deliveries - Get delivery history for a webhook
+       *
+       * Returns a paginated list of delivery attempts for the specified webhook.
+       * Includes status, attempts, timestamps, and errors for each delivery.
+       */
+      api.get('/webhooks/:webhookId/deliveries', async (request: FastifyRequest, reply: FastifyReply) => {
+        const tenantId = await getTenantId(request);
+        const params = webhookIdParamsSchema.parse(request.params ?? {});
+        const query = deliveryHistoryQuerySchema.parse(request.query ?? {});
+
+        const deliveries = await getWebhookService().getPersistentDeliveryHistory(
+          params.webhookId,
+          query.limit
+        );
+
+        // Filter by status if provided
+        const filteredDeliveries = query.status
+          ? deliveries.filter(d => d.status === query.status)
+          : deliveries;
+
+        // Log read audit for SOC2 compliance
+        logReadAudit(request, tenantId, 'webhook.read_deliveries', 'webhook', params.webhookId, {
+          resultCount: filteredDeliveries.length,
+          status: query.status,
+        });
+
+        return reply.send({
+          data: filteredDeliveries.map((delivery) => ({
+            id: delivery.id,
+            webhookId: delivery.webhookId,
+            eventType: delivery.eventType,
+            status: delivery.status,
+            attempts: delivery.attempts,
+            lastAttemptAt: delivery.lastAttemptAt,
+            lastError: delivery.lastError,
+            nextRetryAt: delivery.nextRetryAt,
+            deliveredAt: delivery.deliveredAt,
+            responseStatus: delivery.responseStatus,
+            createdAt: delivery.createdAt,
+          })),
+          pagination: {
+            limit: query.limit,
+            offset: query.offset,
+            hasMore: filteredDeliveries.length >= query.limit,
+          },
+        });
+      });
+
+      /**
+       * GET /webhooks/:webhookId/deliveries/:deliveryId - Get a specific delivery
+       *
+       * Returns detailed information about a specific delivery attempt,
+       * including the full payload and response body.
+       */
+      api.get('/webhooks/:webhookId/deliveries/:deliveryId', async (request: FastifyRequest, reply: FastifyReply) => {
+        const tenantId = await getTenantId(request);
+        const params = deliveryIdParamsSchema.parse(request.params ?? {});
+
+        const delivery = await getWebhookService().getPersistentDeliveryById(params.deliveryId);
+
+        if (!delivery) {
+          return reply.status(404).send({
+            error: { code: 'DELIVERY_NOT_FOUND', message: 'Webhook delivery not found' },
+          });
+        }
+
+        // Verify tenant authorization (delivery belongs to tenant's webhook)
+        if (delivery.tenantId !== tenantId) {
+          return reply.status(404).send({
+            error: { code: 'DELIVERY_NOT_FOUND', message: 'Webhook delivery not found' },
+          });
+        }
+
+        // Verify webhook ID matches
+        if (delivery.webhookId !== params.webhookId) {
+          return reply.status(404).send({
+            error: { code: 'DELIVERY_NOT_FOUND', message: 'Webhook delivery not found' },
+          });
+        }
+
+        // Log read audit for SOC2 compliance
+        logReadAudit(request, tenantId, 'webhook.read_delivery', 'webhook', params.deliveryId);
+
+        return reply.send({
+          id: delivery.id,
+          webhookId: delivery.webhookId,
+          eventType: delivery.eventType,
+          payload: delivery.payload,
+          status: delivery.status,
+          attempts: delivery.attempts,
+          lastAttemptAt: delivery.lastAttemptAt,
+          lastError: delivery.lastError,
+          nextRetryAt: delivery.nextRetryAt,
+          deliveredAt: delivery.deliveredAt,
+          responseStatus: delivery.responseStatus,
+          responseBody: delivery.responseBody,
+          createdAt: delivery.createdAt,
+        });
+      });
+
+      /**
+       * POST /webhooks/:webhookId/deliveries/:deliveryId/replay - Replay a failed delivery
+       *
+       * Requeues a failed delivery for immediate retry.
+       * Requires admin role.
+       * Returns 202 Accepted with the updated delivery record.
+       */
+      api.post('/webhooks/:webhookId/deliveries/:deliveryId/replay', async (request: FastifyRequest, reply: FastifyReply) => {
+        const tenantId = await getTenantId(request);
+        const params = deliveryIdParamsSchema.parse(request.params ?? {});
+
+        // Authorization check - only admin can replay deliveries
+        if (!isAdmin(request)) {
+          return reply.status(403).send({
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Webhook delivery replay requires admin role',
+            },
+          });
+        }
+
+        try {
+          const updatedDelivery = await getWebhookService().replayDelivery(
+            params.deliveryId,
+            tenantId
+          );
+
+          // Verify webhook ID matches
+          if (updatedDelivery.webhookId !== params.webhookId) {
+            return reply.status(404).send({
+              error: { code: 'DELIVERY_NOT_FOUND', message: 'Webhook delivery not found' },
+            });
+          }
+
+          // Log audit event
+          logReadAudit(request, tenantId, 'webhook.replay', 'webhook', params.deliveryId, {
+            webhookId: params.webhookId,
+            previousStatus: 'failed',
+            newStatus: updatedDelivery.status,
+          });
+
+          return reply.status(202).send({
+            id: updatedDelivery.id,
+            webhookId: updatedDelivery.webhookId,
+            eventType: updatedDelivery.eventType,
+            status: updatedDelivery.status,
+            attempts: updatedDelivery.attempts,
+            nextRetryAt: updatedDelivery.nextRetryAt,
+            message: 'Delivery queued for replay',
+          });
+        } catch (error) {
+          if (error instanceof Error) {
+            if (error.message.includes('not found')) {
+              return reply.status(404).send({
+                error: { code: 'DELIVERY_NOT_FOUND', message: 'Webhook delivery not found' },
+              });
+            }
+            if (error.message.includes('Cannot replay')) {
+              return reply.status(400).send({
+                error: { code: 'INVALID_DELIVERY_STATUS', message: error.message },
+              });
+            }
+          }
+          throw error;
+        }
+      });
+
+      /**
+       * GET /webhooks/failed - Get all failed deliveries for the tenant
+       *
+       * Returns a list of failed webhook deliveries for monitoring and debugging.
+       * Requires admin role.
+       */
+      api.get('/webhooks/failed', async (request: FastifyRequest, reply: FastifyReply) => {
+        const tenantId = await getTenantId(request);
+        const query = deliveryHistoryQuerySchema.parse(request.query ?? {});
+
+        // Authorization check - only admin can view all failed deliveries
+        if (!isAdmin(request)) {
+          return reply.status(403).send({
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Viewing failed deliveries requires admin role',
+            },
+          });
+        }
+
+        const failedDeliveries = await getWebhookService().getFailedDeliveries(
+          tenantId,
+          query.limit
+        );
+
+        // Log read audit for SOC2 compliance
+        logReadAudit(request, tenantId, 'webhook.read_failed_deliveries', 'webhook', '*', {
+          resultCount: failedDeliveries.length,
+        });
+
+        return reply.send({
+          data: failedDeliveries.map((delivery) => ({
+            id: delivery.id,
+            webhookId: delivery.webhookId,
+            eventType: delivery.eventType,
+            status: delivery.status,
+            attempts: delivery.attempts,
+            lastAttemptAt: delivery.lastAttemptAt,
+            lastError: delivery.lastError,
+            responseStatus: delivery.responseStatus,
+            createdAt: delivery.createdAt,
+          })),
+          pagination: {
+            limit: query.limit,
+            offset: query.offset,
+            hasMore: failedDeliveries.length >= query.limit,
           },
         });
       });

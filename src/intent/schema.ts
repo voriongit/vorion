@@ -502,9 +502,66 @@ export const auditReads = pgTable('audit_reads', {
 }));
 
 // =============================================================================
+// WEBHOOK DELIVERIES (Persistence for webhook delivery attempts)
+// =============================================================================
+
+/**
+ * Webhook delivery status enum
+ * - pending: Delivery created but not yet attempted
+ * - delivered: Successfully delivered to endpoint
+ * - failed: All retry attempts exhausted, delivery failed
+ * - retrying: Currently being retried
+ */
+export const webhookDeliveryStatusEnum = pgEnum('webhook_delivery_status', [
+  'pending',
+  'delivered',
+  'failed',
+  'retrying',
+]);
+
+/**
+ * Webhook deliveries table - Persistent record of webhook delivery attempts
+ *
+ * This table provides:
+ * - Audit trail for all webhook delivery attempts
+ * - Support for replay of failed deliveries
+ * - Tracking of delivery status, attempts, and errors
+ * - Full payload persistence for debugging and replay
+ */
+export const webhookDeliveries = pgTable('webhook_deliveries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  webhookId: uuid('webhook_id').notNull(),
+  tenantId: text('tenant_id').notNull(),
+  eventType: text('event_type').notNull(),
+  payload: jsonb('payload').notNull(),
+  status: webhookDeliveryStatusEnum('status').notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+  lastError: text('last_error'),
+  nextRetryAt: timestamp('next_retry_at', { withTimezone: true }),
+  deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+  responseStatus: integer('response_status'),
+  responseBody: text('response_body'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  // Index for fetching delivery history by webhook
+  webhookIdx: index('webhook_deliveries_webhook_idx').on(table.webhookId, table.createdAt),
+  // Index for tenant-scoped queries
+  tenantIdx: index('webhook_deliveries_tenant_idx').on(table.tenantId, table.createdAt),
+  // Index for fetching pending retries (status + nextRetryAt)
+  pendingRetriesIdx: index('webhook_deliveries_pending_retries_idx').on(table.status, table.nextRetryAt),
+  // Index for fetching failed deliveries by tenant
+  failedDeliveriesIdx: index('webhook_deliveries_failed_idx').on(table.tenantId, table.status, table.createdAt),
+  // Composite index for webhook + status queries
+  webhookStatusIdx: index('webhook_deliveries_webhook_status_idx').on(table.webhookId, table.status),
+}));
+
+// =============================================================================
 // TYPE EXPORTS
 // =============================================================================
 
+export type WebhookDeliveryRow = typeof webhookDeliveries.$inferSelect;
+export type NewWebhookDeliveryRow = typeof webhookDeliveries.$inferInsert;
 export type AuditReadRow = typeof auditReads.$inferSelect;
 export type NewAuditReadRow = typeof auditReads.$inferInsert;
 export type UserConsentRow = typeof userConsents.$inferSelect;

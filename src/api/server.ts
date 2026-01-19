@@ -18,9 +18,8 @@ import {
   createTraceContext,
   type TraceContext,
 } from '../common/trace.js';
-import { checkDatabaseHealth } from '../common/db.js';
-import { checkRedisHealth } from '../common/redis.js';
-import { withTimeout } from '../common/timeout.js';
+// Note: Database and Redis health checks are now handled by globalHealthCheck/globalReadinessCheck
+// in src/intent/health.ts which provides unified health monitoring
 import { z } from 'zod';
 import {
   createIntentService,
@@ -39,8 +38,6 @@ import { PolicyValidationError } from '../policy/service.js';
 import type { PolicyStatus, PolicyDefinition } from '../policy/index.js';
 import {
   registerIntentWorkers,
-  shutdownWorkers,
-  getQueueHealth,
   retryDeadLetterJob,
   enqueueIntentSubmission,
 } from '../intent/queues.js';
@@ -48,24 +45,24 @@ import {
   isServerShuttingDown,
   shutdownRequestHook,
   shutdownResponseHook,
-  gracefulShutdown,
   registerShutdownHandlers,
   getActiveRequestCount,
 } from '../intent/shutdown.js';
 import { createEscalationService } from '../intent/escalation.js';
 import { createWebhookService, type WebhookEventType } from '../intent/webhooks.js';
 import { getMetrics, getMetricsContentType, tokenRevocationChecks } from '../intent/metrics.js';
-import { startScheduler, stopScheduler, getSchedulerStatus, runCleanupNow } from '../intent/scheduler.js';
+import { startScheduler, getSchedulerStatus, runCleanupNow } from '../intent/scheduler.js';
 import {
   livenessCheck as intentLivenessCheck,
-  readinessCheck as intentReadinessCheck,
+  intentReadinessCheck as intentModuleReadinessCheck,
   validateStartupDependencies,
+  globalHealthCheck,
+  globalReadinessCheck,
 } from '../intent/health.js';
 import {
   createGdprService,
   enqueueGdprExport,
   registerGdprWorker,
-  shutdownGdprWorker,
 } from '../intent/gdpr.js';
 import type { IntentStatus } from '../common/types.js';
 import { INTENT_STATUSES } from '../common/types.js';
@@ -503,162 +500,90 @@ export async function createServer(): Promise<FastifyInstance> {
   server.addHook('onRequest', shutdownRequestHook);
   server.addHook('onResponse', shutdownResponseHook);
 
-  // Liveness check endpoint - minimal self-check with process info
+  // ==========================================================================
+  // Global Health Endpoints
+  // ==========================================================================
+
+  /**
+   * Global liveness check endpoint - Kubernetes livenessProbe
+   *
+   * Returns detailed component status including:
+   * - Memory usage and uptime
+   * - INTENT module health
+   * - Process information
+   *
+   * Returns 503 during shutdown or if critical components unhealthy
+   */
   server.get('/health', async (_request, reply) => {
-    const start = performance.now();
-    const memUsage = process.memoryUsage();
     const shuttingDown = isServerShuttingDown();
+    const activeRequests = getActiveRequestCount();
 
     try {
-      // Minimal async self-check with timeout
-      await withTimeout(
-        Promise.resolve(), // Quick self-check (no external deps)
-        config.health.livenessTimeoutMs,
-        'Liveness check timed out'
-      );
+      const healthStatus = await globalHealthCheck(activeRequests, shuttingDown);
 
-      const latencyMs = Math.round(performance.now() - start);
+      // Return 503 for shutdown or unhealthy status
+      const statusCode =
+        healthStatus.status === 'shutting_down' || healthStatus.status === 'unhealthy'
+          ? 503
+          : 200;
 
-      // During shutdown, return 503 to signal load balancers to stop sending traffic
-      if (shuttingDown) {
-        return reply.status(503).send({
-          status: 'shutting_down',
-          version: process.env['npm_package_version'],
-          environment: config.env,
-          process: {
-            uptimeSeconds: Math.round(process.uptime()),
-            memoryUsageMb: {
-              rss: Math.round(memUsage.rss / 1024 / 1024),
-              heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
-              heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-              external: Math.round(memUsage.external / 1024 / 1024),
-            },
-            activeRequests: getActiveRequestCount(),
-          },
-          latencyMs,
-          timestamp: new Date().toISOString(),
-        });
+      // Add Retry-After header during shutdown
+      if (healthStatus.status === 'shutting_down') {
+        reply.header('Retry-After', '5');
       }
 
-      return reply.send({
-        status: 'healthy',
-        version: process.env['npm_package_version'],
-        environment: config.env,
-        process: {
-          uptimeSeconds: Math.round(process.uptime()),
-          memoryUsageMb: {
-            rss: Math.round(memUsage.rss / 1024 / 1024),
-            heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
-            heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-            external: Math.round(memUsage.external / 1024 / 1024),
-          },
-          activeRequests: getActiveRequestCount(),
-        },
-        latencyMs,
-        timestamp: new Date().toISOString(),
-      });
+      return reply.status(statusCode).send(healthStatus);
     } catch (error) {
-      const latencyMs = Math.round(performance.now() - start);
-      apiLogger.warn({ latencyMs, error: error instanceof Error ? error.message : 'Unknown error' }, 'Liveness check failed');
+      apiLogger.warn(
+        { error: error instanceof Error ? error.message : 'Unknown error' },
+        'Global health check failed'
+      );
 
       return reply.status(503).send({
         status: 'unhealthy',
-        version: process.env['npm_package_version'],
+        version: process.env['npm_package_version'] || '0.0.0',
         environment: config.env,
         error: error instanceof Error ? error.message : 'Unknown error',
-        latencyMs,
         timestamp: new Date().toISOString(),
       });
     }
   });
 
-  // Ready check endpoint - checks all dependencies with timeout
+  /**
+   * Global readiness check endpoint - Kubernetes readinessProbe
+   *
+   * Checks all dependencies with timeouts:
+   * - Database connectivity and latency
+   * - Redis connectivity and latency
+   * - Queue health and job counts
+   * - INTENT module readiness (policies, queues)
+   *
+   * Returns structured response with component-level status
+   * Returns 503 if any critical component is unhealthy
+   */
   server.get('/ready', async (_request, reply) => {
-    const start = performance.now();
-    let timedOut = false;
-
-    // Helper to determine check status
-    const getCheckStatus = (check: { healthy: boolean; timedOut?: boolean }): 'ok' | 'error' | 'timeout' => {
-      if (check.timedOut) return 'timeout';
-      return check.healthy ? 'ok' : 'error';
-    };
-
     try {
-      // Run all checks with overall timeout
-      const checksPromise = Promise.all([
-        checkDatabaseHealth(),
-        checkRedisHealth(),
-        getQueueHealth().catch((error) => ({
-          error: error instanceof Error ? error.message : 'Unknown error',
-        })),
-      ]);
+      const readinessStatus = await globalReadinessCheck();
 
-      const [dbHealth, redisHealth, queueHealth] = await withTimeout(
-        checksPromise,
-        config.health.readyTimeoutMs,
-        'Ready check timed out'
-      );
+      // Return 503 for non-ready status
+      const statusCode = readinessStatus.status === 'ready' ? 200 : 503;
 
-      const anyTimedOut = dbHealth.timedOut || redisHealth.timedOut;
-      const isHealthy = dbHealth.healthy && redisHealth.healthy;
-
-      // Determine overall status
-      let status: 'ready' | 'degraded' | 'unhealthy';
-      if (isHealthy && !anyTimedOut) {
-        status = 'ready';
-      } else if (isHealthy || anyTimedOut) {
-        status = 'degraded';
-      } else {
-        status = 'unhealthy';
-      }
-
-      const response = {
-        status,
-        checks: {
-          database: {
-            status: getCheckStatus(dbHealth),
-            latencyMs: dbHealth.latencyMs,
-            ...(dbHealth.error && { error: dbHealth.error }),
-          },
-          redis: {
-            status: getCheckStatus(redisHealth),
-            latencyMs: redisHealth.latencyMs,
-            ...(redisHealth.error && { error: redisHealth.error }),
-          },
-          queues: 'error' in queueHealth ? { status: 'error' as const, error: queueHealth.error } : {
-            status: 'ok' as const,
-            intake: queueHealth.intake,
-            evaluate: queueHealth.evaluate,
-            decision: queueHealth.decision,
-            deadLetter: queueHealth.deadLetter,
-          },
-        },
-        ...(anyTimedOut && { timedOut: true }),
-        timestamp: new Date().toISOString(),
-      };
-
-      return reply.status(status === 'ready' ? 200 : 503).send(response);
+      return reply.status(statusCode).send(readinessStatus);
     } catch (error) {
-      // Overall timeout reached
-      timedOut = true;
-      const latencyMs = Math.round(performance.now() - start);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      apiLogger.warn({ error: errorMessage }, 'Global readiness check failed');
 
-      apiLogger.warn({ latencyMs, error: errorMessage }, 'Ready check timed out');
-
-      const response = {
-        status: 'unhealthy' as const,
+      return reply.status(503).send({
+        status: 'unhealthy',
         checks: {
-          database: { status: 'timeout' as const, error: 'Check timed out' },
-          redis: { status: 'timeout' as const, error: 'Check timed out' },
-          queues: { status: 'error' as const, error: 'Check timed out' },
+          database: { status: 'error', error: errorMessage },
+          redis: { status: 'error', error: errorMessage },
+          queues: { status: 'error', error: errorMessage },
+          intent: { status: 'error', error: errorMessage },
         },
-        timedOut,
         error: errorMessage,
         timestamp: new Date().toISOString(),
-      };
-
-      return reply.status(503).send(response);
+      });
     }
   });
 
@@ -682,25 +607,51 @@ export async function createServer(): Promise<FastifyInstance> {
     };
   });
 
-  // INTENT module health check endpoints (no auth required for Kubernetes probes)
+  // ==========================================================================
+  // INTENT Module Health Endpoints (auto-registered at startup)
+  // ==========================================================================
+
+  /**
+   * INTENT module liveness check - Kubernetes livenessProbe for INTENT service
+   *
+   * Minimal self-check that returns quickly. Only fails if process is deadlocked.
+   * No external dependencies are checked.
+   */
   server.get(`${config.api.basePath}/intent/health`, async (_request, reply) => {
-    // Liveness check - is the process alive?
     const result = await intentLivenessCheck();
-    return reply.send({
+    const statusCode = result.alive ? 200 : 503;
+
+    return reply.status(statusCode).send({
       status: result.alive ? 'healthy' : 'unhealthy',
+      module: 'intent',
       alive: result.alive,
       timestamp: new Date().toISOString(),
     });
   });
 
+  /**
+   * INTENT module readiness check - Kubernetes readinessProbe for INTENT service
+   *
+   * Checks INTENT-specific dependencies:
+   * - Queue connectivity and health
+   * - Policy loader availability
+   *
+   * Returns 503 if INTENT module cannot handle requests
+   */
   server.get(`${config.api.basePath}/intent/ready`, async (_request, reply) => {
-    // Readiness check - can the service handle requests?
-    const healthStatus = await intentReadinessCheck();
-
+    const healthStatus = await intentModuleReadinessCheck();
     const statusCode = healthStatus.status === 'healthy' ? 200 : 503;
 
-    return reply.status(statusCode).send(healthStatus);
+    return reply.status(statusCode).send({
+      ...healthStatus,
+      module: 'intent',
+    });
   });
+
+  apiLogger.info(
+    { healthEndpoint: '/health', readyEndpoint: '/ready', intentHealth: `${config.api.basePath}/intent/health`, intentReady: `${config.api.basePath}/intent/ready` },
+    'Health check endpoints auto-registered'
+  );
 
   // API routes
   server.register(

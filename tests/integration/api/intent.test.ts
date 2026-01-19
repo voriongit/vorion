@@ -77,12 +77,32 @@ vi.mock('../../../src/common/redis.js', () => {
     duplicate: vi.fn().mockReturnThis(),
     ping: vi.fn().mockResolvedValue('PONG'),
     eval: vi.fn().mockResolvedValue(1), // For lock release
+    exists: vi.fn().mockResolvedValue(1), // For queue health check
   };
   return {
     getRedis: vi.fn(() => mockRedis),
     checkRedisHealth: vi.fn().mockResolvedValue({ healthy: true, latencyMs: 1 }),
   };
 });
+
+// Mock policy loader for health checks
+vi.mock('../../../src/policy/index.js', () => ({
+  createPolicyService: vi.fn(() => ({
+    create: vi.fn(),
+    findById: vi.fn(),
+    list: vi.fn(),
+    update: vi.fn(),
+    publish: vi.fn(),
+    deprecate: vi.fn(),
+    archive: vi.fn(),
+    delete: vi.fn(),
+  })),
+  getPolicyLoader: vi.fn(() => ({
+    loadPolicies: vi.fn().mockResolvedValue([]),
+    invalidateCache: vi.fn().mockResolvedValue(undefined),
+  })),
+  POLICY_STATUSES: ['draft', 'published', 'deprecated', 'archived'],
+}));
 
 vi.mock('../../../src/common/db.js', () => {
   const mockDb = {
@@ -108,6 +128,7 @@ vi.mock('../../../src/common/db.js', () => {
         }),
       }),
     }),
+    execute: vi.fn().mockResolvedValue([{ '1': 1 }]), // For health check SELECT 1
   };
   return {
     checkDatabaseHealth: () => Promise.resolve({ healthy: true, latencyMs: 1 }),
@@ -308,8 +329,12 @@ describe('Intent API Integration Tests', () => {
         url: '/ready',
       });
 
-      expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.payload);
+      // Log body for debugging if test fails
+      if (response.statusCode !== 200) {
+        console.log('Ready check response:', JSON.stringify(body, null, 2));
+      }
+      expect(response.statusCode).toBe(200);
       expect(body.status).toBe('ready');
       expect(body.checks.database.status).toBe('ok');
       expect(body.checks.redis.status).toBe('ok');

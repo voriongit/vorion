@@ -79,8 +79,29 @@ export const CIRCUIT_BREAKER_CONFIGS: Record<string, CircuitBreakerConfig> = {
   trustEngine: {
     name: 'trust-engine',
     failureThreshold: 5,
+    resetTimeoutMs: 30000,
+    halfOpenMaxAttempts: 2,
+    monitorWindowMs: 60000,
+  },
+  auditService: {
+    name: 'audit-service',
+    failureThreshold: 10,
     resetTimeoutMs: 15000,
     halfOpenMaxAttempts: 3,
+    monitorWindowMs: 60000,
+  },
+  gdprService: {
+    name: 'gdpr-service',
+    failureThreshold: 5,
+    resetTimeoutMs: 30000,
+    halfOpenMaxAttempts: 2,
+    monitorWindowMs: 60000,
+  },
+  consentService: {
+    name: 'consent-service',
+    failureThreshold: 5,
+    resetTimeoutMs: 20000,
+    halfOpenMaxAttempts: 2,
     monitorWindowMs: 60000,
   },
 };
@@ -717,4 +738,209 @@ export function clearCircuitBreakerRegistry(): void {
   circuitBreakers.clear();
   configOverrides = {};
   logger.debug({}, 'Circuit breaker registry cleared');
+}
+
+// =============================================================================
+// Circuit Breaker Open Error
+// =============================================================================
+
+/**
+ * Error thrown when a circuit breaker is open and blocking execution.
+ * This error allows callers to distinguish circuit breaker rejections
+ * from actual execution failures.
+ */
+export class CircuitBreakerOpenError extends Error {
+  public readonly serviceName: string;
+  public readonly circuitState: CircuitState;
+
+  constructor(serviceName: string, circuitState: CircuitState = 'OPEN') {
+    super(`Circuit breaker '${serviceName}' is ${circuitState} - request rejected`);
+    this.name = 'CircuitBreakerOpenError';
+    this.serviceName = serviceName;
+    this.circuitState = circuitState;
+  }
+}
+
+// =============================================================================
+// Circuit Breaker Metrics Callback Type
+// =============================================================================
+
+/**
+ * Callback type for recording circuit breaker metrics.
+ * This allows the circuit breaker module to emit metrics without
+ * depending directly on the metrics module (avoiding circular deps).
+ */
+export type CircuitBreakerMetricsCallback = {
+  recordStateChange: (serviceName: string, fromState: CircuitState, toState: CircuitState) => void;
+  recordFailure: (serviceName: string) => void;
+  recordSuccess: (serviceName: string) => void;
+  updateState: (serviceName: string, state: CircuitState) => void;
+};
+
+/**
+ * Default metrics callback (no-op)
+ * Can be overridden via setCircuitBreakerMetricsCallback
+ */
+let metricsCallback: CircuitBreakerMetricsCallback = {
+  recordStateChange: () => {},
+  recordFailure: () => {},
+  recordSuccess: () => {},
+  updateState: () => {},
+};
+
+/**
+ * Set the metrics callback for circuit breaker operations.
+ * This should be called during application initialization to wire up
+ * Prometheus metrics without creating circular dependencies.
+ *
+ * @param callback - The metrics callback functions
+ */
+export function setCircuitBreakerMetricsCallback(callback: CircuitBreakerMetricsCallback): void {
+  metricsCallback = callback;
+  logger.debug({}, 'Circuit breaker metrics callback configured');
+}
+
+// =============================================================================
+// withCircuitBreaker Utility Function
+// =============================================================================
+
+/**
+ * Execute a function with circuit breaker protection.
+ *
+ * This is a convenience wrapper that:
+ * 1. Gets or creates the appropriate circuit breaker for the service
+ * 2. Executes the function through the circuit breaker
+ * 3. Records metrics for state changes, successes, and failures
+ * 4. Throws CircuitBreakerOpenError when the circuit is open
+ *
+ * @param serviceName - The service name identifier (must match CIRCUIT_BREAKER_CONFIGS keys)
+ * @param fn - The async function to execute
+ * @returns The result of the function
+ * @throws CircuitBreakerOpenError when the circuit is open
+ * @throws The original error if the function fails
+ *
+ * @example
+ * ```typescript
+ * // Protect a database call
+ * const result = await withCircuitBreaker('database', async () => {
+ *   return await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+ * });
+ *
+ * // Protect an external API call
+ * try {
+ *   const data = await withCircuitBreaker('gdprService', async () => {
+ *     return await gdprApi.exportUserData(userId);
+ *   });
+ * } catch (error) {
+ *   if (error instanceof CircuitBreakerOpenError) {
+ *     // Handle circuit open - use fallback or return cached data
+ *     return cachedData;
+ *   }
+ *   throw error;
+ * }
+ * ```
+ */
+export async function withCircuitBreaker<T>(
+  serviceName: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  // Get or create the circuit breaker for this service
+  const breaker = getCircuitBreaker(serviceName, (from, to) => {
+    // Record state change metric
+    metricsCallback.recordStateChange(serviceName, from, to);
+    logger.info(
+      { service: serviceName, fromState: from, toState: to },
+      'Circuit breaker state changed'
+    );
+  });
+
+  // Update the current state metric
+  const currentState = await breaker.getCircuitState();
+  metricsCallback.updateState(serviceName, currentState);
+
+  // Execute through the circuit breaker
+  const result = await breaker.execute(fn);
+
+  // Handle the result
+  if (result.circuitOpen) {
+    // Circuit is open - throw CircuitBreakerOpenError
+    logger.debug(
+      { service: serviceName, state: 'OPEN' },
+      'Circuit breaker rejected request'
+    );
+    throw new CircuitBreakerOpenError(serviceName, 'OPEN');
+  }
+
+  if (result.success) {
+    // Success - record metric
+    metricsCallback.recordSuccess(serviceName);
+    return result.result as T;
+  }
+
+  // Failure - record metric and rethrow
+  metricsCallback.recordFailure(serviceName);
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  // Should not reach here, but throw generic error just in case
+  throw new Error(`Circuit breaker '${serviceName}' execution failed`);
+}
+
+/**
+ * Execute a function with circuit breaker protection, returning a result object
+ * instead of throwing on circuit open.
+ *
+ * This variant is useful when you want to handle circuit open gracefully
+ * without try/catch.
+ *
+ * @param serviceName - The service name identifier
+ * @param fn - The async function to execute
+ * @returns Result object with success flag, result/error, and circuitOpen indicator
+ *
+ * @example
+ * ```typescript
+ * const result = await withCircuitBreakerResult('auditService', async () => {
+ *   return await auditService.record(event);
+ * });
+ *
+ * if (result.circuitOpen) {
+ *   // Queue for retry later
+ *   await queueForRetry(event);
+ * } else if (!result.success) {
+ *   logger.error({ error: result.error }, 'Audit failed');
+ * }
+ * ```
+ */
+export async function withCircuitBreakerResult<T>(
+  serviceName: string,
+  fn: () => Promise<T>
+): Promise<CircuitBreakerResult<T>> {
+  // Get or create the circuit breaker for this service
+  const breaker = getCircuitBreaker(serviceName, (from, to) => {
+    metricsCallback.recordStateChange(serviceName, from, to);
+    logger.info(
+      { service: serviceName, fromState: from, toState: to },
+      'Circuit breaker state changed'
+    );
+  });
+
+  // Update the current state metric
+  const currentState = await breaker.getCircuitState();
+  metricsCallback.updateState(serviceName, currentState);
+
+  // Execute through the circuit breaker
+  const result = await breaker.execute(fn);
+
+  // Record metrics based on result
+  if (!result.circuitOpen) {
+    if (result.success) {
+      metricsCallback.recordSuccess(serviceName);
+    } else {
+      metricsCallback.recordFailure(serviceName);
+    }
+  }
+
+  return result;
 }

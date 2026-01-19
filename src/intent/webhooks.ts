@@ -7,13 +7,20 @@
  */
 
 import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
+import { and, desc, eq, lt, lte } from 'drizzle-orm';
 import { getConfig } from '../common/config.js';
 import { createLogger } from '../common/logger.js';
 import { getRedis } from '../common/redis.js';
+import { getDatabase } from '../common/db.js';
 import type { ID } from '../common/types.js';
-import { ValidationError } from '../common/errors.js';
+import { ValidationError, NotFoundError } from '../common/errors.js';
 import { encrypt, decrypt, type EncryptedEnvelope } from '../common/encryption.js';
 import type { EscalationRecord } from './escalation.js';
+import {
+  webhookDeliveries,
+  type WebhookDeliveryRow,
+  type NewWebhookDeliveryRow,
+} from './schema.js';
 import {
   webhookCircuitBreakerState,
   webhookCircuitBreakerTripsTotal,
@@ -664,11 +671,27 @@ export async function validateWebhookIpConsistency(
 
 /**
  * Webhook Service
+ *
+ * Manages webhook registration, delivery, and persistence.
+ * Includes circuit breaker pattern for failing webhooks and
+ * persistent delivery records for auditing and replay.
  */
 export class WebhookService {
   private redis = getRedis();
   private readonly keyPrefix = 'webhook:';
   private readonly circuitKeyPrefix = 'webhook:circuit:';
+  private deliveryRepository: WebhookDeliveryRepository | null = null;
+
+  /**
+   * Get the delivery repository instance (lazy initialization).
+   * This allows the repository to be created only when persistence is needed.
+   */
+  private getDeliveryRepository(): WebhookDeliveryRepository {
+    if (!this.deliveryRepository) {
+      this.deliveryRepository = new WebhookDeliveryRepository();
+    }
+    return this.deliveryRepository;
+  }
 
   // =========================================================================
   // Circuit Breaker Methods
@@ -1064,8 +1087,11 @@ export class WebhookService {
   }
 
   /**
-   * Deliver webhooks to all registered endpoints for a tenant
-   * Includes circuit breaker check to skip consistently failing webhooks
+   * Deliver webhooks to all registered endpoints for a tenant.
+   *
+   * Creates persistent delivery records before attempting delivery,
+   * updating them with success/failure status after each attempt.
+   * Includes circuit breaker check to skip consistently failing webhooks.
    */
   private async deliverToTenant(
     tenantId: ID,
@@ -1074,10 +1100,27 @@ export class WebhookService {
   ): Promise<WebhookDeliveryResult[]> {
     const webhooks = await this.getWebhooks(tenantId);
     const results: WebhookDeliveryResult[] = [];
+    const deliveryRepo = this.getDeliveryRepository();
 
     for (const { id: webhookId, config } of webhooks) {
       if (!config.enabled) continue;
       if (!config.events.includes(eventType)) continue;
+
+      // Create persistent delivery record before attempting delivery
+      let deliveryRecord: WebhookDelivery | null = null;
+      try {
+        deliveryRecord = await deliveryRepo.createDelivery({
+          webhookId,
+          tenantId,
+          eventType,
+          payload: payload as unknown as Record<string, unknown>,
+        });
+      } catch (err) {
+        logger.error(
+          { webhookId, tenantId, eventType, error: err },
+          'Failed to create webhook delivery record, proceeding with delivery anyway'
+        );
+      }
 
       // Check circuit breaker before attempting delivery
       const { allowed, circuitData } = await this.shouldAttemptDelivery(tenantId, webhookId);
@@ -1091,15 +1134,37 @@ export class WebhookService {
           skippedByCircuitBreaker: true,
         };
         results.push(skippedResult);
+
+        // Update delivery record with skipped status
+        if (deliveryRecord) {
+          try {
+            await deliveryRepo.updateDeliveryStatus(deliveryRecord.id, {
+              status: 'failed',
+              attempts: 0,
+              lastError: 'Circuit breaker open - webhook delivery skipped',
+              lastAttemptAt: new Date(),
+            });
+          } catch (err) {
+            logger.error({ deliveryId: deliveryRecord.id, error: err }, 'Failed to update delivery record');
+          }
+        }
+
         await this.storeDeliveryResult(tenantId, webhookId, payload.id, skippedResult);
         continue;
       }
 
       // Attempt delivery with retry logic
-      const result = await this.deliverWithRetry(webhookId, config, payload, tenantId, circuitData);
+      const result = await this.deliverWithRetry(
+        webhookId,
+        config,
+        payload,
+        tenantId,
+        circuitData,
+        deliveryRecord?.id ?? null
+      );
       results.push(result);
 
-      // Store delivery result
+      // Store delivery result in Redis (legacy - for backwards compatibility)
       await this.storeDeliveryResult(tenantId, webhookId, payload.id, result);
     }
 
@@ -1111,15 +1176,47 @@ export class WebhookService {
    *
    * Uses per-webhook config if provided, otherwise falls back to global config.
    * Global defaults are configurable via environment variables.
-   * Updates circuit breaker state based on delivery success/failure.
+   * Updates circuit breaker state and persistent delivery record based on success/failure.
    */
   private async deliverWithRetry(
     webhookId: string,
     config: WebhookConfig,
     payload: WebhookPayload,
     tenantId: ID,
-    circuitData: CircuitBreakerData
+    circuitData: CircuitBreakerData,
+    deliveryRecordId: ID | null = null
   ): Promise<WebhookDeliveryResult> {
+    const deliveryRepo = this.getDeliveryRepository();
+
+    // Helper to safely update delivery record status
+    const updateDeliveryRecord = async (
+      status: WebhookDeliveryStatus,
+      attempts: number,
+      options: {
+        lastError?: string | null;
+        responseStatus?: number | null;
+        responseBody?: string | null;
+        deliveredAt?: Date | null;
+        nextRetryAt?: Date | null;
+      } = {}
+    ) => {
+      if (!deliveryRecordId) return;
+      try {
+        await deliveryRepo.updateDeliveryStatus(deliveryRecordId, {
+          status,
+          attempts,
+          lastAttemptAt: new Date(),
+          lastError: options.lastError ?? null,
+          responseStatus: options.responseStatus ?? null,
+          responseBody: options.responseBody ?? null,
+          deliveredAt: options.deliveredAt ?? null,
+          nextRetryAt: options.nextRetryAt ?? null,
+        });
+      } catch (err) {
+        logger.error({ deliveryId: deliveryRecordId, error: err }, 'Failed to update delivery record');
+      }
+    };
+
     // Wrap the entire delivery process with tracing
     return traceWebhookDeliver(
       webhookId,
@@ -1132,11 +1229,20 @@ export class WebhookService {
 
         let lastError: string | undefined;
         let lastStatusCode: number | undefined;
+        let lastResponseBody: string | undefined;
 
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
           try {
             const response = await this.sendWebhook(config.url, payload, config.secret, config.resolvedIp);
             lastStatusCode = response.status;
+
+            // Try to capture response body for debugging (limited to first 1KB)
+            try {
+              const text = await response.text();
+              lastResponseBody = text.substring(0, 1024);
+            } catch {
+              // Ignore errors reading response body
+            }
 
             if (response.ok) {
               logger.info(
@@ -1146,6 +1252,13 @@ export class WebhookService {
 
               // Record success in circuit breaker (may close the circuit)
               await this.recordDeliverySuccess(tenantId, webhookId, circuitData);
+
+              // Update persistent delivery record with success
+              await updateDeliveryRecord('delivered', attempt, {
+                responseStatus: response.status,
+                responseBody: lastResponseBody ?? null,
+                deliveredAt: new Date(),
+              });
 
               // Record span result
               recordWebhookResult(span, true, response.status);
@@ -1174,8 +1287,17 @@ export class WebhookService {
             );
           }
 
-          // Wait before retry (exponential backoff)
+          // Update delivery record with retry status (if not last attempt)
           if (attempt < maxAttempts) {
+            const nextRetryAt = calculateNextRetryTime(attempt, retryDelay);
+            await updateDeliveryRecord('retrying', attempt, {
+              lastError: lastError ?? null,
+              responseStatus: lastStatusCode ?? null,
+              responseBody: lastResponseBody ?? null,
+              nextRetryAt,
+            });
+
+            // Wait before retry (exponential backoff)
             const delay = retryDelay * Math.pow(2, attempt - 1);
             await new Promise(resolve => setTimeout(resolve, delay));
           }
@@ -1188,6 +1310,13 @@ export class WebhookService {
 
         // Record failure in circuit breaker (may open the circuit)
         await this.recordDeliveryFailure(tenantId, webhookId, circuitData);
+
+        // Update persistent delivery record with final failure
+        await updateDeliveryRecord('failed', maxAttempts, {
+          lastError: lastError ?? null,
+          responseStatus: lastStatusCode ?? null,
+          responseBody: lastResponseBody ?? null,
+        });
 
         // Record span result
         recordWebhookResult(span, false, lastStatusCode);
@@ -1409,6 +1538,209 @@ export class WebhookService {
 
     return cleanedCount;
   }
+
+  // =========================================================================
+  // Persistent Delivery Methods
+  // =========================================================================
+
+  /**
+   * Get persistent delivery history for a webhook.
+   *
+   * Returns deliveries from the database (not Redis), ordered by creation time.
+   *
+   * @param webhookId - Webhook ID
+   * @param limit - Maximum number of records (default: 50, max: 100)
+   * @returns Array of delivery records
+   */
+  async getPersistentDeliveryHistory(
+    webhookId: ID,
+    limit: number = 50
+  ): Promise<WebhookDelivery[]> {
+    return this.getDeliveryRepository().getDeliveryHistory(webhookId, limit);
+  }
+
+  /**
+   * Get a single persistent delivery record by ID.
+   *
+   * @param deliveryId - Delivery ID
+   * @returns Delivery record or null if not found
+   */
+  async getPersistentDeliveryById(deliveryId: ID): Promise<WebhookDelivery | null> {
+    return this.getDeliveryRepository().getDeliveryById(deliveryId);
+  }
+
+  /**
+   * Replay a failed webhook delivery.
+   *
+   * Marks the delivery for immediate retry and processes it.
+   * Only failed deliveries can be replayed.
+   *
+   * @param deliveryId - Delivery ID to replay
+   * @param tenantId - Tenant ID (for authorization)
+   * @returns Updated delivery record
+   * @throws NotFoundError if delivery not found
+   * @throws ValidationError if delivery is not in failed status
+   */
+  async replayDelivery(deliveryId: ID, tenantId: ID): Promise<WebhookDelivery> {
+    const deliveryRepo = this.getDeliveryRepository();
+
+    // Get the delivery record
+    const delivery = await deliveryRepo.getDeliveryById(deliveryId);
+    if (!delivery) {
+      throw new NotFoundError(`Webhook delivery not found: ${deliveryId}`);
+    }
+
+    // Verify tenant authorization
+    if (delivery.tenantId !== tenantId) {
+      throw new NotFoundError(`Webhook delivery not found: ${deliveryId}`);
+    }
+
+    // Mark for replay (this validates status and sets nextRetryAt)
+    const updatedDelivery = await deliveryRepo.markForReplay(deliveryId);
+
+    logger.info(
+      {
+        deliveryId,
+        webhookId: delivery.webhookId,
+        tenantId,
+        eventType: delivery.eventType,
+      },
+      'Webhook delivery queued for replay'
+    );
+
+    return updatedDelivery;
+  }
+
+  /**
+   * Process pending retries.
+   *
+   * This method is intended to be called by a background worker/scheduler
+   * to process deliveries that are in 'retrying' status and have passed
+   * their nextRetryAt time.
+   *
+   * @param limit - Maximum number of deliveries to process (default: 100)
+   * @returns Array of processing results
+   */
+  async processPendingRetries(
+    limit: number = 100
+  ): Promise<Array<{ deliveryId: ID; success: boolean; error?: string }>> {
+    const deliveryRepo = this.getDeliveryRepository();
+    const pendingDeliveries = await deliveryRepo.getPendingRetries(limit);
+    const results: Array<{ deliveryId: ID; success: boolean; error?: string }> = [];
+
+    for (const delivery of pendingDeliveries) {
+      try {
+        // Get webhook config
+        const webhooks = await this.getWebhooks(delivery.tenantId);
+        const webhook = webhooks.find(w => w.id === delivery.webhookId);
+
+        if (!webhook) {
+          // Webhook no longer exists - mark delivery as failed
+          await deliveryRepo.updateDeliveryStatus(delivery.id, {
+            status: 'failed',
+            lastError: 'Webhook configuration not found',
+            lastAttemptAt: new Date(),
+          });
+          results.push({
+            deliveryId: delivery.id,
+            success: false,
+            error: 'Webhook configuration not found',
+          });
+          continue;
+        }
+
+        if (!webhook.config.enabled) {
+          // Webhook disabled - mark delivery as failed
+          await deliveryRepo.updateDeliveryStatus(delivery.id, {
+            status: 'failed',
+            lastError: 'Webhook is disabled',
+            lastAttemptAt: new Date(),
+          });
+          results.push({
+            deliveryId: delivery.id,
+            success: false,
+            error: 'Webhook is disabled',
+          });
+          continue;
+        }
+
+        // Check circuit breaker
+        const { allowed, circuitData } = await this.shouldAttemptDelivery(
+          delivery.tenantId,
+          delivery.webhookId
+        );
+
+        if (!allowed) {
+          // Circuit breaker open - calculate next retry time
+          const nextRetryAt = calculateNextRetryTime(delivery.attempts + 1);
+          await deliveryRepo.updateDeliveryStatus(delivery.id, {
+            status: 'retrying',
+            lastError: 'Circuit breaker open - delivery postponed',
+            lastAttemptAt: new Date(),
+            nextRetryAt,
+          });
+          results.push({
+            deliveryId: delivery.id,
+            success: false,
+            error: 'Circuit breaker open',
+          });
+          continue;
+        }
+
+        // Attempt delivery
+        const payload = delivery.payload as unknown as WebhookPayload;
+        const result = await this.deliverWithRetry(
+          delivery.webhookId,
+          webhook.config,
+          payload,
+          delivery.tenantId,
+          circuitData,
+          delivery.id
+        );
+
+        const resultEntry: { deliveryId: ID; success: boolean; error?: string } = {
+          deliveryId: delivery.id,
+          success: result.success,
+        };
+        if (result.error) {
+          resultEntry.error = result.error;
+        }
+        results.push(resultEntry);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error(
+          { deliveryId: delivery.id, error: errorMessage },
+          'Error processing pending retry'
+        );
+        results.push({
+          deliveryId: delivery.id,
+          success: false,
+          error: errorMessage,
+        });
+      }
+    }
+
+    if (results.length > 0) {
+      const successCount = results.filter(r => r.success).length;
+      logger.info(
+        { total: results.length, success: successCount, failed: results.length - successCount },
+        'Processed pending webhook retries'
+      );
+    }
+
+    return results;
+  }
+
+  /**
+   * Get failed deliveries for a tenant.
+   *
+   * @param tenantId - Tenant ID
+   * @param limit - Maximum number of records (default: 50, max: 100)
+   * @returns Array of failed delivery records
+   */
+  async getFailedDeliveries(tenantId: ID, limit: number = 50): Promise<WebhookDelivery[]> {
+    return this.getDeliveryRepository().getFailedDeliveries(tenantId, limit);
+  }
 }
 
 /**
@@ -1416,4 +1748,440 @@ export class WebhookService {
  */
 export function createWebhookService(): WebhookService {
   return new WebhookService();
+}
+
+// =============================================================================
+// Webhook Delivery Persistence Types
+// =============================================================================
+
+/**
+ * Webhook delivery status
+ */
+export type WebhookDeliveryStatus = 'pending' | 'delivered' | 'failed' | 'retrying';
+
+/**
+ * Webhook delivery record - represents a persistent delivery attempt
+ */
+export interface WebhookDelivery {
+  id: ID;
+  webhookId: ID;
+  tenantId: ID;
+  eventType: string;
+  payload: Record<string, unknown>;
+  status: WebhookDeliveryStatus;
+  attempts: number;
+  lastAttemptAt: string | null;
+  lastError: string | null;
+  nextRetryAt: string | null;
+  deliveredAt: string | null;
+  responseStatus: number | null;
+  responseBody: string | null;
+  createdAt: string;
+}
+
+/**
+ * Options for creating a new delivery record
+ */
+export interface CreateDeliveryOptions {
+  webhookId: ID;
+  tenantId: ID;
+  eventType: string;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * Options for updating delivery status
+ */
+export interface UpdateDeliveryStatusOptions {
+  status: WebhookDeliveryStatus;
+  attempts?: number;
+  lastAttemptAt?: Date;
+  lastError?: string | null;
+  nextRetryAt?: Date | null;
+  deliveredAt?: Date | null;
+  responseStatus?: number | null;
+  responseBody?: string | null;
+}
+
+/**
+ * Default page size for delivery history queries
+ */
+const DEFAULT_DELIVERY_PAGE_SIZE = 50;
+
+/**
+ * Maximum page size for delivery history queries
+ */
+const MAX_DELIVERY_PAGE_SIZE = 100;
+
+/**
+ * Map database row to WebhookDelivery
+ */
+function mapDeliveryRow(row: WebhookDeliveryRow): WebhookDelivery {
+  return {
+    id: row.id,
+    webhookId: row.webhookId,
+    tenantId: row.tenantId,
+    eventType: row.eventType,
+    payload: (row.payload ?? {}) as Record<string, unknown>,
+    status: row.status as WebhookDeliveryStatus,
+    attempts: row.attempts,
+    lastAttemptAt: row.lastAttemptAt?.toISOString() ?? null,
+    lastError: row.lastError ?? null,
+    nextRetryAt: row.nextRetryAt?.toISOString() ?? null,
+    deliveredAt: row.deliveredAt?.toISOString() ?? null,
+    responseStatus: row.responseStatus ?? null,
+    responseBody: row.responseBody ?? null,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/**
+ * Calculate next retry time with exponential backoff.
+ *
+ * Uses the formula: baseDelay * 2^(attempt - 1)
+ * With a maximum delay cap to prevent extremely long waits.
+ *
+ * @param attempt - Current attempt number (1-based)
+ * @param baseDelayMs - Base delay in milliseconds (default: 1000)
+ * @param maxDelayMs - Maximum delay cap in milliseconds (default: 1 hour)
+ * @returns Date when next retry should occur
+ */
+export function calculateNextRetryTime(
+  attempt: number,
+  baseDelayMs: number = 1000,
+  maxDelayMs: number = 3600000 // 1 hour
+): Date {
+  const delayMs = Math.min(baseDelayMs * Math.pow(2, attempt - 1), maxDelayMs);
+  return new Date(Date.now() + delayMs);
+}
+
+// =============================================================================
+// Webhook Delivery Repository
+// =============================================================================
+
+/**
+ * Repository for managing webhook delivery persistence.
+ *
+ * Provides CRUD operations for webhook delivery records, supporting:
+ * - Creation of delivery records before attempting delivery
+ * - Status updates on success/failure
+ * - Retrieval of delivery history for auditing
+ * - Fetching pending retries for background processing
+ * - Fetching failed deliveries for monitoring/debugging
+ */
+export class WebhookDeliveryRepository {
+  private _db: ReturnType<typeof getDatabase> | null = null;
+
+  /**
+   * Get database instance (lazy initialization).
+   */
+  private get db(): ReturnType<typeof getDatabase> {
+    if (!this._db) {
+      this._db = getDatabase();
+    }
+    return this._db;
+  }
+
+  /**
+   * Create a new delivery record.
+   *
+   * Call this before attempting webhook delivery to ensure
+   * the delivery is tracked even if the process crashes.
+   *
+   * @param data - Delivery creation options
+   * @returns Created delivery record
+   */
+  async createDelivery(data: CreateDeliveryOptions): Promise<WebhookDelivery> {
+    const insertData: NewWebhookDeliveryRow = {
+      webhookId: data.webhookId,
+      tenantId: data.tenantId,
+      eventType: data.eventType,
+      payload: data.payload,
+      status: 'pending',
+      attempts: 0,
+    };
+
+    const [row] = await this.db
+      .insert(webhookDeliveries)
+      .values(insertData)
+      .returning();
+
+    if (!row) {
+      throw new Error('Failed to create webhook delivery record');
+    }
+
+    logger.info(
+      { deliveryId: row.id, webhookId: data.webhookId, tenantId: data.tenantId, eventType: data.eventType },
+      'Created webhook delivery record'
+    );
+
+    return mapDeliveryRow(row);
+  }
+
+  /**
+   * Update delivery status with details.
+   *
+   * @param id - Delivery ID
+   * @param options - Status update options
+   * @returns Updated delivery record
+   * @throws NotFoundError if delivery not found
+   */
+  async updateDeliveryStatus(
+    id: ID,
+    options: UpdateDeliveryStatusOptions
+  ): Promise<WebhookDelivery> {
+    const updateData: Partial<WebhookDeliveryRow> = {
+      status: options.status,
+    };
+
+    if (options.attempts !== undefined) {
+      updateData.attempts = options.attempts;
+    }
+    if (options.lastAttemptAt !== undefined) {
+      updateData.lastAttemptAt = options.lastAttemptAt;
+    }
+    if (options.lastError !== undefined) {
+      updateData.lastError = options.lastError;
+    }
+    if (options.nextRetryAt !== undefined) {
+      updateData.nextRetryAt = options.nextRetryAt;
+    }
+    if (options.deliveredAt !== undefined) {
+      updateData.deliveredAt = options.deliveredAt;
+    }
+    if (options.responseStatus !== undefined) {
+      updateData.responseStatus = options.responseStatus;
+    }
+    if (options.responseBody !== undefined) {
+      updateData.responseBody = options.responseBody;
+    }
+
+    const [row] = await this.db
+      .update(webhookDeliveries)
+      .set(updateData)
+      .where(eq(webhookDeliveries.id, id))
+      .returning();
+
+    if (!row) {
+      throw new NotFoundError(`Webhook delivery not found: ${id}`);
+    }
+
+    logger.debug(
+      { deliveryId: id, status: options.status, attempts: options.attempts },
+      'Updated webhook delivery status'
+    );
+
+    return mapDeliveryRow(row);
+  }
+
+  /**
+   * Get delivery by ID.
+   *
+   * @param id - Delivery ID
+   * @returns Delivery record or null if not found
+   */
+  async getDeliveryById(id: ID): Promise<WebhookDelivery | null> {
+    const [row] = await this.db
+      .select()
+      .from(webhookDeliveries)
+      .where(eq(webhookDeliveries.id, id));
+
+    return row ? mapDeliveryRow(row) : null;
+  }
+
+  /**
+   * Get delivery history for a webhook.
+   *
+   * Returns deliveries ordered by creation time (most recent first).
+   *
+   * @param webhookId - Webhook ID
+   * @param limit - Maximum number of records to return (default: 50, max: 100)
+   * @returns Array of delivery records
+   */
+  async getDeliveryHistory(
+    webhookId: ID,
+    limit: number = DEFAULT_DELIVERY_PAGE_SIZE
+  ): Promise<WebhookDelivery[]> {
+    const effectiveLimit = Math.min(limit, MAX_DELIVERY_PAGE_SIZE);
+
+    const rows = await this.db
+      .select()
+      .from(webhookDeliveries)
+      .where(eq(webhookDeliveries.webhookId, webhookId))
+      .orderBy(desc(webhookDeliveries.createdAt))
+      .limit(effectiveLimit);
+
+    return rows.map(mapDeliveryRow);
+  }
+
+  /**
+   * Get pending retries that are due for processing.
+   *
+   * Returns deliveries with status='retrying' and nextRetryAt <= now.
+   *
+   * @param limit - Maximum number of records to return (default: 100)
+   * @returns Array of delivery records ready for retry
+   */
+  async getPendingRetries(limit: number = 100): Promise<WebhookDelivery[]> {
+    const now = new Date();
+
+    const rows = await this.db
+      .select()
+      .from(webhookDeliveries)
+      .where(
+        and(
+          eq(webhookDeliveries.status, 'retrying'),
+          lte(webhookDeliveries.nextRetryAt, now)
+        )
+      )
+      .orderBy(webhookDeliveries.nextRetryAt)
+      .limit(limit);
+
+    return rows.map(mapDeliveryRow);
+  }
+
+  /**
+   * Get failed deliveries for a tenant.
+   *
+   * Returns deliveries with status='failed' for monitoring and debugging.
+   *
+   * @param tenantId - Tenant ID
+   * @param limit - Maximum number of records to return (default: 50, max: 100)
+   * @returns Array of failed delivery records
+   */
+  async getFailedDeliveries(
+    tenantId: ID,
+    limit: number = DEFAULT_DELIVERY_PAGE_SIZE
+  ): Promise<WebhookDelivery[]> {
+    const effectiveLimit = Math.min(limit, MAX_DELIVERY_PAGE_SIZE);
+
+    const rows = await this.db
+      .select()
+      .from(webhookDeliveries)
+      .where(
+        and(
+          eq(webhookDeliveries.tenantId, tenantId),
+          eq(webhookDeliveries.status, 'failed')
+        )
+      )
+      .orderBy(desc(webhookDeliveries.createdAt))
+      .limit(effectiveLimit);
+
+    return rows.map(mapDeliveryRow);
+  }
+
+  /**
+   * Get deliveries by tenant with pagination.
+   *
+   * @param tenantId - Tenant ID
+   * @param options - Pagination options
+   * @returns Paginated array of delivery records
+   */
+  async getDeliveriesByTenant(
+    tenantId: ID,
+    options: {
+      limit?: number;
+      offset?: number;
+      status?: WebhookDeliveryStatus;
+    } = {}
+  ): Promise<{ items: WebhookDelivery[]; hasMore: boolean }> {
+    const limit = Math.min(options.limit ?? DEFAULT_DELIVERY_PAGE_SIZE, MAX_DELIVERY_PAGE_SIZE);
+    const offset = options.offset ?? 0;
+
+    const whereConditions = [eq(webhookDeliveries.tenantId, tenantId)];
+    if (options.status) {
+      whereConditions.push(eq(webhookDeliveries.status, options.status));
+    }
+
+    const rows = await this.db
+      .select()
+      .from(webhookDeliveries)
+      .where(and(...whereConditions))
+      .orderBy(desc(webhookDeliveries.createdAt))
+      .limit(limit + 1)
+      .offset(offset);
+
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+
+    return {
+      items: items.map(mapDeliveryRow),
+      hasMore,
+    };
+  }
+
+  /**
+   * Mark a delivery for immediate replay.
+   *
+   * Resets the delivery status to 'retrying' with nextRetryAt set to now.
+   * Does not reset attempt count to preserve audit history.
+   *
+   * @param id - Delivery ID
+   * @returns Updated delivery record
+   * @throws NotFoundError if delivery not found
+   */
+  async markForReplay(id: ID): Promise<WebhookDelivery> {
+    const delivery = await this.getDeliveryById(id);
+    if (!delivery) {
+      throw new NotFoundError(`Webhook delivery not found: ${id}`);
+    }
+
+    // Only allow replay of failed deliveries
+    if (delivery.status !== 'failed') {
+      throw new ValidationError(
+        `Cannot replay delivery with status '${delivery.status}'. Only failed deliveries can be replayed.`,
+        { deliveryId: id, currentStatus: delivery.status }
+      );
+    }
+
+    const updatedDelivery = await this.updateDeliveryStatus(id, {
+      status: 'retrying',
+      nextRetryAt: new Date(), // Immediate retry
+      lastError: null, // Clear last error for retry
+    });
+
+    logger.info(
+      { deliveryId: id, webhookId: delivery.webhookId, tenantId: delivery.tenantId },
+      'Marked webhook delivery for replay'
+    );
+
+    return updatedDelivery;
+  }
+
+  /**
+   * Clean up old delivery records.
+   *
+   * Deletes deliveries older than the specified retention period.
+   * Typically called by a scheduled cleanup job.
+   *
+   * @param retentionDays - Number of days to retain records
+   * @returns Number of records deleted
+   */
+  async cleanupOldDeliveries(retentionDays: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    const result = await this.db
+      .delete(webhookDeliveries)
+      .where(lt(webhookDeliveries.createdAt, cutoffDate))
+      .returning({ id: webhookDeliveries.id });
+
+    const deletedCount = result.length;
+
+    if (deletedCount > 0) {
+      logger.info(
+        { deletedCount, retentionDays, cutoffDate: cutoffDate.toISOString() },
+        'Cleaned up old webhook delivery records'
+      );
+    }
+
+    return deletedCount;
+  }
+}
+
+/**
+ * Create webhook delivery repository instance
+ */
+export function createWebhookDeliveryRepository(): WebhookDeliveryRepository {
+  return new WebhookDeliveryRepository();
 }

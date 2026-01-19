@@ -579,6 +579,16 @@ export const serviceCircuitBreakerFailuresTotal = new Counter({
 });
 
 /**
+ * Per-service circuit breaker successes total
+ */
+export const serviceCircuitBreakerSuccessesTotal = new Counter({
+  name: 'vorion_service_circuit_breaker_successes_total',
+  help: 'Total successful executions through circuit breaker per service',
+  labelNames: ['service'] as const,
+  registers: [intentRegistry],
+});
+
+/**
  * Per-service circuit breaker trips (circuit opening)
  */
 export const serviceCircuitBreakerTripsTotal = new Counter({
@@ -1034,6 +1044,13 @@ export function updateServiceCircuitBreakerState(
  */
 export function recordServiceCircuitBreakerFailure(service: string): void {
   serviceCircuitBreakerFailuresTotal.inc({ service });
+}
+
+/**
+ * Record a success for a service's circuit breaker
+ */
+export function recordServiceCircuitBreakerSuccess(service: string): void {
+  serviceCircuitBreakerSuccessesTotal.inc({ service });
 }
 
 /**

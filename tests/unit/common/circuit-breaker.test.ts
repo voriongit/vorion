@@ -12,8 +12,13 @@ import {
   resetCircuitBreaker,
   clearCircuitBreakerRegistry,
   CIRCUIT_BREAKER_CONFIGS,
+  CircuitBreakerOpenError,
+  withCircuitBreaker,
+  withCircuitBreakerResult,
+  setCircuitBreakerMetricsCallback,
   type CircuitState,
   type CircuitBreakerConfig,
+  type CircuitBreakerMetricsCallback,
 } from '../../../src/common/circuit-breaker.js';
 
 // Mock Redis
@@ -759,8 +764,21 @@ describe('Circuit Breaker Registry', () => {
     });
 
     it('should have all required fields in each config', () => {
+      // Map serviceName keys to their expected config.name values
+      const expectedNames: Record<string, string> = {
+        database: 'database',
+        redis: 'redis',
+        webhook: 'webhook',
+        policyEngine: 'policy-engine',
+        trustEngine: 'trust-engine',
+        auditService: 'audit-service',
+        gdprService: 'gdpr-service',
+        consentService: 'consent-service',
+      };
+
       for (const [serviceName, config] of Object.entries(CIRCUIT_BREAKER_CONFIGS)) {
-        expect(config.name).toBe(serviceName === 'policyEngine' ? 'policy-engine' : serviceName === 'trustEngine' ? 'trust-engine' : serviceName);
+        const expectedName = expectedNames[serviceName] || serviceName;
+        expect(config.name).toBe(expectedName);
         expect(typeof config.failureThreshold).toBe('number');
         expect(typeof config.resetTimeoutMs).toBe('number');
         expect(typeof config.halfOpenMaxAttempts).toBe('number');
@@ -921,5 +939,336 @@ describe('Circuit Breaker Registry', () => {
       const status = await breaker.getStatus();
       expect(status.failureThreshold).toBe(CIRCUIT_BREAKER_CONFIGS.database.failureThreshold);
     });
+  });
+});
+
+// =============================================================================
+// CircuitBreakerOpenError Tests
+// =============================================================================
+
+describe('CircuitBreakerOpenError', () => {
+  it('should create error with correct properties', () => {
+    const error = new CircuitBreakerOpenError('testService', 'OPEN');
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(CircuitBreakerOpenError);
+    expect(error.name).toBe('CircuitBreakerOpenError');
+    expect(error.serviceName).toBe('testService');
+    expect(error.circuitState).toBe('OPEN');
+    expect(error.message).toContain('testService');
+    expect(error.message).toContain('OPEN');
+  });
+
+  it('should default to OPEN state if not specified', () => {
+    const error = new CircuitBreakerOpenError('myService');
+
+    expect(error.circuitState).toBe('OPEN');
+  });
+
+  it('should be catchable as an Error', () => {
+    expect(() => {
+      throw new CircuitBreakerOpenError('test');
+    }).toThrow(Error);
+  });
+});
+
+// =============================================================================
+// withCircuitBreaker Tests
+// =============================================================================
+
+describe('withCircuitBreaker', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearCircuitBreakerRegistry();
+    mockRedis.get.mockResolvedValue(null);
+    mockRedis.setex.mockResolvedValue('OK');
+    mockRedis.del.mockResolvedValue(1);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    clearCircuitBreakerRegistry();
+  });
+
+  it('should execute function successfully when circuit is closed', async () => {
+    const fn = vi.fn().mockResolvedValue('success');
+
+    const result = await withCircuitBreaker('database', fn);
+
+    expect(fn).toHaveBeenCalled();
+    expect(result).toBe('success');
+  });
+
+  it('should throw CircuitBreakerOpenError when circuit is open', async () => {
+    mockRedis.get.mockResolvedValue(JSON.stringify({
+      state: 'OPEN',
+      failureCount: 5,
+      lastFailureTime: Date.now(),
+      openedAt: Date.now(),
+    }));
+
+    const fn = vi.fn().mockResolvedValue('success');
+
+    await expect(withCircuitBreaker('database', fn)).rejects.toThrow(CircuitBreakerOpenError);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('should rethrow original error when function fails', async () => {
+    const originalError = new Error('Database connection failed');
+    const fn = vi.fn().mockRejectedValue(originalError);
+
+    await expect(withCircuitBreaker('database', fn)).rejects.toThrow(originalError);
+    expect(fn).toHaveBeenCalled();
+  });
+
+  it('should use service-specific configuration', async () => {
+    const fn = vi.fn().mockResolvedValue('success');
+
+    await withCircuitBreaker('webhook', fn);
+
+    // Get the created circuit breaker and verify its config
+    const status = (await getAllCircuitBreakerStatuses()).get('webhook');
+    expect(status?.failureThreshold).toBe(CIRCUIT_BREAKER_CONFIGS.webhook.failureThreshold);
+    expect(status?.resetTimeoutMs).toBe(CIRCUIT_BREAKER_CONFIGS.webhook.resetTimeoutMs);
+  });
+
+  it('should record metrics on state change', async () => {
+    const metricsCallback: CircuitBreakerMetricsCallback = {
+      recordStateChange: vi.fn(),
+      recordFailure: vi.fn(),
+      recordSuccess: vi.fn(),
+      updateState: vi.fn(),
+    };
+    setCircuitBreakerMetricsCallback(metricsCallback);
+
+    // First call - success
+    await withCircuitBreaker('test-service', async () => 'success');
+
+    expect(metricsCallback.updateState).toHaveBeenCalledWith('test-service', 'CLOSED');
+    expect(metricsCallback.recordSuccess).toHaveBeenCalledWith('test-service');
+  });
+
+  it('should record failure metrics when function throws', async () => {
+    const metricsCallback: CircuitBreakerMetricsCallback = {
+      recordStateChange: vi.fn(),
+      recordFailure: vi.fn(),
+      recordSuccess: vi.fn(),
+      updateState: vi.fn(),
+    };
+    setCircuitBreakerMetricsCallback(metricsCallback);
+
+    const error = new Error('Test error');
+    await expect(withCircuitBreaker('test-service', async () => {
+      throw error;
+    })).rejects.toThrow(error);
+
+    expect(metricsCallback.recordFailure).toHaveBeenCalledWith('test-service');
+  });
+
+  it('should work with async functions that return various types', async () => {
+    // Test with object return
+    const objResult = await withCircuitBreaker('database', async () => ({ id: 1, name: 'test' }));
+    expect(objResult).toEqual({ id: 1, name: 'test' });
+
+    // Test with array return
+    const arrResult = await withCircuitBreaker('database', async () => [1, 2, 3]);
+    expect(arrResult).toEqual([1, 2, 3]);
+
+    // Test with null return
+    const nullResult = await withCircuitBreaker('database', async () => null);
+    expect(nullResult).toBeNull();
+  });
+});
+
+// =============================================================================
+// withCircuitBreakerResult Tests
+// =============================================================================
+
+describe('withCircuitBreakerResult', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearCircuitBreakerRegistry();
+    mockRedis.get.mockResolvedValue(null);
+    mockRedis.setex.mockResolvedValue('OK');
+    mockRedis.del.mockResolvedValue(1);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    clearCircuitBreakerRegistry();
+  });
+
+  it('should return success result when function succeeds', async () => {
+    const fn = vi.fn().mockResolvedValue('success');
+
+    const result = await withCircuitBreakerResult('database', fn);
+
+    expect(result.success).toBe(true);
+    expect(result.result).toBe('success');
+    expect(result.circuitOpen).toBe(false);
+    expect(result.error).toBeUndefined();
+  });
+
+  it('should return circuitOpen=true when circuit is open (not throw)', async () => {
+    mockRedis.get.mockResolvedValue(JSON.stringify({
+      state: 'OPEN',
+      failureCount: 5,
+      lastFailureTime: Date.now(),
+      openedAt: Date.now(),
+    }));
+
+    const fn = vi.fn().mockResolvedValue('success');
+
+    const result = await withCircuitBreakerResult('database', fn);
+
+    expect(result.success).toBe(false);
+    expect(result.circuitOpen).toBe(true);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('should return failure result when function throws (not throw)', async () => {
+    const originalError = new Error('Test error');
+    const fn = vi.fn().mockRejectedValue(originalError);
+
+    const result = await withCircuitBreakerResult('database', fn);
+
+    expect(result.success).toBe(false);
+    expect(result.circuitOpen).toBe(false);
+    expect(result.error).toBe(originalError);
+    expect(fn).toHaveBeenCalled();
+  });
+
+  it('should record metrics on success', async () => {
+    const metricsCallback: CircuitBreakerMetricsCallback = {
+      recordStateChange: vi.fn(),
+      recordFailure: vi.fn(),
+      recordSuccess: vi.fn(),
+      updateState: vi.fn(),
+    };
+    setCircuitBreakerMetricsCallback(metricsCallback);
+
+    await withCircuitBreakerResult('test-service', async () => 'success');
+
+    expect(metricsCallback.recordSuccess).toHaveBeenCalledWith('test-service');
+  });
+
+  it('should record metrics on failure', async () => {
+    const metricsCallback: CircuitBreakerMetricsCallback = {
+      recordStateChange: vi.fn(),
+      recordFailure: vi.fn(),
+      recordSuccess: vi.fn(),
+      updateState: vi.fn(),
+    };
+    setCircuitBreakerMetricsCallback(metricsCallback);
+
+    await withCircuitBreakerResult('test-service', async () => {
+      throw new Error('Test error');
+    });
+
+    expect(metricsCallback.recordFailure).toHaveBeenCalledWith('test-service');
+  });
+
+  it('should not record metrics when circuit is open', async () => {
+    mockRedis.get.mockResolvedValue(JSON.stringify({
+      state: 'OPEN',
+      failureCount: 5,
+      lastFailureTime: Date.now(),
+      openedAt: Date.now(),
+    }));
+
+    const metricsCallback: CircuitBreakerMetricsCallback = {
+      recordStateChange: vi.fn(),
+      recordFailure: vi.fn(),
+      recordSuccess: vi.fn(),
+      updateState: vi.fn(),
+    };
+    setCircuitBreakerMetricsCallback(metricsCallback);
+
+    await withCircuitBreakerResult('test-service', async () => 'success');
+
+    // Should update state but not record success/failure
+    expect(metricsCallback.updateState).toHaveBeenCalled();
+    expect(metricsCallback.recordSuccess).not.toHaveBeenCalled();
+    expect(metricsCallback.recordFailure).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// Service-Specific Circuit Breaker Config Tests
+// =============================================================================
+
+describe('Service-Specific Circuit Breaker Configs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearCircuitBreakerRegistry();
+    mockRedis.get.mockResolvedValue(null);
+    mockRedis.setex.mockResolvedValue('OK');
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    clearCircuitBreakerRegistry();
+  });
+
+  it('should have auditService config with correct values', () => {
+    expect(CIRCUIT_BREAKER_CONFIGS.auditService).toBeDefined();
+    expect(CIRCUIT_BREAKER_CONFIGS.auditService.name).toBe('audit-service');
+    expect(CIRCUIT_BREAKER_CONFIGS.auditService.failureThreshold).toBe(10);
+    expect(CIRCUIT_BREAKER_CONFIGS.auditService.resetTimeoutMs).toBe(15000);
+    expect(CIRCUIT_BREAKER_CONFIGS.auditService.halfOpenMaxAttempts).toBe(3);
+  });
+
+  it('should have gdprService config with correct values', () => {
+    expect(CIRCUIT_BREAKER_CONFIGS.gdprService).toBeDefined();
+    expect(CIRCUIT_BREAKER_CONFIGS.gdprService.name).toBe('gdpr-service');
+    expect(CIRCUIT_BREAKER_CONFIGS.gdprService.failureThreshold).toBe(5);
+    expect(CIRCUIT_BREAKER_CONFIGS.gdprService.resetTimeoutMs).toBe(30000);
+    expect(CIRCUIT_BREAKER_CONFIGS.gdprService.halfOpenMaxAttempts).toBe(2);
+  });
+
+  it('should have consentService config with correct values', () => {
+    expect(CIRCUIT_BREAKER_CONFIGS.consentService).toBeDefined();
+    expect(CIRCUIT_BREAKER_CONFIGS.consentService.name).toBe('consent-service');
+    expect(CIRCUIT_BREAKER_CONFIGS.consentService.failureThreshold).toBe(5);
+    expect(CIRCUIT_BREAKER_CONFIGS.consentService.resetTimeoutMs).toBe(20000);
+    expect(CIRCUIT_BREAKER_CONFIGS.consentService.halfOpenMaxAttempts).toBe(2);
+  });
+
+  it('should have trustEngine config with correct values', () => {
+    expect(CIRCUIT_BREAKER_CONFIGS.trustEngine).toBeDefined();
+    expect(CIRCUIT_BREAKER_CONFIGS.trustEngine.name).toBe('trust-engine');
+    expect(CIRCUIT_BREAKER_CONFIGS.trustEngine.failureThreshold).toBe(5);
+    expect(CIRCUIT_BREAKER_CONFIGS.trustEngine.resetTimeoutMs).toBe(30000);
+    expect(CIRCUIT_BREAKER_CONFIGS.trustEngine.halfOpenMaxAttempts).toBe(2);
+  });
+
+  it('should create circuit breaker with auditService config', async () => {
+    const breaker = getCircuitBreaker('auditService');
+    const status = await breaker.getStatus();
+
+    // getCircuitBreaker uses the serviceName as the breaker name, not the config's name field
+    expect(status.name).toBe('auditService');
+    expect(status.failureThreshold).toBe(10);
+    expect(status.resetTimeoutMs).toBe(15000);
+  });
+
+  it('should create circuit breaker with gdprService config', async () => {
+    const breaker = getCircuitBreaker('gdprService');
+    const status = await breaker.getStatus();
+
+    // getCircuitBreaker uses the serviceName as the breaker name, not the config's name field
+    expect(status.name).toBe('gdprService');
+    expect(status.failureThreshold).toBe(5);
+    expect(status.resetTimeoutMs).toBe(30000);
+  });
+
+  it('should create circuit breaker with consentService config', async () => {
+    const breaker = getCircuitBreaker('consentService');
+    const status = await breaker.getStatus();
+
+    // getCircuitBreaker uses the serviceName as the breaker name, not the config's name field
+    expect(status.name).toBe('consentService');
+    expect(status.failureThreshold).toBe(5);
+    expect(status.resetTimeoutMs).toBe(20000);
   });
 });

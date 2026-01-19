@@ -15,6 +15,10 @@ import { getConfig } from '../common/config.js';
 import { getRedis } from '../common/redis.js';
 import { getDatabase, withLongQueryTimeout } from '../common/db.js';
 import { createAuditService, createAuditHelper } from '../audit/index.js';
+import {
+  withCircuitBreaker,
+  CircuitBreakerOpenError,
+} from '../common/circuit-breaker.js';
 import type { ID } from '../common/types.js';
 import {
   intents,
@@ -135,11 +139,13 @@ export class GdprService {
   /**
    * Export all user data for GDPR compliance (Article 15 - Right of Access)
    * Uses extended statement timeout for complex multi-table queries.
+   * Protected by circuit breaker to prevent cascading failures.
    *
    * @param userId - The user/entity ID to export data for
    * @param tenantId - The tenant context
    * @returns Complete export data structure
    * @throws StatementTimeoutError if the query exceeds the long query timeout
+   * @throws CircuitBreakerOpenError if the GDPR service circuit breaker is open
    */
   async exportUserData(userId: ID, tenantId: ID): Promise<GdprExportData> {
     const exportId = randomUUID();
@@ -147,59 +153,61 @@ export class GdprService {
 
     logger.info({ userId, tenantId, exportId }, 'Starting GDPR data export');
 
-    // Use long query timeout for GDPR exports as they can involve complex joins
-    return withLongQueryTimeout(async () => {
-      // Fetch all user intents (including soft-deleted for complete history)
-      const userIntents = await this.db
-        .select()
-        .from(intents)
-        .where(
-          and(
-            eq(intents.entityId, userId),
-            eq(intents.tenantId, tenantId)
-          )
-        )
-        .orderBy(desc(intents.createdAt));
-
-      const intentIds = userIntents.map((i) => i.id);
-
-      // Fetch events for all user intents
-      let userEvents: typeof intentEvents.$inferSelect[] = [];
-      if (intentIds.length > 0) {
-        userEvents = await this.db
+    // Wrap the entire export in circuit breaker protection
+    return withCircuitBreaker('gdprService', async () => {
+      // Use long query timeout for GDPR exports as they can involve complex joins
+      return withLongQueryTimeout(async () => {
+        // Fetch all user intents (including soft-deleted for complete history)
+        const userIntents = await this.db
           .select()
-          .from(intentEvents)
-          .where(inArray(intentEvents.intentId, intentIds))
-          .orderBy(desc(intentEvents.occurredAt));
-      }
-
-      // Fetch escalations for user intents
-      let userEscalations: typeof escalations.$inferSelect[] = [];
-      if (intentIds.length > 0) {
-        userEscalations = await this.db
-          .select()
-          .from(escalations)
+          .from(intents)
           .where(
             and(
-              inArray(escalations.intentId, intentIds),
-              eq(escalations.tenantId, tenantId)
+              eq(intents.entityId, userId),
+              eq(intents.tenantId, tenantId)
             )
           )
-          .orderBy(desc(escalations.createdAt));
-      }
+          .orderBy(desc(intents.createdAt));
 
-      // Fetch audit records where user is the actor or target
-      const userAuditRecords = await this.db
-        .select()
-        .from(auditRecords)
-        .where(
-          and(
-            eq(auditRecords.tenantId, tenantId),
-            eq(auditRecords.actorId, userId)
+        const intentIds = userIntents.map((i) => i.id);
+
+        // Fetch events for all user intents
+        let userEvents: typeof intentEvents.$inferSelect[] = [];
+        if (intentIds.length > 0) {
+          userEvents = await this.db
+            .select()
+            .from(intentEvents)
+            .where(inArray(intentEvents.intentId, intentIds))
+            .orderBy(desc(intentEvents.occurredAt));
+        }
+
+        // Fetch escalations for user intents
+        let userEscalations: typeof escalations.$inferSelect[] = [];
+        if (intentIds.length > 0) {
+          userEscalations = await this.db
+            .select()
+            .from(escalations)
+            .where(
+              and(
+                inArray(escalations.intentId, intentIds),
+                eq(escalations.tenantId, tenantId)
+              )
+            )
+            .orderBy(desc(escalations.createdAt));
+        }
+
+        // Fetch audit records where user is the actor or target
+        const userAuditRecords = await this.db
+          .select()
+          .from(auditRecords)
+          .where(
+            and(
+              eq(auditRecords.tenantId, tenantId),
+              eq(auditRecords.actorId, userId)
+            )
           )
-        )
-        .orderBy(desc(auditRecords.eventTime))
-        .limit(1000); // Limit audit records to prevent massive exports
+          .orderBy(desc(auditRecords.eventTime))
+          .limit(1000); // Limit audit records to prevent massive exports
 
       // Transform data to GDPR export format
       const exportData: GdprExportData = {
@@ -287,8 +295,9 @@ export class GdprService {
         'GDPR data export completed'
       );
 
-      return exportData;
-    }, 'exportUserData');
+        return exportData;
+      }, 'exportUserData');
+    });
   }
 
   /**
@@ -467,11 +476,13 @@ export class GdprService {
 
   /**
    * Soft delete all user data (Article 17 - Right to Erasure)
+   * Protected by circuit breaker to prevent cascading failures.
    *
    * @param userId - The user/entity ID to erase data for
    * @param tenantId - The tenant context
    * @param erasedBy - User who initiated the erasure
    * @returns Erasure result with counts
+   * @throws CircuitBreakerOpenError if the GDPR service circuit breaker is open
    */
   async eraseUserData(
     userId: ID,
@@ -482,103 +493,106 @@ export class GdprService {
 
     logger.info({ userId, tenantId, erasedBy }, 'Starting GDPR data erasure');
 
-    // Get all user intents
-    const userIntents = await this.db
-      .select({ id: intents.id })
-      .from(intents)
-      .where(
-        and(
-          eq(intents.entityId, userId),
-          eq(intents.tenantId, tenantId)
-        )
-      );
+    // Wrap the entire erasure operation in circuit breaker protection
+    return withCircuitBreaker('gdprService', async () => {
+      // Get all user intents
+      const userIntents = await this.db
+        .select({ id: intents.id })
+        .from(intents)
+        .where(
+          and(
+            eq(intents.entityId, userId),
+            eq(intents.tenantId, tenantId)
+          )
+        );
 
-    const intentIds = userIntents.map((i) => i.id);
+      const intentIds = userIntents.map((i) => i.id);
 
-    // Soft delete intents (clear PII but keep audit trail)
-    const intentResult = await this.db
-      .update(intents)
-      .set({
-        deletedAt: now,
-        updatedAt: now,
-        context: {}, // Clear sensitive data
-        metadata: { erasedAt: now.toISOString(), erasedBy },
-        goal: '[ERASED]',
-      })
-      .where(
-        and(
-          eq(intents.entityId, userId),
-          eq(intents.tenantId, tenantId)
-        )
-      )
-      .returning({ id: intents.id });
-
-    // Clear event payloads for erased intents
-    let eventsCleared = 0;
-    if (intentIds.length > 0) {
-      const eventResult = await this.db
-        .update(intentEvents)
+      // Soft delete intents (clear PII but keep audit trail)
+      const intentResult = await this.db
+        .update(intents)
         .set({
-          payload: { erased: true, erasedAt: now.toISOString() },
-        })
-        .where(inArray(intentEvents.intentId, intentIds))
-        .returning({ id: intentEvents.id });
-
-      eventsCleared = eventResult.length;
-    }
-
-    // Mark escalations as erased
-    let escalationsMarked = 0;
-    if (intentIds.length > 0) {
-      const escalationResult = await this.db
-        .update(escalations)
-        .set({
-          metadata: { erased: true, erasedAt: now.toISOString(), erasedBy },
-          context: null,
+          deletedAt: now,
           updatedAt: now,
+          context: {}, // Clear sensitive data
+          metadata: { erasedAt: now.toISOString(), erasedBy },
+          goal: '[ERASED]',
         })
         .where(
           and(
-            inArray(escalations.intentId, intentIds),
-            eq(escalations.tenantId, tenantId)
+            eq(intents.entityId, userId),
+            eq(intents.tenantId, tenantId)
           )
         )
-        .returning({ id: escalations.id });
+        .returning({ id: intents.id });
 
-      escalationsMarked = escalationResult.length;
-    }
+      // Clear event payloads for erased intents
+      let eventsCleared = 0;
+      if (intentIds.length > 0) {
+        const eventResult = await this.db
+          .update(intentEvents)
+          .set({
+            payload: { erased: true, erasedAt: now.toISOString() },
+          })
+          .where(inArray(intentEvents.intentId, intentIds))
+          .returning({ id: intentEvents.id });
 
-    const result: GdprErasureResult = {
-      userId,
-      tenantId,
-      erasedAt: now.toISOString(),
-      counts: {
-        intents: intentResult.length,
-        events: eventsCleared,
-        escalations: escalationsMarked,
-      },
-    };
+        eventsCleared = eventResult.length;
+      }
 
-    // Record audit event for erasure
-    await this.auditService.record({
-      tenantId,
-      eventType: 'data.deleted',
-      actor: { type: 'user', id: erasedBy },
-      target: { type: 'user', id: userId },
-      action: 'gdpr_erasure',
-      outcome: 'success',
-      metadata: {
-        gdprArticle: 'Article 17 - Right to Erasure',
-        counts: result.counts,
-      },
+      // Mark escalations as erased
+      let escalationsMarked = 0;
+      if (intentIds.length > 0) {
+        const escalationResult = await this.db
+          .update(escalations)
+          .set({
+            metadata: { erased: true, erasedAt: now.toISOString(), erasedBy },
+            context: null,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              inArray(escalations.intentId, intentIds),
+              eq(escalations.tenantId, tenantId)
+            )
+          )
+          .returning({ id: escalations.id });
+
+        escalationsMarked = escalationResult.length;
+      }
+
+      const result: GdprErasureResult = {
+        userId,
+        tenantId,
+        erasedAt: now.toISOString(),
+        counts: {
+          intents: intentResult.length,
+          events: eventsCleared,
+          escalations: escalationsMarked,
+        },
+      };
+
+      // Record audit event for erasure
+      await this.auditService.record({
+        tenantId,
+        eventType: 'data.deleted',
+        actor: { type: 'user', id: erasedBy },
+        target: { type: 'user', id: userId },
+        action: 'gdpr_erasure',
+        outcome: 'success',
+        metadata: {
+          gdprArticle: 'Article 17 - Right to Erasure',
+          counts: result.counts,
+        },
+      });
+
+      logger.info(
+        { userId, tenantId, erasedBy, counts: result.counts },
+        'GDPR data erasure completed'
+      );
+
+      return result;
     });
-
-    logger.info(
-      { userId, tenantId, erasedBy, counts: result.counts },
-      'GDPR data erasure completed'
-    );
-
-    return result;
   }
 }
 

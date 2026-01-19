@@ -222,8 +222,18 @@ export function registerShutdownHandlers(
 }
 
 /**
+ * Default retry delay in seconds for 503 responses during shutdown
+ */
+const DEFAULT_RETRY_AFTER_SECONDS = 5;
+
+/**
  * Fastify hook to reject requests during shutdown.
  * Add this to server.addHook('onRequest', ...)
+ *
+ * When the server is shutting down:
+ * - Returns 503 Service Unavailable
+ * - Includes Retry-After header (RFC 7231)
+ * - Provides structured error response
  */
 export async function shutdownRequestHook(
   request: FastifyRequest,
@@ -235,12 +245,19 @@ export async function shutdownRequestHook(
       'Rejecting request - server is shutting down'
     );
 
-    reply.status(503).send({
-      error: 'Service shutting down',
-      code: 'SERVICE_UNAVAILABLE',
-      retryAfter: 5,
-      message: 'The server is shutting down. Please retry your request shortly.',
-    });
+    // Set Retry-After header per RFC 7231 Section 7.1.3
+    reply
+      .status(503)
+      .header('Retry-After', String(DEFAULT_RETRY_AFTER_SECONDS))
+      .header('Connection', 'close')
+      .send({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'The server is shutting down. Please retry your request shortly.',
+        },
+        retryAfter: DEFAULT_RETRY_AFTER_SECONDS,
+        timestamp: new Date().toISOString(),
+      });
     return;
   }
 

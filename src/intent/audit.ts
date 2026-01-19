@@ -11,8 +11,16 @@ import { randomUUID } from 'node:crypto';
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
 import { createLogger } from '../common/logger.js';
 import { getDatabase } from '../common/db.js';
+import {
+  withCircuitBreaker,
+  withCircuitBreakerResult,
+  CircuitBreakerOpenError,
+} from '../common/circuit-breaker.js';
 import { auditReads } from './schema.js';
 import type { ID } from '../common/types.js';
+
+// Re-export CircuitBreakerOpenError for consumers
+export { CircuitBreakerOpenError };
 
 const logger = createLogger({ component: 'intent-audit' });
 
@@ -30,6 +38,10 @@ export type AuditAction =
   | 'escalation.approve'
   | 'escalation.reject'
   | 'webhook.read'
+  | 'webhook.read_deliveries'
+  | 'webhook.read_delivery'
+  | 'webhook.read_failed_deliveries'
+  | 'webhook.replay'
   | 'gdpr.export'
   | 'gdpr.erase';
 
@@ -121,7 +133,9 @@ class AuditQueue {
   }
 
   /**
-   * Flush the queue to the database
+   * Flush the queue to the database.
+   * Uses circuit breaker to prevent cascading failures and avoid
+   * overwhelming the database during outages.
    */
   private async flush(): Promise<void> {
     if (this.processing || this.queue.length === 0) {
@@ -132,30 +146,60 @@ class AuditQueue {
     const batch = this.queue.splice(0, this.maxBatchSize);
 
     try {
-      const db = getDatabase();
-      const now = new Date();
+      // Use withCircuitBreakerResult to avoid throwing on circuit open
+      // since audit logging should never fail the main request
+      const result = await withCircuitBreakerResult('auditService', async () => {
+        const db = getDatabase();
+        const now = new Date();
 
-      const values = batch.map((entry) => ({
-        id: randomUUID(),
-        tenantId: entry.tenantId,
-        userId: entry.userId,
-        action: entry.action,
-        resourceType: entry.resourceType,
-        resourceId: entry.resourceId,
-        metadata: entry.metadata ?? null,
-        ipAddress: entry.ipAddress ?? null,
-        userAgent: entry.userAgent ?? null,
-        timestamp: now,
-      }));
+        const values = batch.map((entry) => ({
+          id: randomUUID(),
+          tenantId: entry.tenantId,
+          userId: entry.userId,
+          action: entry.action,
+          resourceType: entry.resourceType,
+          resourceId: entry.resourceId,
+          metadata: entry.metadata ?? null,
+          ipAddress: entry.ipAddress ?? null,
+          userAgent: entry.userAgent ?? null,
+          timestamp: now,
+        }));
 
-      await db.insert(auditReads).values(values);
+        await db.insert(auditReads).values(values);
+        return batch.length;
+      });
 
-      logger.debug({ count: batch.length }, 'Audit entries flushed to database');
+      if (result.success) {
+        logger.debug({ count: batch.length }, 'Audit entries flushed to database');
+      } else if (result.circuitOpen) {
+        // Circuit is open - re-queue for later retry
+        logger.warn(
+          { count: batch.length },
+          'Audit circuit breaker is open, re-queuing entries for retry'
+        );
+        if (this.queue.length < 10000) {
+          this.queue.unshift(...batch);
+        } else {
+          logger.warn({ dropped: batch.length }, 'Dropping audit entries due to queue overflow');
+        }
+      } else {
+        // Execution failed
+        logger.error(
+          { error: result.error, count: batch.length },
+          'Failed to flush audit entries'
+        );
+        // Re-queue failed entries for retry (with limit to prevent memory issues)
+        if (this.queue.length < 10000) {
+          this.queue.unshift(...batch);
+        } else {
+          logger.warn({ dropped: batch.length }, 'Dropping audit entries due to queue overflow');
+        }
+      }
     } catch (error) {
-      // Log error but don't throw - audit logging should never block requests
-      logger.error({ error, count: batch.length }, 'Failed to flush audit entries');
+      // Catch-all for unexpected errors
+      logger.error({ error, count: batch.length }, 'Unexpected error flushing audit entries');
 
-      // Re-queue failed entries for retry (with limit to prevent memory issues)
+      // Re-queue failed entries for retry
       if (this.queue.length < 10000) {
         this.queue.unshift(...batch);
       } else {
@@ -213,48 +257,52 @@ export async function recordAudit(entry: CreateAuditEntry): Promise<void> {
 /**
  * Record an audit entry synchronously (for testing or critical paths).
  * Prefer recordAudit() for production use.
+ * Protected by circuit breaker to prevent cascading failures.
  *
  * @param entry - The audit entry to record
  * @returns The created audit entry with id and timestamp
+ * @throws CircuitBreakerOpenError if the audit service circuit breaker is open
  */
 export async function recordAuditSync(entry: CreateAuditEntry): Promise<AuditEntry> {
-  const db = getDatabase();
-  const now = new Date();
-  const id = randomUUID();
+  return withCircuitBreaker('auditService', async () => {
+    const db = getDatabase();
+    const now = new Date();
+    const id = randomUUID();
 
-  const [row] = await db
-    .insert(auditReads)
-    .values({
-      id,
-      tenantId: entry.tenantId,
-      userId: entry.userId,
-      action: entry.action,
-      resourceType: entry.resourceType,
-      resourceId: entry.resourceId,
-      metadata: entry.metadata ?? null,
-      ipAddress: entry.ipAddress ?? null,
-      userAgent: entry.userAgent ?? null,
-      timestamp: now,
-    })
-    .returning();
+    const [row] = await db
+      .insert(auditReads)
+      .values({
+        id,
+        tenantId: entry.tenantId,
+        userId: entry.userId,
+        action: entry.action,
+        resourceType: entry.resourceType,
+        resourceId: entry.resourceId,
+        metadata: entry.metadata ?? null,
+        ipAddress: entry.ipAddress ?? null,
+        userAgent: entry.userAgent ?? null,
+        timestamp: now,
+      })
+      .returning();
 
-  logger.debug(
-    { auditId: row.id, action: entry.action, resourceType: entry.resourceType },
-    'Audit entry recorded'
-  );
+    logger.debug(
+      { auditId: row.id, action: entry.action, resourceType: entry.resourceType },
+      'Audit entry recorded'
+    );
 
-  return {
-    id: row.id,
-    tenantId: row.tenantId,
-    userId: row.userId,
-    action: row.action as AuditAction,
-    resourceType: row.resourceType as AuditResourceType,
-    resourceId: row.resourceId,
-    metadata: row.metadata as Record<string, unknown> | undefined,
-    ipAddress: row.ipAddress ?? undefined,
-    userAgent: row.userAgent ?? undefined,
-    timestamp: row.timestamp,
-  };
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      userId: row.userId,
+      action: row.action as AuditAction,
+      resourceType: row.resourceType as AuditResourceType,
+      resourceId: row.resourceId,
+      metadata: row.metadata as Record<string, unknown> | undefined,
+      ipAddress: row.ipAddress ?? undefined,
+      userAgent: row.userAgent ?? undefined,
+      timestamp: row.timestamp,
+    };
+  });
 }
 
 // =============================================================================
@@ -264,76 +312,80 @@ export async function recordAuditSync(entry: CreateAuditEntry): Promise<AuditEnt
 /**
  * Query audit log entries for compliance reporting.
  * Supports filtering by user, action, resource, and time range.
+ * Protected by circuit breaker to prevent cascading failures.
  *
  * @param filters - Query filters
  * @returns Paginated audit entries
+ * @throws CircuitBreakerOpenError if the audit service circuit breaker is open
  */
 export async function queryAuditLog(filters: AuditQueryFilters): Promise<AuditQueryResult> {
-  const db = getDatabase();
-  const limit = Math.min(filters.limit ?? 50, 1000);
-  const offset = filters.offset ?? 0;
+  return withCircuitBreaker('auditService', async () => {
+    const db = getDatabase();
+    const limit = Math.min(filters.limit ?? 50, 1000);
+    const offset = filters.offset ?? 0;
 
-  const conditions = [eq(auditReads.tenantId, filters.tenantId)];
+    const conditions = [eq(auditReads.tenantId, filters.tenantId)];
 
-  if (filters.userId) {
-    conditions.push(eq(auditReads.userId, filters.userId));
-  }
+    if (filters.userId) {
+      conditions.push(eq(auditReads.userId, filters.userId));
+    }
 
-  if (filters.action) {
-    conditions.push(eq(auditReads.action, filters.action));
-  }
+    if (filters.action) {
+      conditions.push(eq(auditReads.action, filters.action));
+    }
 
-  if (filters.resourceType) {
-    conditions.push(eq(auditReads.resourceType, filters.resourceType));
-  }
+    if (filters.resourceType) {
+      conditions.push(eq(auditReads.resourceType, filters.resourceType));
+    }
 
-  if (filters.resourceId) {
-    conditions.push(eq(auditReads.resourceId, filters.resourceId));
-  }
+    if (filters.resourceId) {
+      conditions.push(eq(auditReads.resourceId, filters.resourceId));
+    }
 
-  if (filters.from) {
-    conditions.push(gte(auditReads.timestamp, filters.from));
-  }
+    if (filters.from) {
+      conditions.push(gte(auditReads.timestamp, filters.from));
+    }
 
-  if (filters.to) {
-    conditions.push(lte(auditReads.timestamp, filters.to));
-  }
+    if (filters.to) {
+      conditions.push(lte(auditReads.timestamp, filters.to));
+    }
 
-  // Get total count
-  const allRows = await db
-    .select()
-    .from(auditReads)
-    .where(and(...conditions));
+    // Get total count
+    const allRows = await db
+      .select()
+      .from(auditReads)
+      .where(and(...conditions));
 
-  const total = allRows.length;
+    const total = allRows.length;
 
-  // Get paginated results
-  const rows = await db
-    .select()
-    .from(auditReads)
-    .where(and(...conditions))
-    .orderBy(desc(auditReads.timestamp))
-    .limit(limit)
-    .offset(offset);
+    // Get paginated results
+    const rows = await db
+      .select()
+      .from(auditReads)
+      .where(and(...conditions))
+      .orderBy(desc(auditReads.timestamp))
+      .limit(limit)
+      .offset(offset);
 
-  const entries: AuditEntry[] = rows.map((row) => ({
-    id: row.id,
-    tenantId: row.tenantId,
-    userId: row.userId,
-    action: row.action as AuditAction,
-    resourceType: row.resourceType as AuditResourceType,
-    resourceId: row.resourceId,
-    metadata: row.metadata as Record<string, unknown> | undefined,
-    ipAddress: row.ipAddress ?? undefined,
-    userAgent: row.userAgent ?? undefined,
-    timestamp: row.timestamp,
-  }));
+    const entries: AuditEntry[] = rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenantId,
+      userId: row.userId,
+      action: row.action as AuditAction,
+      resourceType: row.resourceType as AuditResourceType,
+      resourceId: row.resourceId,
+      metadata: row.metadata as Record<string, unknown> | undefined,
+      ipAddress: row.ipAddress ?? undefined,
+      userAgent: row.userAgent ?? undefined,
+      timestamp: row.timestamp,
+    }));
 
-  return {
-    entries,
-    total,
-    hasMore: offset + entries.length < total,
-  };
+    return {
+      entries,
+      total,
+      hasMore: offset + entries.length < total,
+    };
+  });
 }
 
 /**

@@ -11,6 +11,10 @@
 import { and, desc, eq, isNull, or } from 'drizzle-orm';
 import { createLogger } from '../common/logger.js';
 import { getDatabase } from '../common/db.js';
+import {
+  withCircuitBreaker,
+  CircuitBreakerOpenError,
+} from '../common/circuit-breaker.js';
 import type { ID } from '../common/types.js';
 import {
   userConsents,
@@ -19,6 +23,9 @@ import {
   type ConsentPolicyRow,
   type NewUserConsentRow,
 } from './schema.js';
+
+// Re-export CircuitBreakerOpenError for consumers
+export { CircuitBreakerOpenError };
 
 const logger = createLogger({ component: 'consent-service' });
 
@@ -139,6 +146,7 @@ export class ConsentService {
    *
    * Creates a new consent record or updates existing one.
    * Records the policy version and metadata for audit purposes.
+   * Protected by circuit breaker to prevent cascading failures.
    *
    * @param userId - The user granting consent
    * @param tenantId - The tenant context
@@ -146,6 +154,7 @@ export class ConsentService {
    * @param version - Policy version being consented to
    * @param metadata - Optional metadata (IP, user agent)
    * @returns The created or updated consent record
+   * @throws CircuitBreakerOpenError if the consent service circuit breaker is open
    */
   async grantConsent(
     userId: ID,
@@ -154,76 +163,78 @@ export class ConsentService {
     version: string,
     metadata?: ConsentMetadata
   ): Promise<UserConsent> {
-    const now = new Date();
+    return withCircuitBreaker('consentService', async () => {
+      const now = new Date();
 
-    // Check if consent already exists
-    const [existing] = await this.db
-      .select()
-      .from(userConsents)
-      .where(
-        and(
-          eq(userConsents.userId, userId),
-          eq(userConsents.tenantId, tenantId),
-          eq(userConsents.consentType, consentType),
-          eq(userConsents.granted, true),
-          isNull(userConsents.revokedAt)
+      // Check if consent already exists
+      const [existing] = await this.db
+        .select()
+        .from(userConsents)
+        .where(
+          and(
+            eq(userConsents.userId, userId),
+            eq(userConsents.tenantId, tenantId),
+            eq(userConsents.consentType, consentType),
+            eq(userConsents.granted, true),
+            isNull(userConsents.revokedAt)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (existing) {
-      // If already granted with same version, just return existing
-      if (existing.version === version) {
-        logger.debug(
-          { userId, tenantId, consentType, version },
-          'Consent already granted with same version'
+      if (existing) {
+        // If already granted with same version, just return existing
+        if (existing.version === version) {
+          logger.debug(
+            { userId, tenantId, consentType, version },
+            'Consent already granted with same version'
+          );
+          return this.mapConsentRow(existing);
+        }
+
+        // Different version - revoke old and create new
+        await this.db
+          .update(userConsents)
+          .set({
+            revokedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(userConsents.id, existing.id));
+
+        logger.info(
+          { userId, tenantId, consentType, oldVersion: existing.version, newVersion: version },
+          'Previous consent revoked for version upgrade'
         );
-        return this.mapConsentRow(existing);
       }
 
-      // Different version - revoke old and create new
-      await this.db
-        .update(userConsents)
-        .set({
-          revokedAt: now,
+      // Create new consent record
+      const [row] = await this.db
+        .insert(userConsents)
+        .values({
+          userId,
+          tenantId,
+          consentType,
+          granted: true,
+          grantedAt: now,
+          revokedAt: null,
+          version,
+          ipAddress: metadata?.ipAddress ?? null,
+          userAgent: metadata?.userAgent ?? null,
+          createdAt: now,
           updatedAt: now,
         })
-        .where(eq(userConsents.id, existing.id));
+        .returning();
+
+      if (!row) {
+        throw new Error('Failed to create consent record');
+      }
 
       logger.info(
-        { userId, tenantId, consentType, oldVersion: existing.version, newVersion: version },
-        'Previous consent revoked for version upgrade'
+        { userId, tenantId, consentType, version, consentId: row.id },
+        'Consent granted'
       );
-    }
 
-    // Create new consent record
-    const [row] = await this.db
-      .insert(userConsents)
-      .values({
-        userId,
-        tenantId,
-        consentType,
-        granted: true,
-        grantedAt: now,
-        revokedAt: null,
-        version,
-        ipAddress: metadata?.ipAddress ?? null,
-        userAgent: metadata?.userAgent ?? null,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning();
-
-    if (!row) {
-      throw new Error('Failed to create consent record');
-    }
-
-    logger.info(
-      { userId, tenantId, consentType, version, consentId: row.id },
-      'Consent granted'
-    );
-
-    return this.mapConsentRow(row);
+      return this.mapConsentRow(row);
+    });
   }
 
   /**
@@ -231,51 +242,55 @@ export class ConsentService {
    *
    * Marks the consent as revoked with a timestamp.
    * Does not delete the record to maintain audit trail.
+   * Protected by circuit breaker to prevent cascading failures.
    *
    * @param userId - The user revoking consent
    * @param tenantId - The tenant context
    * @param consentType - Type of consent being revoked
    * @returns The revoked consent record, or null if no active consent found
+   * @throws CircuitBreakerOpenError if the consent service circuit breaker is open
    */
   async revokeConsent(
     userId: ID,
     tenantId: ID,
     consentType: ConsentType
   ): Promise<UserConsent | null> {
-    const now = new Date();
+    return withCircuitBreaker('consentService', async () => {
+      const now = new Date();
 
-    const [row] = await this.db
-      .update(userConsents)
-      .set({
-        granted: false,
-        revokedAt: now,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(userConsents.userId, userId),
-          eq(userConsents.tenantId, tenantId),
-          eq(userConsents.consentType, consentType),
-          eq(userConsents.granted, true),
-          isNull(userConsents.revokedAt)
+      const [row] = await this.db
+        .update(userConsents)
+        .set({
+          granted: false,
+          revokedAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(userConsents.userId, userId),
+            eq(userConsents.tenantId, tenantId),
+            eq(userConsents.consentType, consentType),
+            eq(userConsents.granted, true),
+            isNull(userConsents.revokedAt)
+          )
         )
-      )
-      .returning();
+        .returning();
 
-    if (!row) {
-      logger.debug(
-        { userId, tenantId, consentType },
-        'No active consent found to revoke'
+      if (!row) {
+        logger.debug(
+          { userId, tenantId, consentType },
+          'No active consent found to revoke'
+        );
+        return null;
+      }
+
+      logger.info(
+        { userId, tenantId, consentType, consentId: row.id },
+        'Consent revoked'
       );
-      return null;
-    }
 
-    logger.info(
-      { userId, tenantId, consentType, consentId: row.id },
-      'Consent revoked'
-    );
-
-    return this.mapConsentRow(row);
+      return this.mapConsentRow(row);
+    });
   }
 
   /**
@@ -364,45 +379,49 @@ export class ConsentService {
    * Validate consent and return detailed result
    *
    * Provides detailed validation information for audit purposes.
+   * Protected by circuit breaker to prevent cascading failures.
    *
    * @param userId - The user ID
    * @param tenantId - The tenant context
    * @param consentType - Type of consent to validate
    * @returns Detailed validation result
+   * @throws CircuitBreakerOpenError if the consent service circuit breaker is open
    */
   async validateConsent(
     userId: ID,
     tenantId: ID,
     consentType: ConsentType
   ): Promise<ConsentValidationResult> {
-    const [row] = await this.db
-      .select()
-      .from(userConsents)
-      .where(
-        and(
-          eq(userConsents.userId, userId),
-          eq(userConsents.tenantId, tenantId),
-          eq(userConsents.consentType, consentType),
-          eq(userConsents.granted, true),
-          isNull(userConsents.revokedAt)
+    return withCircuitBreaker('consentService', async () => {
+      const [row] = await this.db
+        .select()
+        .from(userConsents)
+        .where(
+          and(
+            eq(userConsents.userId, userId),
+            eq(userConsents.tenantId, tenantId),
+            eq(userConsents.consentType, consentType),
+            eq(userConsents.granted, true),
+            isNull(userConsents.revokedAt)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!row) {
+      if (!row) {
+        return {
+          valid: false,
+          consentType,
+          reason: 'No active consent found',
+        };
+      }
+
       return {
-        valid: false,
+        valid: true,
         consentType,
-        reason: 'No active consent found',
+        grantedAt: row.grantedAt?.toISOString(),
+        version: row.version,
       };
-    }
-
-    return {
-      valid: true,
-      consentType,
-      grantedAt: row.grantedAt?.toISOString(),
-      version: row.version,
-    };
+    });
   }
 
   /**

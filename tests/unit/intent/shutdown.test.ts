@@ -120,6 +120,7 @@ describe('Graceful Shutdown Module', () => {
 
       const mockReply = {
         status: vi.fn().mockReturnThis(),
+        header: vi.fn().mockReturnThis(),
         send: vi.fn().mockReturnThis(),
       } as unknown as FastifyReply;
 
@@ -145,13 +146,50 @@ describe('Graceful Shutdown Module', () => {
       expect(mockReply.status).toHaveBeenCalledWith(503);
       expect(mockReply.send).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: 'Service shutting down',
-          code: 'SERVICE_UNAVAILABLE',
+          error: expect.objectContaining({
+            code: 'SERVICE_UNAVAILABLE',
+            message: expect.stringContaining('shutting down'),
+          }),
           retryAfter: 5,
         })
       );
 
       // Wait for shutdown to complete
+      await shutdownPromise;
+    });
+
+    it('should include Retry-After header in 503 response', async () => {
+      const mockRequest = {
+        url: '/api/test',
+        method: 'GET',
+      } as unknown as FastifyRequest;
+
+      const mockReply = {
+        status: vi.fn().mockReturnThis(),
+        header: vi.fn().mockReturnThis(),
+        send: vi.fn().mockReturnThis(),
+      } as unknown as FastifyReply;
+
+      // Start shutdown
+      const mockServer = {
+        close: vi.fn().mockResolvedValue(undefined),
+        server: { close: vi.fn() },
+      } as unknown as FastifyInstance;
+
+      const shutdownPromise = gracefulShutdown(mockServer, {
+        timeoutMs: 100,
+        skipDatabase: true,
+        skipRedis: true,
+        skipWorkers: true,
+        skipScheduler: true,
+      });
+
+      await shutdownRequestHook(mockRequest, mockReply);
+
+      // Should include Retry-After header
+      expect(mockReply.header).toHaveBeenCalledWith('Retry-After', '5');
+      expect(mockReply.header).toHaveBeenCalledWith('Connection', 'close');
+
       await shutdownPromise;
     });
 
@@ -454,6 +492,7 @@ describe('Integration: Shutdown with Request Tracking', () => {
 
     const mockReply = {
       status: vi.fn().mockReturnThis(),
+      header: vi.fn().mockReturnThis(),
       send: vi.fn().mockReturnThis(),
     } as unknown as FastifyReply;
 
@@ -463,9 +502,101 @@ describe('Integration: Shutdown with Request Tracking', () => {
     expect(mockReply.status).toHaveBeenCalledWith(503);
     expect(mockReply.send).toHaveBeenCalledWith(
       expect.objectContaining({
-        error: 'Service shutting down',
+        error: expect.objectContaining({
+          code: 'SERVICE_UNAVAILABLE',
+        }),
       })
     );
+
+    await shutdownPromise;
+  });
+});
+
+describe('Shutdown Response Format', () => {
+  beforeEach(() => {
+    resetShutdownState();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    resetShutdownState();
+  });
+
+  it('should return structured error response during shutdown', async () => {
+    const mockServer = {
+      close: vi.fn().mockResolvedValue(undefined),
+      server: { close: vi.fn() },
+    } as unknown as FastifyInstance;
+
+    const mockRequest = {
+      url: '/api/test',
+      method: 'GET',
+    } as unknown as FastifyRequest;
+
+    const mockReply = {
+      status: vi.fn().mockReturnThis(),
+      header: vi.fn().mockReturnThis(),
+      send: vi.fn().mockReturnThis(),
+    } as unknown as FastifyReply;
+
+    const shutdownPromise = gracefulShutdown(mockServer, {
+      timeoutMs: 100,
+      skipDatabase: true,
+      skipRedis: true,
+      skipWorkers: true,
+      skipScheduler: true,
+    });
+
+    await shutdownRequestHook(mockRequest, mockReply);
+
+    // Verify complete response structure
+    expect(mockReply.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'SERVICE_UNAVAILABLE',
+          message: expect.any(String),
+        }),
+        retryAfter: expect.any(Number),
+        timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/),
+      })
+    );
+
+    await shutdownPromise;
+  });
+
+  it('should include timestamp in ISO format', async () => {
+    const mockServer = {
+      close: vi.fn().mockResolvedValue(undefined),
+      server: { close: vi.fn() },
+    } as unknown as FastifyInstance;
+
+    const mockRequest = {
+      url: '/api/test',
+      method: 'GET',
+    } as unknown as FastifyRequest;
+
+    let capturedResponse: any;
+    const mockReply = {
+      status: vi.fn().mockReturnThis(),
+      header: vi.fn().mockReturnThis(),
+      send: vi.fn((body) => {
+        capturedResponse = body;
+        return mockReply;
+      }),
+    } as unknown as FastifyReply;
+
+    const shutdownPromise = gracefulShutdown(mockServer, {
+      timeoutMs: 100,
+      skipDatabase: true,
+      skipRedis: true,
+      skipWorkers: true,
+      skipScheduler: true,
+    });
+
+    await shutdownRequestHook(mockRequest, mockReply);
+
+    expect(capturedResponse.timestamp).toBeDefined();
+    expect(new Date(capturedResponse.timestamp).toISOString()).toBe(capturedResponse.timestamp);
 
     await shutdownPromise;
   });

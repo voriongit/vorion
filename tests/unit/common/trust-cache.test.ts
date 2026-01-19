@@ -1,7 +1,12 @@
 /**
  * Trust Cache Tests
  *
- * Tests for the trust score caching functionality with stampede prevention.
+ * Tests for the trust score caching functionality with XFetch stampede prevention.
+ *
+ * The XFetch algorithm uses probabilistic early refresh to prevent cache stampede:
+ * - Formula: age > ttl - delta * beta * log(random())
+ * - delta: computation time
+ * - beta: tuning parameter (default 1.0)
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -52,6 +57,16 @@ import {
   invalidateTenantTrustScores,
   shouldRefreshEarly,
   getTTLWithJitter,
+  // XFetch exports
+  shouldRefresh,
+  getWithXFetch,
+  invalidateXFetchCache,
+  applyTTLJitter,
+  getInFlightRefreshCount,
+  clearInFlightRefreshes,
+  getInFlightTrustRefreshCount,
+  clearInFlightTrustRefreshes,
+  type XFetchCacheEntry,
 } from '../../../src/common/trust-cache.js';
 
 describe('Trust Cache', () => {
@@ -519,5 +534,644 @@ describe('Trust Cache', () => {
 
       Math.random = originalRandom;
     });
+  });
+});
+
+// ============================================================================
+// XFetch Algorithm Tests
+// ============================================================================
+
+describe('XFetch Algorithm', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    clearInFlightRefreshes();
+    clearInFlightTrustRefreshes();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+    clearInFlightRefreshes();
+    clearInFlightTrustRefreshes();
+  });
+
+  describe('shouldRefresh', () => {
+    it('should return true when entry is expired', () => {
+      const entry: XFetchCacheEntry<string> = {
+        value: 'test',
+        fetchTime: Date.now() - 60000, // 60 seconds ago
+        ttl: 30000, // 30 second TTL (expired 30s ago)
+        delta: 100,
+      };
+
+      // Should always refresh when expired
+      expect(shouldRefresh(entry)).toBe(true);
+    });
+
+    it('should return false when entry is fresh (well before TTL)', () => {
+      const entry: XFetchCacheEntry<string> = {
+        value: 'test',
+        fetchTime: Date.now() - 1000, // 1 second ago
+        ttl: 300000, // 5 minute TTL
+        delta: 100,
+      };
+
+      const originalRandom = Math.random;
+      // Even with very low random, should not refresh when very fresh
+      Math.random = vi.fn().mockReturnValue(0.001);
+
+      // With entry only 1 second old and 5 minute TTL, very unlikely to refresh
+      // age = 1000ms, ttl = 300000ms
+      // threshold = 300000 + 100 * 1.0 * log(0.001) = 300000 - 690.77 = ~299309
+      // age (1000) < threshold (299309), so should NOT refresh
+      expect(shouldRefresh(entry)).toBe(false);
+
+      Math.random = originalRandom;
+    });
+
+    it('should use delta to scale refresh probability', () => {
+      const now = Date.now();
+      const originalRandom = Math.random;
+
+      // Fix random to a specific value
+      // log(0.1) = -2.302585
+      Math.random = vi.fn().mockReturnValue(0.1);
+
+      // Entry with small delta (50ms computation time)
+      const entrySmallDelta: XFetchCacheEntry<string> = {
+        value: 'test',
+        fetchTime: now - 55000, // 55 seconds old
+        ttl: 60000, // 60 second TTL (5s remaining)
+        delta: 50,
+      };
+
+      // Entry with large delta (1000ms computation time)
+      const entryLargeDelta: XFetchCacheEntry<string> = {
+        value: 'test',
+        fetchTime: now - 55000, // 55 seconds old
+        ttl: 60000, // 60 second TTL (5s remaining)
+        delta: 1000,
+      };
+
+      // With larger delta, refresh should be more likely
+      // Small delta: threshold = 60000 + 50 * 1.0 * (-2.30) = 60000 - 115 = 59885
+      // Large delta: threshold = 60000 + 1000 * 1.0 * (-2.30) = 60000 - 2302 = 57698
+      // age = 55000
+      // For small delta: 55000 < 59885, so NOT refresh
+      // For large delta: 55000 < 57698, so NOT refresh
+      // Both are still before threshold, but large delta has lower threshold
+
+      // With age closer to TTL
+      const entryNearExpiry: XFetchCacheEntry<string> = {
+        value: 'test',
+        fetchTime: now - 59000, // 59 seconds old
+        ttl: 60000, // 60 second TTL (1s remaining)
+        delta: 1000,
+      };
+
+      // age = 59000
+      // threshold = 60000 + 1000 * (-2.30) = 57698
+      // 59000 > 57698, so SHOULD refresh
+      expect(shouldRefresh(entryNearExpiry)).toBe(true);
+
+      Math.random = originalRandom;
+    });
+
+    it('should be probabilistic - multiple calls may give different results', () => {
+      vi.useRealTimers(); // Use real random for this test
+      const now = Date.now();
+
+      // Entry close to expiry where refresh is probabilistic
+      const entry: XFetchCacheEntry<string> = {
+        value: 'test',
+        fetchTime: now - 58000, // 58 seconds old
+        ttl: 60000, // 60 second TTL
+        delta: 500,
+      };
+
+      // Run multiple times and collect results
+      const results: boolean[] = [];
+      for (let i = 0; i < 100; i++) {
+        results.push(shouldRefresh(entry));
+      }
+
+      // Should have some true and some false (probabilistic)
+      const trueCount = results.filter(Boolean).length;
+      // With these parameters, we expect some variance
+      expect(trueCount).toBeGreaterThan(0);
+      expect(trueCount).toBeLessThan(100);
+    });
+
+    it('should respect beta parameter', () => {
+      const now = Date.now();
+      const originalRandom = Math.random;
+
+      // Fixed random value
+      Math.random = vi.fn().mockReturnValue(0.1); // log(0.1) = -2.30
+
+      const entry: XFetchCacheEntry<string> = {
+        value: 'test',
+        fetchTime: now - 55000, // 55 seconds old
+        ttl: 60000, // 60 second TTL
+        delta: 500,
+      };
+
+      // With beta = 1.0: threshold = 60000 + 500 * 1.0 * (-2.30) = 58849
+      // age = 55000 < threshold, no refresh
+      expect(shouldRefresh(entry, 1.0)).toBe(false);
+
+      // With beta = 3.0 (more aggressive): threshold = 60000 + 500 * 3.0 * (-2.30) = 56548
+      // age = 55000 < threshold, no refresh
+      expect(shouldRefresh(entry, 3.0)).toBe(false);
+
+      // With beta = 5.0 (very aggressive): threshold = 60000 + 500 * 5.0 * (-2.30) = 54247
+      // age = 55000 > threshold, REFRESH
+      expect(shouldRefresh(entry, 5.0)).toBe(true);
+
+      Math.random = originalRandom;
+    });
+  });
+
+  describe('applyTTLJitter', () => {
+    it('should apply jitter within range', () => {
+      const originalRandom = Math.random;
+
+      // Test minimum jitter (random = 0 gives multiplier = -0.1)
+      Math.random = vi.fn().mockReturnValue(0);
+      let result = applyTTLJitter(100000, 0.1);
+      expect(result).toBe(90000); // -10%
+
+      // Test maximum jitter (random = 1 gives multiplier = +0.1)
+      Math.random = vi.fn().mockReturnValue(1);
+      result = applyTTLJitter(100000, 0.1);
+      expect(result).toBe(110000); // +10%
+
+      // Test middle (random = 0.5 gives multiplier = 0)
+      Math.random = vi.fn().mockReturnValue(0.5);
+      result = applyTTLJitter(100000, 0.1);
+      expect(result).toBe(100000); // No change
+
+      Math.random = originalRandom;
+    });
+
+    it('should never return zero or negative TTL', () => {
+      const originalRandom = Math.random;
+
+      // Even with minimum random and high jitter, should return at least 1
+      Math.random = vi.fn().mockReturnValue(0);
+      const result = applyTTLJitter(1, 0.99); // Would be 0.01 without floor
+
+      expect(result).toBeGreaterThanOrEqual(1);
+
+      Math.random = originalRandom;
+    });
+
+    it('should support custom jitter fraction', () => {
+      const originalRandom = Math.random;
+
+      // Test with 20% jitter
+      Math.random = vi.fn().mockReturnValue(1);
+      const result = applyTTLJitter(100000, 0.2);
+      expect(result).toBe(120000); // +20%
+
+      Math.random = originalRandom;
+    });
+  });
+
+  describe('getWithXFetch', () => {
+    it('should return cached value on cache hit', async () => {
+      const entry: XFetchCacheEntry<{ data: string }> = {
+        value: { data: 'cached' },
+        fetchTime: Date.now() - 1000,
+        ttl: 60000,
+        delta: 100,
+      };
+      mockRedis.get.mockResolvedValueOnce(JSON.stringify(entry));
+
+      const fetchFn = vi.fn().mockResolvedValue({ data: 'fresh' });
+      const result = await getWithXFetch('test-key', fetchFn, 60000);
+
+      expect(result).toEqual({ data: 'cached' });
+      expect(fetchFn).not.toHaveBeenCalled();
+      expect(mockRedis.get).toHaveBeenCalledWith('xfetch:test-key');
+    });
+
+    it('should fetch and cache on cache miss', async () => {
+      mockRedis.get.mockResolvedValueOnce(null);
+      mockRedis.setex.mockResolvedValueOnce('OK');
+
+      const fetchFn = vi.fn().mockResolvedValue({ data: 'fresh' });
+      const result = await getWithXFetch('test-key', fetchFn, 60000);
+
+      expect(result).toEqual({ data: 'fresh' });
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+      expect(mockRedis.setex).toHaveBeenCalled();
+
+      // Verify the stored entry has XFetch metadata
+      const [, , serialized] = mockRedis.setex.mock.calls[0] as [string, number, string];
+      const stored = JSON.parse(serialized) as XFetchCacheEntry<unknown>;
+      expect(stored.value).toEqual({ data: 'fresh' });
+      expect(stored.fetchTime).toBeDefined();
+      expect(stored.ttl).toBeDefined();
+      expect(stored.delta).toBeDefined();
+    });
+
+    it('should trigger background refresh when XFetch determines refresh needed', async () => {
+      // Entry that is close to expiry
+      const entry: XFetchCacheEntry<{ data: string }> = {
+        value: { data: 'stale' },
+        fetchTime: Date.now() - 59000, // 59 seconds old
+        ttl: 60000, // 60 second TTL
+        delta: 1000,
+      };
+      mockRedis.get.mockResolvedValue(JSON.stringify(entry));
+      mockRedis.setex.mockResolvedValue('OK');
+
+      // Force refresh
+      const originalRandom = Math.random;
+      Math.random = vi.fn().mockReturnValue(0.01); // Very low, forces refresh
+
+      const fetchFn = vi.fn().mockResolvedValue({ data: 'fresh' });
+      const result = await getWithXFetch('test-key', fetchFn, 60000);
+
+      // Should return stale data immediately
+      expect(result).toEqual({ data: 'stale' });
+
+      // Wait for background refresh
+      await vi.runAllTimersAsync();
+
+      // fetchFn should have been called for background refresh
+      expect(fetchFn).toHaveBeenCalled();
+
+      Math.random = originalRandom;
+    });
+
+    it('should deduplicate concurrent background refreshes', async () => {
+      const entry: XFetchCacheEntry<{ data: string }> = {
+        value: { data: 'stale' },
+        fetchTime: Date.now() - 59000,
+        ttl: 60000,
+        delta: 1000,
+      };
+      mockRedis.get.mockResolvedValue(JSON.stringify(entry));
+      mockRedis.setex.mockResolvedValue('OK');
+
+      const originalRandom = Math.random;
+      Math.random = vi.fn().mockReturnValue(0.01);
+
+      // Slow fetch function
+      let fetchCount = 0;
+      const fetchFn = vi.fn().mockImplementation(async () => {
+        fetchCount++;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return { data: `fresh-${fetchCount}` };
+      });
+
+      // Multiple concurrent requests
+      const results = await Promise.all([
+        getWithXFetch('test-key', fetchFn, 60000),
+        getWithXFetch('test-key', fetchFn, 60000),
+        getWithXFetch('test-key', fetchFn, 60000),
+      ]);
+
+      // All should return stale data
+      for (const result of results) {
+        expect(result).toEqual({ data: 'stale' });
+      }
+
+      // Check in-flight refresh count
+      expect(getInFlightRefreshCount()).toBeLessThanOrEqual(1);
+
+      // Wait for background refresh
+      await vi.runAllTimersAsync();
+
+      // fetchFn should only be called once due to deduplication
+      // (first request triggers refresh, others see in-flight and skip)
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+
+      Math.random = originalRandom;
+    });
+
+    it('should apply jitter to TTL', async () => {
+      mockRedis.get.mockResolvedValueOnce(null);
+      mockRedis.setex.mockResolvedValueOnce('OK');
+
+      const originalRandom = Math.random;
+      Math.random = vi.fn().mockReturnValue(0.75); // Will give +5% jitter with default 0.1
+
+      const fetchFn = vi.fn().mockResolvedValue({ data: 'fresh' });
+      await getWithXFetch('test-key', fetchFn, 60000, { jitter: 0.1 });
+
+      // Check the TTL stored
+      const [, , serialized] = mockRedis.setex.mock.calls[0] as [string, number, string];
+      const stored = JSON.parse(serialized) as XFetchCacheEntry<unknown>;
+
+      // With random = 0.75, jitterMultiplier = (0.75 * 2 - 1) * 0.1 = 0.05
+      // jitteredTtl = 60000 * 1.05 = 63000
+      expect(stored.ttl).toBe(63000);
+
+      Math.random = originalRandom;
+    });
+
+    it('should track computation time (delta)', async () => {
+      mockRedis.get.mockResolvedValueOnce(null);
+      mockRedis.setex.mockResolvedValueOnce('OK');
+
+      // Simulate a slow fetch
+      const fetchFn = vi.fn().mockImplementation(async () => {
+        vi.advanceTimersByTime(150); // Simulate 150ms fetch
+        return { data: 'fresh' };
+      });
+
+      await getWithXFetch('test-key', fetchFn, 60000);
+
+      const [, , serialized] = mockRedis.setex.mock.calls[0] as [string, number, string];
+      const stored = JSON.parse(serialized) as XFetchCacheEntry<unknown>;
+
+      // Delta should be approximately 150ms
+      expect(stored.delta).toBeGreaterThanOrEqual(150);
+    });
+
+    it('should use custom beta parameter', async () => {
+      const entry: XFetchCacheEntry<{ data: string }> = {
+        value: { data: 'cached' },
+        fetchTime: Date.now() - 55000, // 55 seconds old
+        ttl: 60000, // 60 second TTL
+        delta: 500,
+      };
+      mockRedis.get.mockResolvedValue(JSON.stringify(entry));
+      mockRedis.setex.mockResolvedValue('OK');
+
+      const originalRandom = Math.random;
+      Math.random = vi.fn().mockReturnValue(0.1); // log(0.1) = -2.30
+
+      const fetchFn = vi.fn().mockResolvedValue({ data: 'fresh' });
+
+      // With default beta = 1.0, should not refresh
+      await getWithXFetch('test-key-1', fetchFn, 60000, { beta: 1.0 });
+      expect(fetchFn).not.toHaveBeenCalled();
+
+      // With high beta = 5.0, should trigger refresh
+      await getWithXFetch('test-key-2', fetchFn, 60000, { beta: 5.0 });
+
+      // Wait for background refresh
+      await vi.runAllTimersAsync();
+
+      expect(fetchFn).toHaveBeenCalled();
+
+      Math.random = originalRandom;
+    });
+  });
+
+  describe('invalidateXFetchCache', () => {
+    it('should delete cache entry', async () => {
+      mockRedis.del.mockResolvedValueOnce(1);
+
+      await invalidateXFetchCache('test-key');
+
+      expect(mockRedis.del).toHaveBeenCalledWith('xfetch:test-key');
+    });
+
+    it('should not throw on Redis error', async () => {
+      mockRedis.del.mockRejectedValueOnce(new Error('Redis error'));
+
+      await expect(invalidateXFetchCache('test-key')).resolves.not.toThrow();
+    });
+  });
+
+  describe('in-flight refresh tracking', () => {
+    it('should track in-flight refreshes', async () => {
+      const entry: XFetchCacheEntry<string> = {
+        value: 'stale',
+        fetchTime: Date.now() - 59000,
+        ttl: 60000,
+        delta: 1000,
+      };
+      mockRedis.get.mockResolvedValue(JSON.stringify(entry));
+      mockRedis.setex.mockResolvedValue('OK');
+
+      const originalRandom = Math.random;
+      Math.random = vi.fn().mockReturnValue(0.01);
+
+      let resolvePromise: () => void;
+      const fetchPromise = new Promise<string>((resolve) => {
+        resolvePromise = () => resolve('fresh');
+      });
+      const fetchFn = vi.fn().mockReturnValue(fetchPromise);
+
+      // Start request that triggers background refresh
+      const resultPromise = getWithXFetch('test-key', fetchFn, 60000);
+
+      // Result should be stale data immediately
+      const result = await resultPromise;
+      expect(result).toBe('stale');
+
+      // In-flight count should be 1
+      expect(getInFlightRefreshCount()).toBe(1);
+
+      // Complete the refresh
+      resolvePromise!();
+      await vi.runAllTimersAsync();
+
+      // In-flight should be cleared
+      expect(getInFlightRefreshCount()).toBe(0);
+
+      Math.random = originalRandom;
+    });
+
+    it('should clear in-flight tracking on error', async () => {
+      const entry: XFetchCacheEntry<string> = {
+        value: 'stale',
+        fetchTime: Date.now() - 59000,
+        ttl: 60000,
+        delta: 1000,
+      };
+      mockRedis.get.mockResolvedValue(JSON.stringify(entry));
+
+      const originalRandom = Math.random;
+      Math.random = vi.fn().mockReturnValue(0.01);
+
+      const fetchFn = vi.fn().mockRejectedValue(new Error('Fetch failed'));
+
+      await getWithXFetch('test-key', fetchFn, 60000);
+
+      // Wait for background refresh to fail
+      await vi.runAllTimersAsync();
+
+      // In-flight should be cleared even on error
+      expect(getInFlightRefreshCount()).toBe(0);
+
+      Math.random = originalRandom;
+    });
+  });
+});
+
+// ============================================================================
+// Trust Score XFetch Integration Tests
+// ============================================================================
+
+describe('Trust Score Cache with XFetch', () => {
+  const testEntityId = 'entity-123';
+  const testTenantId = 'tenant-456';
+  const testTrustRecord: TrustRecord = {
+    entityId: testEntityId,
+    score: 750,
+    level: 3,
+    components: {
+      behavioral: 0.8,
+      compliance: 0.7,
+      identity: 0.75,
+      context: 0.7,
+    },
+    signals: [],
+    lastCalculatedAt: '2026-01-18T12:00:00.000Z',
+    history: [],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    clearInFlightTrustRefreshes();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+    clearInFlightTrustRefreshes();
+  });
+
+  it('should store delta in cache entry', async () => {
+    mockRedis.get.mockResolvedValueOnce(null);
+    mockRedis.setex.mockResolvedValueOnce('OK');
+
+    const fetchFn = vi.fn().mockImplementation(async () => {
+      vi.advanceTimersByTime(100); // Simulate 100ms computation
+      return testTrustRecord;
+    });
+
+    await getCachedTrustScoreWithRefresh(testEntityId, testTenantId, fetchFn);
+
+    const [, , serialized] = mockRedis.setex.mock.calls[0] as [string, number, string];
+    const stored = JSON.parse(serialized);
+
+    expect(stored.delta).toBeDefined();
+    expect(stored.delta).toBeGreaterThanOrEqual(100);
+  });
+
+  it('should use delta for XFetch calculation when available', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    // Entry very close to expiration to trigger XFetch refresh
+    // With delta = 5000ms, TTL = 300s, and entry at 299s age:
+    // threshold = 300000 + 5000 * log(0.01) = 300000 - 23025 = 276975ms
+    // age = 299 * 1000 = 299000ms > 276975, so REFRESH
+    const cachedData = {
+      record: testTrustRecord,
+      cachedAt: now - 299, // 299 seconds ago
+      expiresAt: now + 1, // 1 second remaining (very close to expiry)
+      delta: 5000, // 5 second computation time (high to increase refresh probability)
+    };
+    mockRedis.get.mockResolvedValue(JSON.stringify(cachedData));
+    mockRedis.setex.mockResolvedValue('OK');
+
+    const originalRandom = Math.random;
+    // log(0.01) = -4.605, so threshold = 300000 + 5000 * (-4.605) = 276975ms
+    // age = 299000ms > 276975ms, so SHOULD refresh
+    Math.random = vi.fn().mockReturnValue(0.01);
+
+    const fetchFn = vi.fn().mockResolvedValue({ ...testTrustRecord, score: 900 });
+
+    const result = await getCachedTrustScoreWithRefresh(
+      testEntityId,
+      testTenantId,
+      fetchFn
+    );
+
+    // Should return stale data
+    expect(result.score).toBe(750);
+
+    // Background refresh should be triggered
+    await vi.runAllTimersAsync();
+    expect(fetchFn).toHaveBeenCalled();
+
+    Math.random = originalRandom;
+  });
+
+  it('should deduplicate concurrent trust score refreshes', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    // Entry very close to expiration - will trigger XFetch refresh
+    const cachedData = {
+      record: testTrustRecord,
+      cachedAt: now - 299, // 299 seconds ago
+      expiresAt: now + 1, // 1 second remaining
+      delta: 5000, // 5 second computation time
+    };
+    mockRedis.get.mockResolvedValue(JSON.stringify(cachedData));
+    mockRedis.setex.mockResolvedValue('OK');
+
+    const originalRandom = Math.random;
+    Math.random = vi.fn().mockReturnValue(0.01);
+
+    let fetchCount = 0;
+    const fetchFn = vi.fn().mockImplementation(async () => {
+      fetchCount++;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return { ...testTrustRecord, score: 900 + fetchCount };
+    });
+
+    // Multiple concurrent requests
+    const results = await Promise.all([
+      getCachedTrustScoreWithRefresh(testEntityId, testTenantId, fetchFn),
+      getCachedTrustScoreWithRefresh(testEntityId, testTenantId, fetchFn),
+      getCachedTrustScoreWithRefresh(testEntityId, testTenantId, fetchFn),
+    ]);
+
+    // All should return stale data
+    for (const result of results) {
+      expect(result.score).toBe(750);
+    }
+
+    // Wait for background refresh
+    await vi.runAllTimersAsync();
+
+    // Should only have one background refresh due to deduplication
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(getInFlightTrustRefreshCount()).toBe(0);
+
+    Math.random = originalRandom;
+  });
+
+  it('should fall back to legacy behavior when delta is not present', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    // Legacy cache entry without delta
+    const cachedData = {
+      record: testTrustRecord,
+      cachedAt: now - 270,
+      expiresAt: now + 30, // 30 seconds remaining
+      // No delta field
+    };
+    mockRedis.get.mockResolvedValue(JSON.stringify(cachedData));
+    mockRedis.setex.mockResolvedValue('OK');
+
+    const originalRandom = Math.random;
+    // With legacy behavior: probability = (60-30)/60 = 0.5
+    // random 0.3 < 0.5 should trigger refresh
+    Math.random = vi.fn().mockReturnValue(0.3);
+
+    const fetchFn = vi.fn().mockResolvedValue({ ...testTrustRecord, score: 900 });
+
+    const result = await getCachedTrustScoreWithRefresh(
+      testEntityId,
+      testTenantId,
+      fetchFn
+    );
+
+    expect(result.score).toBe(750);
+
+    // Should trigger background refresh using legacy probability
+    await vi.runAllTimersAsync();
+    expect(fetchFn).toHaveBeenCalled();
+
+    Math.random = originalRandom;
   });
 });
