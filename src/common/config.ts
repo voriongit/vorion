@@ -33,14 +33,26 @@ const configSchema = z.object({
     rateLimit: z.coerce.number().default(1000),
   }),
 
+  health: z.object({
+    // Per-check timeout (database, redis individual checks)
+    checkTimeoutMs: z.coerce.number().default(5000),
+    // Overall /ready endpoint timeout
+    readyTimeoutMs: z.coerce.number().default(10000),
+    // Liveness check timeout
+    livenessTimeoutMs: z.coerce.number().default(1000),
+  }),
+
   database: z.object({
     host: z.string().default('localhost'),
     port: z.coerce.number().default(5432),
     name: z.string().default('vorion'),
     user: z.string().default('vorion'),
     password: z.string().default(''),
-    poolMin: z.coerce.number().default(5),
-    poolMax: z.coerce.number().default(20),
+    poolMin: z.coerce.number().min(1).default(10),
+    poolMax: z.coerce.number().min(1).default(50),
+    poolIdleTimeoutMs: z.coerce.number().min(0).default(10000),
+    poolConnectionTimeoutMs: z.coerce.number().min(0).default(5000),
+    metricsIntervalMs: z.coerce.number().min(1000).default(5000),
   }),
 
   redis: z.object({
@@ -54,7 +66,19 @@ const configSchema = z.object({
     secret: z.string().min(32),
     expiration: z.string().default('1h'),
     refreshExpiration: z.string().default('7d'),
-  }),
+    requireJti: z.coerce.boolean().default(false),
+  }).refine(
+    (jwt) => {
+      const env = process.env['VORION_ENV'] || 'development';
+      const isInsecureDefault = jwt.secret === 'development-secret-change-in-production';
+      // Block insecure default in production/staging
+      if ((env === 'production' || env === 'staging') && isInsecureDefault) {
+        return false;
+      }
+      return true;
+    },
+    { message: 'VORION_JWT_SECRET must be set to a secure value in production/staging' }
+  ),
 
   proof: z.object({
     storage: z.enum(['local', 's3', 'gcs']).default('local'),
@@ -130,12 +154,133 @@ const configSchema = z.object({
     // Scheduled jobs
     cleanupCronSchedule: z.string().default('0 2 * * *'), // 2 AM daily
     timeoutCheckCronSchedule: z.string().default('*/5 * * * *'), // Every 5 minutes
+    // Rate limiting configuration per intent type
+    rateLimits: z.object({
+      default: z.object({
+        limit: z.coerce.number().min(1).default(100),
+        windowSeconds: z.coerce.number().min(1).default(60),
+      }),
+      highRisk: z.object({
+        limit: z.coerce.number().min(1).default(10),
+        windowSeconds: z.coerce.number().min(1).default(60),
+      }),
+      dataExport: z.object({
+        limit: z.coerce.number().min(1).default(5),
+        windowSeconds: z.coerce.number().min(1).default(60),
+      }),
+      adminAction: z.object({
+        limit: z.coerce.number().min(1).default(20),
+        windowSeconds: z.coerce.number().min(1).default(60),
+      }),
+    }).default({}),
+  }),
+
+  webhook: z.object({
+    // HTTP request timeout for webhook delivery (default: 10s, min: 1s, max: 60s)
+    timeoutMs: z.coerce.number().min(1000).max(60000).default(10000),
+    // Number of retry attempts for failed webhook deliveries
+    retryAttempts: z.coerce.number().min(0).max(10).default(3),
+    // Base delay between retries in milliseconds (exponential backoff applied)
+    retryDelayMs: z.coerce.number().min(100).max(30000).default(1000),
+  }),
+
+  audit: z.object({
+    // Enterprise compliance: 365 days (1 year) minimum retention
+    // For financial compliance (SOX, etc.), consider 2555 days (7 years)
+    retentionDays: z.coerce.number().min(30).default(365),
+    // Enable archival instead of hard delete for compliance
+    archiveEnabled: z.coerce.boolean().default(true),
+    // Move records to archived state after this many days
+    archiveAfterDays: z.coerce.number().min(1).default(90),
+    // Batch size for cleanup operations
+    cleanupBatchSize: z.coerce.number().min(100).max(10000).default(1000),
   }),
 
   encryption: z.object({
+    /**
+     * Dedicated encryption key for data at rest (required in production/staging)
+     * MUST be at least 32 characters. Generate with: openssl rand -base64 32
+     */
     key: z.string().min(32).optional(),
+    /**
+     * Salt for PBKDF2 key derivation (required in production/staging)
+     * MUST be at least 16 characters. Generate with: openssl rand -base64 16
+     */
+    salt: z.string().min(16).optional(),
     algorithm: z.string().default('aes-256-gcm'),
+    /**
+     * PBKDF2 iterations - higher is more secure but slower
+     * Minimum 100,000 recommended by OWASP
+     */
+    pbkdf2Iterations: z.coerce.number().min(10000).default(100000),
+    /**
+     * Key derivation version for future algorithm changes
+     * v1 = SHA-256 (legacy, insecure)
+     * v2 = PBKDF2-SHA512 (current)
+     */
+    kdfVersion: z.coerce.number().min(1).max(2).default(2),
   }).default({}),
+}).superRefine((config, ctx) => {
+  const env = config.env;
+  const isProductionOrStaging = env === 'production' || env === 'staging';
+
+  // Validate encryption key is set when encryption is enabled
+  if (config.intent.encryptContext && !config.encryption.key) {
+    if (isProductionOrStaging) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'VORION_ENCRYPTION_KEY must be set when encryption is enabled in production/staging',
+        path: ['encryption', 'key'],
+      });
+    }
+  }
+
+  // Validate encryption salt is set when using PBKDF2 (v2) in production
+  if (config.encryption.kdfVersion === 2 && !config.encryption.salt) {
+    if (isProductionOrStaging) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'VORION_ENCRYPTION_SALT must be set when using PBKDF2 key derivation in production/staging',
+        path: ['encryption', 'salt'],
+      });
+    }
+  }
+
+  // Warn if encryption key is set but fallback to v1 (insecure) in production
+  if (isProductionOrStaging && config.encryption.kdfVersion === 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'VORION_ENCRYPTION_KDF_VERSION=1 (legacy SHA-256) is insecure. Migrate to version 2 (PBKDF2-SHA512)',
+      path: ['encryption', 'kdfVersion'],
+    });
+  }
+
+  // Validate database pool settings
+  if (config.database.poolMin > config.database.poolMax) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Database poolMin cannot exceed poolMax',
+      path: ['database', 'poolMin'],
+    });
+  }
+
+  // Validate retention settings
+  if (config.intent.softDeleteRetentionDays > config.intent.eventRetentionDays) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'softDeleteRetentionDays cannot exceed eventRetentionDays',
+      path: ['intent', 'softDeleteRetentionDays'],
+    });
+  }
+
+  // Validate audit archive settings
+  if (config.audit.archiveAfterDays >= config.audit.retentionDays) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'audit.archiveAfterDays must be less than audit.retentionDays',
+      path: ['audit', 'archiveAfterDays'],
+    });
+  }
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -170,6 +315,12 @@ export function loadConfig(): Config {
       rateLimit: process.env['VORION_API_RATE_LIMIT'],
     },
 
+    health: {
+      checkTimeoutMs: process.env['VORION_HEALTH_CHECK_TIMEOUT_MS'],
+      readyTimeoutMs: process.env['VORION_READY_CHECK_TIMEOUT_MS'],
+      livenessTimeoutMs: process.env['VORION_LIVENESS_CHECK_TIMEOUT_MS'],
+    },
+
     database: {
       host: process.env['VORION_DB_HOST'],
       port: process.env['VORION_DB_PORT'],
@@ -178,6 +329,9 @@ export function loadConfig(): Config {
       password: process.env['VORION_DB_PASSWORD'],
       poolMin: process.env['VORION_DB_POOL_MIN'],
       poolMax: process.env['VORION_DB_POOL_MAX'],
+      poolIdleTimeoutMs: process.env['VORION_DB_POOL_IDLE_TIMEOUT'],
+      poolConnectionTimeoutMs: process.env['VORION_DB_POOL_CONNECTION_TIMEOUT'],
+      metricsIntervalMs: process.env['VORION_DB_METRICS_INTERVAL_MS'],
     },
 
     redis: {
@@ -191,6 +345,7 @@ export function loadConfig(): Config {
       secret: process.env['VORION_JWT_SECRET'] ?? 'development-secret-change-in-production',
       expiration: process.env['VORION_JWT_EXPIRATION'],
       refreshExpiration: process.env['VORION_REFRESH_TOKEN_EXPIRATION'],
+      requireJti: process.env['VORION_JWT_REQUIRE_JTI'],
     },
 
     proof: {
@@ -241,11 +396,45 @@ export function loadConfig(): Config {
       escalationDefaultRecipient: process.env['VORION_INTENT_ESCALATION_RECIPIENT'],
       cleanupCronSchedule: process.env['VORION_INTENT_CLEANUP_CRON'],
       timeoutCheckCronSchedule: process.env['VORION_INTENT_TIMEOUT_CHECK_CRON'],
+      rateLimits: {
+        default: {
+          limit: process.env['VORION_RATELIMIT_DEFAULT_LIMIT'],
+          windowSeconds: process.env['VORION_RATELIMIT_DEFAULT_WINDOW'],
+        },
+        highRisk: {
+          limit: process.env['VORION_RATELIMIT_HIGH_RISK_LIMIT'],
+          windowSeconds: process.env['VORION_RATELIMIT_HIGH_RISK_WINDOW'],
+        },
+        dataExport: {
+          limit: process.env['VORION_RATELIMIT_DATA_EXPORT_LIMIT'],
+          windowSeconds: process.env['VORION_RATELIMIT_DATA_EXPORT_WINDOW'],
+        },
+        adminAction: {
+          limit: process.env['VORION_RATELIMIT_ADMIN_ACTION_LIMIT'],
+          windowSeconds: process.env['VORION_RATELIMIT_ADMIN_ACTION_WINDOW'],
+        },
+      },
+    },
+
+    webhook: {
+      timeoutMs: process.env['VORION_WEBHOOK_TIMEOUT_MS'],
+      retryAttempts: process.env['VORION_WEBHOOK_RETRY_ATTEMPTS'],
+      retryDelayMs: process.env['VORION_WEBHOOK_RETRY_DELAY_MS'],
+    },
+
+    audit: {
+      retentionDays: process.env['VORION_AUDIT_RETENTION_DAYS'],
+      archiveEnabled: process.env['VORION_AUDIT_ARCHIVE_ENABLED'],
+      archiveAfterDays: process.env['VORION_AUDIT_ARCHIVE_AFTER_DAYS'],
+      cleanupBatchSize: process.env['VORION_AUDIT_CLEANUP_BATCH_SIZE'],
     },
 
     encryption: {
       key: process.env['VORION_ENCRYPTION_KEY'],
+      salt: process.env['VORION_ENCRYPTION_SALT'],
       algorithm: process.env['VORION_ENCRYPTION_ALGORITHM'],
+      pbkdf2Iterations: process.env['VORION_ENCRYPTION_PBKDF2_ITERATIONS'],
+      kdfVersion: process.env['VORION_ENCRYPTION_KDF_VERSION'],
     },
   });
 }

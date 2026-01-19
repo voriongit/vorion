@@ -2,14 +2,23 @@
  * INTENT Escalation Service
  *
  * Manages human-in-the-loop approval workflows for high-risk intents.
- * Supports escalation creation, approval/rejection, and timeout handling.
+ * Uses PostgreSQL as primary storage with Redis for caching and fast lookups.
+ * Supports escalation creation, acknowledgment, approval/rejection, and timeout handling.
  */
 
 import { randomUUID } from 'node:crypto';
+import { and, desc, eq, inArray, lt, lte, sql } from 'drizzle-orm';
 import { createLogger } from '../common/logger.js';
 import { getConfig } from '../common/config.js';
 import { getRedis } from '../common/redis.js';
+import { getDatabase } from '../common/db.js';
 import type { ID } from '../common/types.js';
+import { EscalationError, DatabaseError } from '../common/errors.js';
+import {
+  escalations,
+  type EscalationRow,
+  type NewEscalationRow,
+} from './schema.js';
 import {
   escalationsCreated,
   escalationResolutions,
@@ -19,7 +28,7 @@ import {
 
 const logger = createLogger({ component: 'escalation' });
 
-export type EscalationStatus = 'pending' | 'approved' | 'rejected' | 'timeout';
+export type EscalationStatus = 'pending' | 'acknowledged' | 'approved' | 'rejected' | 'timeout' | 'cancelled';
 
 export interface EscalationRecord {
   id: ID;
@@ -37,7 +46,10 @@ export interface EscalationRecord {
   };
   timeout: string; // ISO duration (e.g., "PT1H" for 1 hour)
   timeoutAt: string; // ISO timestamp when escalation expires
-  metadata: Record<string, unknown>;
+  acknowledgedAt?: string;
+  slaBreached: boolean;
+  context?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -50,12 +62,23 @@ export interface CreateEscalationOptions {
   escalatedTo: string;
   escalatedBy?: string;
   timeout?: string; // ISO duration, defaults to config
+  context?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
 
 export interface ResolveEscalationOptions {
   resolvedBy: string;
   notes?: string;
+}
+
+export interface ListEscalationFilters {
+  tenantId: ID;
+  status?: EscalationStatus | EscalationStatus[];
+  intentId?: ID;
+  escalatedTo?: string;
+  limit?: number;
+  cursor?: ID;
+  includeSlaBreached?: boolean;
 }
 
 /**
@@ -67,7 +90,7 @@ function calculateTimeout(isoDuration: string): Date {
   // Parse ISO 8601 duration (simplified: PT1H, PT30M, P1D, etc.)
   const match = isoDuration.match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
   if (!match) {
-    throw new Error(`Invalid ISO duration: ${isoDuration}`);
+    throw new EscalationError(`Invalid ISO duration: ${isoDuration}`, { isoDuration });
   }
 
   const days = parseInt(match[1] ?? '0', 10);
@@ -84,12 +107,63 @@ function calculateTimeout(isoDuration: string): Date {
 }
 
 /**
- * Escalation Service
+ * Map database row to EscalationRecord
+ */
+function mapRow(row: EscalationRow): EscalationRecord {
+  const base: EscalationRecord = {
+    id: row.id,
+    intentId: row.intentId,
+    tenantId: row.tenantId,
+    reason: row.reason,
+    reasonCategory: row.reasonCategory,
+    escalatedTo: row.escalatedTo,
+    status: row.status,
+    timeout: row.timeout,
+    timeoutAt: row.timeoutAt.toISOString(),
+    slaBreached: row.slaBreached ?? false,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+
+  if (row.escalatedBy) {
+    base.escalatedBy = row.escalatedBy;
+  }
+
+  if (row.acknowledgedAt) {
+    base.acknowledgedAt = row.acknowledgedAt.toISOString();
+  }
+
+  if (row.resolvedBy && row.resolvedAt) {
+    base.resolution = {
+      resolvedBy: row.resolvedBy,
+      resolvedAt: row.resolvedAt.toISOString(),
+    };
+    if (row.resolutionNotes) {
+      base.resolution.notes = row.resolutionNotes;
+    }
+  }
+
+  if (row.context) {
+    base.context = row.context as Record<string, unknown>;
+  }
+
+  if (row.metadata) {
+    base.metadata = row.metadata as Record<string, unknown>;
+  }
+
+  return base;
+}
+
+/**
+ * Escalation Service with PostgreSQL persistence and Redis caching
  */
 export class EscalationService {
   private config = getConfig();
   private redis = getRedis();
-  private readonly keyPrefix = 'escalation:';
+  private db = getDatabase();
+  private readonly cachePrefix = 'escalation:cache:';
+  private readonly indexPrefix = 'escalation:idx:';
+  private readonly cacheTtlSeconds = 300; // 5 minutes cache TTL
 
   /**
    * Create a new escalation for an intent
@@ -97,53 +171,33 @@ export class EscalationService {
   async create(options: CreateEscalationOptions): Promise<EscalationRecord> {
     const timeout = options.timeout ?? this.config.intent.escalationTimeout ?? 'PT1H';
     const timeoutAt = calculateTimeout(timeout);
+    const now = new Date();
 
-    const baseEscalation = {
+    const newEscalation: NewEscalationRow = {
       id: randomUUID(),
       intentId: options.intentId,
       tenantId: options.tenantId,
       reason: options.reason,
       reasonCategory: options.reasonCategory,
       escalatedTo: options.escalatedTo,
-      status: 'pending' as const,
+      escalatedBy: options.escalatedBy ?? null,
+      status: 'pending',
       timeout,
-      timeoutAt: timeoutAt.toISOString(),
-      metadata: options.metadata ?? {},
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      timeoutAt,
+      context: options.context ?? null,
+      metadata: options.metadata ?? null,
+      createdAt: now,
+      updatedAt: now,
     };
 
-    const escalation: EscalationRecord = options.escalatedBy
-      ? { ...baseEscalation, escalatedBy: options.escalatedBy }
-      : baseEscalation;
+    // Insert into PostgreSQL
+    const [row] = await this.db.insert(escalations).values(newEscalation).returning();
+    if (!row) throw new DatabaseError('Failed to create escalation', { intentId: options.intentId });
 
-    // Store in Redis with TTL slightly longer than timeout
-    const ttlSeconds = Math.ceil((timeoutAt.getTime() - Date.now()) / 1000) + 3600; // +1 hour buffer
-    await this.redis.set(
-      this.keyPrefix + escalation.id,
-      JSON.stringify(escalation),
-      'EX',
-      ttlSeconds
-    );
+    const escalation = mapRow(row);
 
-    // Add to tenant's pending escalations set
-    await this.redis.sadd(
-      `${this.keyPrefix}pending:${options.tenantId}`,
-      escalation.id
-    );
-
-    // Add to intent's escalation list
-    await this.redis.rpush(
-      `${this.keyPrefix}intent:${options.intentId}`,
-      escalation.id
-    );
-
-    // Schedule timeout check
-    await this.redis.zadd(
-      `${this.keyPrefix}timeouts`,
-      timeoutAt.getTime(),
-      escalation.id
-    );
+    // Update Redis indexes for fast lookups
+    await this.updateRedisIndexes(escalation, 'add');
 
     // Record metrics
     escalationsCreated.inc({
@@ -164,52 +218,205 @@ export class EscalationService {
   /**
    * Get an escalation by ID
    */
-  async get(id: ID): Promise<EscalationRecord | null> {
-    const data = await this.redis.get(this.keyPrefix + id);
-    if (!data) return null;
-    return JSON.parse(data) as EscalationRecord;
+  async get(id: ID, tenantId?: ID): Promise<EscalationRecord | null> {
+    // Try cache first
+    const cached = await this.redis.get(this.cachePrefix + id);
+    if (cached) {
+      const escalation = JSON.parse(cached) as EscalationRecord;
+      // Verify tenant if provided
+      if (tenantId && escalation.tenantId !== tenantId) {
+        return null;
+      }
+      return escalation;
+    }
+
+    // Query database
+    const conditions = [eq(escalations.id, id)];
+    if (tenantId) {
+      conditions.push(eq(escalations.tenantId, tenantId));
+    }
+
+    const [row] = await this.db
+      .select()
+      .from(escalations)
+      .where(conditions.length > 1 ? and(...conditions) : conditions[0]);
+
+    if (!row) return null;
+
+    const escalation = mapRow(row);
+
+    // Populate cache
+    await this.redis.set(
+      this.cachePrefix + id,
+      JSON.stringify(escalation),
+      'EX',
+      this.cacheTtlSeconds
+    );
+
+    return escalation;
   }
 
   /**
    * Get escalation by intent ID (most recent)
    */
-  async getByIntentId(intentId: ID): Promise<EscalationRecord | null> {
-    const ids = await this.redis.lrange(`${this.keyPrefix}intent:${intentId}`, -1, -1);
-    if (!ids.length || !ids[0]) return null;
-    return this.get(ids[0]);
+  async getByIntentId(intentId: ID, tenantId?: ID): Promise<EscalationRecord | null> {
+    const conditions = [eq(escalations.intentId, intentId)];
+    if (tenantId) {
+      conditions.push(eq(escalations.tenantId, tenantId));
+    }
+
+    const [row] = await this.db
+      .select()
+      .from(escalations)
+      .where(conditions.length > 1 ? and(...conditions) : conditions[0])
+      .orderBy(desc(escalations.createdAt))
+      .limit(1);
+
+    if (!row) return null;
+    return mapRow(row);
   }
 
   /**
-   * List pending escalations for a tenant
+   * List escalations with filters
    */
-  async listPending(tenantId: ID): Promise<EscalationRecord[]> {
-    const ids = await this.redis.smembers(`${this.keyPrefix}pending:${tenantId}`);
-    const escalations: EscalationRecord[] = [];
+  async list(filters: ListEscalationFilters): Promise<EscalationRecord[]> {
+    const { tenantId, status, intentId, escalatedTo, limit = 50, cursor } = filters;
+    const conditions = [eq(escalations.tenantId, tenantId)];
 
-    for (const id of ids) {
-      const escalation = await this.get(id);
-      if (escalation && escalation.status === 'pending') {
-        escalations.push(escalation);
+    if (status) {
+      if (Array.isArray(status)) {
+        conditions.push(inArray(escalations.status, status));
+      } else {
+        conditions.push(eq(escalations.status, status));
       }
     }
 
-    return escalations.sort((a, b) =>
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
+    if (intentId) {
+      conditions.push(eq(escalations.intentId, intentId));
+    }
+
+    if (escalatedTo) {
+      conditions.push(eq(escalations.escalatedTo, escalatedTo));
+    }
+
+    // Cursor-based pagination
+    if (cursor) {
+      const [cursorEsc] = await this.db
+        .select({ createdAt: escalations.createdAt })
+        .from(escalations)
+        .where(eq(escalations.id, cursor));
+
+      if (cursorEsc?.createdAt) {
+        conditions.push(lt(escalations.createdAt, cursorEsc.createdAt));
+      }
+    }
+
+    const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0];
+
+    const rows = await this.db
+      .select()
+      .from(escalations)
+      .where(whereClause)
+      .orderBy(desc(escalations.createdAt))
+      .limit(Math.min(limit, 100));
+
+    return rows.map(mapRow);
+  }
+
+  /**
+   * List pending escalations for a tenant (optimized with Redis index)
+   */
+  async listPending(tenantId: ID): Promise<EscalationRecord[]> {
+    // Use Redis set for fast pending lookup
+    const pendingIds = await this.redis.smembers(`${this.indexPrefix}pending:${tenantId}`);
+
+    if (pendingIds.length === 0) {
+      // Fall back to database if index is empty (cold start)
+      return this.list({ tenantId, status: 'pending' });
+    }
+
+    // Fetch from database to ensure consistency
+    const rows = await this.db
+      .select()
+      .from(escalations)
+      .where(
+        and(
+          eq(escalations.tenantId, tenantId),
+          eq(escalations.status, 'pending'),
+          inArray(escalations.id, pendingIds)
+        )
+      )
+      .orderBy(escalations.createdAt);
+
+    return rows.map(mapRow);
+  }
+
+  /**
+   * Acknowledge an escalation (SLA tracking)
+   */
+  async acknowledge(id: ID, tenantId: ID, acknowledgedBy: string): Promise<EscalationRecord | null> {
+    const escalation = await this.get(id, tenantId);
+    if (!escalation) return null;
+
+    if (escalation.status !== 'pending') {
+      logger.warn({ escalationId: id, currentStatus: escalation.status }, 'Cannot acknowledge non-pending escalation');
+      return escalation;
+    }
+
+    const now = new Date();
+
+    const [row] = await this.db
+      .update(escalations)
+      .set({
+        status: 'acknowledged',
+        acknowledgedAt: now,
+        updatedAt: now,
+        metadata: {
+          ...(escalation.metadata ?? {}),
+          acknowledgedBy,
+        },
+      })
+      .where(
+        and(
+          eq(escalations.id, id),
+          eq(escalations.tenantId, tenantId),
+          eq(escalations.status, 'pending')
+        )
+      )
+      .returning();
+
+    if (!row) return escalation;
+
+    const updated = mapRow(row);
+
+    // Update cache and indexes
+    await this.invalidateCache(id);
+    await this.redis.srem(`${this.indexPrefix}pending:${tenantId}`, id);
+
+    logger.info({ escalationId: id, acknowledgedBy }, 'Escalation acknowledged');
+
+    return updated;
   }
 
   /**
    * Approve an escalation
    */
-  async approve(id: ID, options: ResolveEscalationOptions): Promise<EscalationRecord | null> {
-    return this.resolve(id, 'approved', options);
+  async approve(id: ID, tenantId: ID, options: ResolveEscalationOptions): Promise<EscalationRecord | null> {
+    return this.resolve(id, tenantId, 'approved', options);
   }
 
   /**
    * Reject an escalation
    */
-  async reject(id: ID, options: ResolveEscalationOptions): Promise<EscalationRecord | null> {
-    return this.resolve(id, 'rejected', options);
+  async reject(id: ID, tenantId: ID, options: ResolveEscalationOptions): Promise<EscalationRecord | null> {
+    return this.resolve(id, tenantId, 'rejected', options);
+  }
+
+  /**
+   * Cancel an escalation
+   */
+  async cancel(id: ID, tenantId: ID, options: ResolveEscalationOptions): Promise<EscalationRecord | null> {
+    return this.resolve(id, tenantId, 'cancelled', options);
   }
 
   /**
@@ -217,12 +424,14 @@ export class EscalationService {
    */
   private async resolve(
     id: ID,
-    status: 'approved' | 'rejected',
+    tenantId: ID,
+    status: 'approved' | 'rejected' | 'cancelled',
     options: ResolveEscalationOptions
   ): Promise<EscalationRecord | null> {
-    const escalation = await this.get(id);
+    const escalation = await this.get(id, tenantId);
     if (!escalation) return null;
-    if (escalation.status !== 'pending') {
+
+    if (!['pending', 'acknowledged'].includes(escalation.status)) {
       logger.warn({ escalationId: id, currentStatus: escalation.status }, 'Escalation already resolved');
       return escalation;
     }
@@ -230,103 +439,105 @@ export class EscalationService {
     const now = new Date();
     const pendingDuration = (now.getTime() - new Date(escalation.createdAt).getTime()) / 1000;
 
-    escalation.status = status;
-    const baseResolution = {
-      resolvedBy: options.resolvedBy,
-      resolvedAt: now.toISOString(),
-    };
-    escalation.resolution = options.notes
-      ? { ...baseResolution, notes: options.notes }
-      : baseResolution;
-    escalation.updatedAt = now.toISOString();
+    // Check SLA breach
+    const timeoutAt = new Date(escalation.timeoutAt);
+    const slaBreached = now > timeoutAt;
 
-    // Update in Redis
-    const ttl = await this.redis.ttl(this.keyPrefix + id);
-    await this.redis.set(
-      this.keyPrefix + id,
-      JSON.stringify(escalation),
-      'EX',
-      Math.max(ttl, 86400) // Keep for at least 24 hours after resolution
-    );
+    const [row] = await this.db
+      .update(escalations)
+      .set({
+        status,
+        resolvedBy: options.resolvedBy,
+        resolvedAt: now,
+        resolutionNotes: options.notes ?? null,
+        slaBreached,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(escalations.id, id),
+          eq(escalations.tenantId, tenantId),
+          inArray(escalations.status, ['pending', 'acknowledged'])
+        )
+      )
+      .returning();
 
-    // Remove from pending set
-    await this.redis.srem(`${this.keyPrefix}pending:${escalation.tenantId}`, id);
+    if (!row) return escalation;
 
-    // Remove from timeout schedule
-    await this.redis.zrem(`${this.keyPrefix}timeouts`, id);
+    const updated = mapRow(row);
+
+    // Update cache and indexes
+    await this.invalidateCache(id);
+    await this.updateRedisIndexes(updated, 'remove');
 
     // Record metrics
     escalationResolutions.inc({
-      tenant_id: escalation.tenantId,
+      tenant_id: tenantId,
       resolution: status,
     });
     escalationPendingDuration.observe(
-      { tenant_id: escalation.tenantId, resolution: status },
+      { tenant_id: tenantId, resolution: status },
       pendingDuration
     );
-    escalationsPending.dec({ tenant_id: escalation.tenantId });
+    escalationsPending.dec({ tenant_id: tenantId });
 
     logger.info(
-      { escalationId: id, status, resolvedBy: options.resolvedBy, pendingDuration },
+      { escalationId: id, status, resolvedBy: options.resolvedBy, pendingDuration, slaBreached },
       'Escalation resolved'
     );
 
-    return escalation;
+    return updated;
   }
 
   /**
    * Process timed out escalations
    */
   async processTimeouts(): Promise<number> {
-    const now = Date.now();
-    const timedOutIds = await this.redis.zrangebyscore(
-      `${this.keyPrefix}timeouts`,
-      '-inf',
-      now.toString()
-    );
+    const now = new Date();
+
+    // Find all pending/acknowledged escalations past timeout
+    const timedOut = await this.db
+      .select()
+      .from(escalations)
+      .where(
+        and(
+          inArray(escalations.status, ['pending', 'acknowledged']),
+          lte(escalations.timeoutAt, now)
+        )
+      );
 
     let processed = 0;
 
-    for (const id of timedOutIds) {
-      const escalation = await this.get(id);
-      if (!escalation || escalation.status !== 'pending') {
-        await this.redis.zrem(`${this.keyPrefix}timeouts`, id);
-        continue;
-      }
+    for (const row of timedOut) {
+      const pendingDuration = (now.getTime() - row.createdAt.getTime()) / 1000;
 
-      const pendingDuration = (now - new Date(escalation.createdAt).getTime()) / 1000;
+      await this.db
+        .update(escalations)
+        .set({
+          status: 'timeout',
+          slaBreached: true,
+          updatedAt: now,
+        })
+        .where(eq(escalations.id, row.id));
 
-      escalation.status = 'timeout';
-      escalation.updatedAt = new Date().toISOString();
-
-      // Update in Redis
-      const ttl = await this.redis.ttl(this.keyPrefix + id);
-      await this.redis.set(
-        this.keyPrefix + id,
-        JSON.stringify(escalation),
-        'EX',
-        Math.max(ttl, 86400)
-      );
-
-      // Remove from pending set
-      await this.redis.srem(`${this.keyPrefix}pending:${escalation.tenantId}`, id);
-
-      // Remove from timeout schedule
-      await this.redis.zrem(`${this.keyPrefix}timeouts`, id);
+      // Update indexes
+      await this.invalidateCache(row.id);
+      await this.redis.srem(`${this.indexPrefix}pending:${row.tenantId}`, row.id);
+      await this.redis.zrem(`${this.indexPrefix}timeouts`, row.id);
 
       // Record metrics
       escalationResolutions.inc({
-        tenant_id: escalation.tenantId,
+        tenant_id: row.tenantId,
         resolution: 'timeout',
       });
       escalationPendingDuration.observe(
-        { tenant_id: escalation.tenantId, resolution: 'timeout' },
+        { tenant_id: row.tenantId, resolution: 'timeout' },
         pendingDuration
       );
-      escalationsPending.dec({ tenant_id: escalation.tenantId });
+      escalationsPending.dec({ tenant_id: row.tenantId });
 
       logger.warn(
-        { escalationId: id, intentId: escalation.intentId },
+        { escalationId: row.id, intentId: row.intentId },
         'Escalation timed out'
       );
 
@@ -339,18 +550,19 @@ export class EscalationService {
   /**
    * Get escalation history for an intent
    */
-  async getHistory(intentId: ID): Promise<EscalationRecord[]> {
-    const ids = await this.redis.lrange(`${this.keyPrefix}intent:${intentId}`, 0, -1);
-    const escalations: EscalationRecord[] = [];
-
-    for (const id of ids) {
-      const escalation = await this.get(id);
-      if (escalation) {
-        escalations.push(escalation);
-      }
+  async getHistory(intentId: ID, tenantId?: ID): Promise<EscalationRecord[]> {
+    const conditions = [eq(escalations.intentId, intentId)];
+    if (tenantId) {
+      conditions.push(eq(escalations.tenantId, tenantId));
     }
 
-    return escalations;
+    const rows = await this.db
+      .select()
+      .from(escalations)
+      .where(conditions.length > 1 ? and(...conditions) : conditions[0])
+      .orderBy(escalations.createdAt);
+
+    return rows.map(mapRow);
   }
 
   /**
@@ -358,7 +570,102 @@ export class EscalationService {
    */
   async hasPendingEscalation(intentId: ID): Promise<boolean> {
     const escalation = await this.getByIntentId(intentId);
-    return escalation?.status === 'pending';
+    return escalation?.status === 'pending' || escalation?.status === 'acknowledged';
+  }
+
+  /**
+   * Get SLA breach statistics for a tenant
+   */
+  async getSlaStats(tenantId: ID, since?: Date): Promise<{
+    total: number;
+    breached: number;
+    breachRate: number;
+    avgResolutionTime: number;
+  }> {
+    const conditions = [eq(escalations.tenantId, tenantId)];
+    if (since) {
+      conditions.push(lte(escalations.createdAt, since));
+    }
+
+    const [stats] = await this.db
+      .select({
+        total: sql<number>`count(*)`,
+        breached: sql<number>`count(*) filter (where ${escalations.slaBreached} = true)`,
+        avgTime: sql<number>`avg(extract(epoch from (coalesce(${escalations.resolvedAt}, now()) - ${escalations.createdAt})))`,
+      })
+      .from(escalations)
+      .where(conditions.length > 1 ? and(...conditions) : conditions[0]);
+
+    const total = Number(stats?.total ?? 0);
+    const breached = Number(stats?.breached ?? 0);
+    const avgResolutionTime = Number(stats?.avgTime ?? 0);
+
+    return {
+      total,
+      breached,
+      breachRate: total > 0 ? breached / total : 0,
+      avgResolutionTime,
+    };
+  }
+
+  /**
+   * Update Redis indexes for fast lookups
+   */
+  private async updateRedisIndexes(
+    escalation: EscalationRecord,
+    operation: 'add' | 'remove'
+  ): Promise<void> {
+    const pendingKey = `${this.indexPrefix}pending:${escalation.tenantId}`;
+    const timeoutKey = `${this.indexPrefix}timeouts`;
+    const intentKey = `${this.indexPrefix}intent:${escalation.intentId}`;
+
+    if (operation === 'add' && ['pending', 'acknowledged'].includes(escalation.status)) {
+      await this.redis.sadd(pendingKey, escalation.id);
+      await this.redis.zadd(timeoutKey, new Date(escalation.timeoutAt).getTime(), escalation.id);
+      await this.redis.rpush(intentKey, escalation.id);
+    } else if (operation === 'remove') {
+      await this.redis.srem(pendingKey, escalation.id);
+      await this.redis.zrem(timeoutKey, escalation.id);
+    }
+  }
+
+  /**
+   * Invalidate cache for an escalation
+   */
+  private async invalidateCache(id: ID): Promise<void> {
+    await this.redis.del(this.cachePrefix + id);
+  }
+
+  /**
+   * Rebuild Redis indexes from PostgreSQL (for recovery/consistency)
+   */
+  async rebuildIndexes(tenantId?: ID): Promise<{ indexed: number }> {
+    const conditions = tenantId ? [eq(escalations.tenantId, tenantId)] : [];
+
+    // Get all pending/acknowledged escalations
+    const pendingRows = await this.db
+      .select()
+      .from(escalations)
+      .where(
+        conditions.length > 0
+          ? and(...conditions, inArray(escalations.status, ['pending', 'acknowledged']))
+          : inArray(escalations.status, ['pending', 'acknowledged'])
+      );
+
+    // Clear existing indexes if tenant-specific
+    if (tenantId) {
+      await this.redis.del(`${this.indexPrefix}pending:${tenantId}`);
+    }
+
+    // Rebuild indexes
+    for (const row of pendingRows) {
+      const escalation = mapRow(row);
+      await this.updateRedisIndexes(escalation, 'add');
+    }
+
+    logger.info({ tenantId, indexed: pendingRows.length }, 'Rebuilt escalation indexes');
+
+    return { indexed: pendingRows.length };
   }
 }
 

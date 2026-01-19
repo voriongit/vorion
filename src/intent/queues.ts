@@ -1,19 +1,42 @@
 import { Queue, Worker, QueueEvents, JobsOptions, Job } from 'bullmq';
 import { randomUUID } from 'node:crypto';
-import type { Intent, TrustLevel } from '../common/types.js';
+import type { Intent, TrustLevel, ControlAction } from '../common/types.js';
 import type { EvaluationResult } from '../basis/types.js';
+import type { PolicyAction } from '../policy/types.js';
 import { TrustEngine } from '../trust-engine/index.js';
 import { RuleEvaluator } from '../basis/evaluator.js';
 import { createEnforcementService } from '../enforce/index.js';
-import { createLogger } from '../common/logger.js';
+import { createLogger, createTracedLogger } from '../common/logger.js';
 import { getRedis } from '../common/redis.js';
 import { getConfig } from '../common/config.js';
 import type { IntentService } from './index.js';
 import {
+  getTraceContext,
+  runWithTraceContext,
+  createTraceContext,
+  addTraceToJobData,
+  extractTraceFromJobData,
+  type TraceContext,
+} from '../common/trace.js';
+import {
   recordJobResult,
   updateQueueGauges,
   dlqSize,
+  recordPolicyEvaluation,
+  recordPolicyOverride,
 } from './metrics.js';
+import {
+  getPolicyLoader,
+  createPolicyEvaluator,
+  type MultiPolicyEvaluationResult,
+  type PolicyEvaluationContext,
+} from '../policy/index.js';
+import {
+  createAuditService,
+  createAuditHelper,
+  type AuditService,
+} from '../audit/index.js';
+import { createWebhookService } from './webhooks.js';
 
 const logger = createLogger({ component: 'intent-queue' });
 
@@ -50,8 +73,50 @@ function getJobOptions(): JobsOptions {
 const connection = () => getRedis().duplicate();
 
 const trustEngine = new TrustEngine();
+const policyLoader = getPolicyLoader();
+const policyEvaluator = createPolicyEvaluator();
 const ruleEvaluator = new RuleEvaluator();
 const enforcementService = createEnforcementService({ defaultAction: 'deny' });
+const auditService = createAuditService();
+const auditHelper = createAuditHelper(auditService);
+const webhookService = createWebhookService();
+
+/**
+ * Action priority map - lower number = more restrictive
+ */
+const ACTION_PRIORITY: Record<ControlAction | PolicyAction, number> = {
+  deny: 1,
+  escalate: 2,
+  allow: 3,
+};
+
+/**
+ * Convert policy action to control action
+ */
+function policyActionToControlAction(action: PolicyAction): ControlAction {
+  return action as ControlAction; // They're the same values
+}
+
+/**
+ * Determine the most restrictive action between rule and policy evaluations
+ * Returns the more restrictive action (deny > escalate > allow)
+ */
+function getMostRestrictiveAction(
+  ruleAction: ControlAction,
+  policyAction?: PolicyAction | null
+): ControlAction {
+  if (!policyAction) {
+    return ruleAction;
+  }
+
+  const rulePriority = ACTION_PRIORITY[ruleAction];
+  const policyPriority = ACTION_PRIORITY[policyAction];
+
+  // Return the action with lower priority number (more restrictive)
+  return rulePriority <= policyPriority
+    ? ruleAction
+    : policyActionToControlAction(policyAction);
+}
 
 // Queue instances
 export const intentIntakeQueue = new Queue(queueNames.intake, {
@@ -149,6 +214,24 @@ async function markIntentFailed(
         timestamp: new Date().toISOString(),
       },
     });
+
+    // Record failed intent audit event
+    await auditHelper.recordIntentEvent(
+      tenantId,
+      'intent.failed',
+      intentId,
+      { type: 'service', id: 'intent-queue' },
+      {
+        outcome: 'failure',
+        reason: error.message,
+        stateChange: {
+          after: { status: 'failed' },
+        },
+        metadata: {
+          errorStack: error.stack,
+        },
+      }
+    );
   } catch (updateError) {
     logger.error(
       { intentId, error: updateError },
@@ -159,13 +242,23 @@ async function markIntentFailed(
 
 export async function enqueueIntentSubmission(
   intent: Intent,
-  options?: { namespace?: string }
+  options?: { namespace?: string; traceContext?: TraceContext }
 ): Promise<void> {
-  await intentIntakeQueue.add('intent.submitted', {
+  // Get current trace context or create new one
+  const traceContext = options?.traceContext ?? getTraceContext() ?? createTraceContext();
+
+  const jobData = addTraceToJobData({
     intentId: intent.id,
     tenantId: intent.tenantId,
     namespace: options?.namespace,
-  });
+  }, traceContext);
+
+  await intentIntakeQueue.add('intent.submitted', jobData);
+
+  logger.debug(
+    { intentId: intent.id, traceId: traceContext.traceId },
+    'Intent enqueued for processing'
+  );
 }
 
 export function registerIntentWorkers(service: IntentService): void {
@@ -183,53 +276,89 @@ export function registerIntentWorkers(service: IntentService): void {
     async (job) => {
       const startTime = Date.now();
       if (!intentService || isShuttingDown) return;
-      const { intentId, tenantId, namespace } = job.data as {
-        intentId: string;
-        tenantId: string;
-        namespace?: string;
-      };
 
-      try {
-        const intent = await intentService.get(intentId, tenantId);
-        if (!intent) {
-          logger.warn({ intentId }, 'Intent no longer exists');
-          return;
-        }
+      // Extract trace context from job data or create new one
+      const traceContext = extractTraceFromJobData(job.data) ?? createTraceContext();
 
-        const trustRecord = await trustEngine.getScore(intent.entityId);
-        const trustSnapshot = trustRecord
-          ? {
-              score: trustRecord.score,
-              level: trustRecord.level,
-              components: trustRecord.components,
-            }
-          : null;
+      // Run the job within the trace context
+      return runWithTraceContext(traceContext, async () => {
+        const { intentId, tenantId, namespace } = job.data as {
+          intentId: string;
+          tenantId: string;
+          namespace?: string;
+        };
 
-        await intentService.updateTrustMetadata(
-          intent.id,
-          intent.tenantId,
-          trustSnapshot,
-          trustRecord?.level,
-          trustRecord?.score
+        const jobLogger = createTracedLogger(
+          { component: 'intake-worker', jobId: job.id },
+          traceContext.traceId,
+          traceContext.spanId
         );
 
-        await intentService.updateStatus(intent.id, intent.tenantId, 'evaluating', 'pending');
-        await intentService.recordEvaluation(intent.id, intent.tenantId, {
-          stage: 'trust-snapshot',
-          result: trustSnapshot,
-        });
+        try {
+          const intent = await intentService!.get(intentId, tenantId);
+          if (!intent) {
+            jobLogger.warn({ intentId }, 'Intent no longer exists');
+            return;
+          }
 
-        await intentEvaluateQueue.add('intent.evaluate', {
-          intentId: intent.id,
-          tenantId: intent.tenantId,
-          namespace,
-        });
+          const trustRecord = await trustEngine.getScore(intent.entityId);
+          const trustSnapshot = trustRecord
+            ? {
+                score: trustRecord.score,
+                level: trustRecord.level,
+                components: trustRecord.components,
+              }
+            : null;
 
-        recordJobResult('intake', 'success', (Date.now() - startTime) / 1000);
-      } catch (error) {
-        recordJobResult('intake', 'failure', (Date.now() - startTime) / 1000);
-        throw error;
-      }
+          await intentService!.updateTrustMetadata(
+            intent.id,
+            intent.tenantId,
+            trustSnapshot,
+            trustRecord?.level,
+            trustRecord?.score
+          );
+
+          await intentService!.updateStatus(intent.id, intent.tenantId, 'evaluating', 'pending');
+          await intentService!.recordEvaluation(intent.id, intent.tenantId, {
+            stage: 'trust-snapshot',
+            result: trustSnapshot,
+          });
+
+          // Record audit event for intent submission
+          await auditHelper.recordIntentEvent(
+            tenantId,
+            'intent.submitted',
+            intentId,
+            { type: 'agent', id: intent.entityId, name: intent.metadata['agentName'] as string },
+            {
+              outcome: 'success',
+              metadata: {
+                intentType: intent.intentType,
+                goal: intent.goal,
+                trustScore: trustRecord?.score,
+                trustLevel: trustRecord?.level,
+                namespace,
+              },
+            }
+          ).catch((auditError) => {
+            jobLogger.warn({ error: auditError }, 'Failed to record intake audit event');
+          });
+
+          // Propagate trace context to next queue
+          const nextJobData = addTraceToJobData({
+            intentId: intent.id,
+            tenantId: intent.tenantId,
+            namespace,
+          }, traceContext);
+
+          await intentEvaluateQueue.add('intent.evaluate', nextJobData);
+
+          recordJobResult('intake', 'success', (Date.now() - startTime) / 1000);
+        } catch (error) {
+          recordJobResult('intake', 'failure', (Date.now() - startTime) / 1000);
+          throw error;
+        }
+      });
     },
     {
       connection: connection(),
@@ -272,7 +401,25 @@ export function registerIntentWorkers(service: IntentService): void {
           return;
         }
 
-        const evaluation = await ruleEvaluator.evaluate({
+        // Record evaluation started audit event
+        auditHelper.recordIntentEvent(
+          tenantId,
+          'intent.evaluation.started',
+          intentId,
+          { type: 'service', id: 'intent-queue' },
+          {
+            outcome: 'success',
+            metadata: {
+              intentType: intent.intentType,
+              namespace,
+            },
+          }
+        ).catch((auditError) => {
+          logger.warn({ error: auditError }, 'Failed to record evaluation started audit event');
+        });
+
+        // Build evaluation context (shared by rule and policy evaluators)
+        const evaluationContext = {
           intent: {
             id: intent.id,
             type: intent.intentType ?? 'generic',
@@ -283,7 +430,7 @@ export function registerIntentWorkers(service: IntentService): void {
             id: intent.entityId,
             type: (intent.metadata['entityType'] as string) ?? 'agent',
             trustScore: intent.trustScore ?? 0,
-            trustLevel: intent.trustLevel ?? 0,
+            trustLevel: (intent.trustLevel ?? 0) as TrustLevel,
             attributes: intent.metadata,
           },
           environment: {
@@ -294,7 +441,74 @@ export function registerIntentWorkers(service: IntentService): void {
           custom: {
             namespace: namespace ?? config.intent.defaultNamespace,
           },
-        });
+        };
+
+        // Rule-based evaluation (existing system)
+        const evaluation = await ruleEvaluator.evaluate(evaluationContext);
+
+        // Policy-based evaluation (new policy engine)
+        let policyEvaluation: MultiPolicyEvaluationResult | null = null;
+        const policyNamespace = namespace ?? config.intent.defaultNamespace;
+        const policyEvalStartTime = Date.now();
+        try {
+          const policies = await policyLoader.getPolicies(
+            intent.tenantId,
+            policyNamespace
+          );
+
+          if (policies.length > 0) {
+            // Build policy evaluation context (slightly different structure)
+            const policyContext: PolicyEvaluationContext = {
+              intent: {
+                ...intent,
+                intentType: intent.intentType ?? 'generic',
+              },
+              entity: {
+                id: intent.entityId,
+                type: (intent.metadata['entityType'] as string) ?? 'agent',
+                trustScore: intent.trustScore ?? 0,
+                trustLevel: (intent.trustLevel ?? 0) as TrustLevel,
+                attributes: intent.metadata as Record<string, unknown>,
+              },
+              environment: {
+                timestamp: new Date().toISOString(),
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                requestId: randomUUID(),
+              },
+            };
+
+            policyEvaluation = await policyEvaluator.evaluateMultiple(policies, policyContext);
+
+            // Record policy evaluation metrics
+            const policyEvalDuration = (Date.now() - policyEvalStartTime) / 1000;
+            const matchedCount = policyEvaluation.policiesEvaluated.filter(
+              (p) => p.matchedRules.length > 0
+            ).length;
+            const policyResult = policyEvaluation.finalAction === 'allow'
+              ? 'allow'
+              : policyEvaluation.finalAction === 'deny'
+                ? 'deny'
+                : 'escalate';
+            recordPolicyEvaluation(
+              intent.tenantId,
+              policyNamespace,
+              policyResult,
+              policyEvalDuration,
+              matchedCount
+            );
+
+            logger.debug(
+              {
+                intentId: intent.id,
+                policiesEvaluated: policyEvaluation.policiesEvaluated.length,
+                finalAction: policyEvaluation.finalAction,
+              },
+              'Policy evaluation completed'
+            );
+          }
+        } catch (policyError) {
+          logger.warn({ intentId: intent.id, error: policyError }, 'Policy evaluation failed, continuing with rules only');
+        }
 
         await intentService.recordEvaluation(intent.id, intent.tenantId, {
           stage: 'basis',
@@ -302,10 +516,32 @@ export function registerIntentWorkers(service: IntentService): void {
           namespace: namespace ?? config.intent.defaultNamespace,
         });
 
+        // Record evaluation completed audit event
+        auditHelper.recordIntentEvent(
+          tenantId,
+          'intent.evaluation.completed',
+          intentId,
+          { type: 'service', id: 'intent-queue' },
+          {
+            outcome: 'success',
+            metadata: {
+              rulesPassed: evaluation.passed,
+              rulesAction: evaluation.finalAction,
+              rulesEvaluated: evaluation.rulesEvaluated.length,
+              policyAction: policyEvaluation?.finalAction,
+              policiesEvaluated: policyEvaluation?.policiesEvaluated.length ?? 0,
+              namespace,
+            },
+          }
+        ).catch((auditError) => {
+          logger.warn({ error: auditError }, 'Failed to record evaluation completed audit event');
+        });
+
         await intentDecisionQueue.add('intent.decision', {
           intentId: intent.id,
           tenantId: intent.tenantId,
           evaluation,
+          policyEvaluation,
         });
 
         recordJobResult('evaluate', 'success', (Date.now() - startTime) / 1000);
@@ -341,10 +577,11 @@ export function registerIntentWorkers(service: IntentService): void {
     async (job) => {
       const startTime = Date.now();
       if (!intentService || isShuttingDown) return;
-      const { intentId, tenantId, evaluation } = job.data as {
+      const { intentId, tenantId, evaluation, policyEvaluation } = job.data as {
         intentId: string;
         tenantId: string;
         evaluation: EvaluationResult;
+        policyEvaluation?: MultiPolicyEvaluationResult | null;
       };
 
       try {
@@ -395,28 +632,125 @@ export function registerIntentWorkers(service: IntentService): void {
           }
         }
 
-        const decision = await enforcementService.decide({
+        // Get rule-based enforcement decision
+        const ruleDecision = await enforcementService.decide({
           intent,
           evaluation,
           trustScore: intent.trustScore ?? 0,
           trustLevel: (intent.trustLevel ?? 0) as TrustLevel,
         });
 
+        // Determine final action considering policy evaluation
+        let finalAction: ControlAction = ruleDecision.action;
+        let policyOverride = false;
+
+        if (policyEvaluation && policyEvaluation.finalAction) {
+          const combinedAction = getMostRestrictiveAction(
+            ruleDecision.action,
+            policyEvaluation.finalAction
+          );
+
+          if (combinedAction !== ruleDecision.action) {
+            policyOverride = true;
+            finalAction = combinedAction;
+
+            // Record policy override metric
+            recordPolicyOverride(
+              intent.tenantId,
+              ruleDecision.action,
+              policyEvaluation.finalAction
+            );
+
+            logger.info(
+              {
+                intentId: intent.id,
+                ruleAction: ruleDecision.action,
+                policyAction: policyEvaluation.finalAction,
+                finalAction,
+              },
+              'Policy evaluation overrode rule decision'
+            );
+          }
+        }
+
+        // Record both rule and policy evaluations
         await intentService.recordEvaluation(intent.id, intent.tenantId, {
           stage: 'decision',
-          decision,
+          ruleDecision: {
+            action: ruleDecision.action,
+            constraintsEvaluated: ruleDecision.constraintsEvaluated,
+          },
+          policyDecision: policyEvaluation
+            ? {
+                action: policyEvaluation.finalAction,
+                reason: policyEvaluation.finalReason,
+                policiesEvaluated: policyEvaluation.policiesEvaluated.length,
+                matchedPolicies: policyEvaluation.policiesEvaluated
+                  .filter((p) => p.matchedRules.length > 0)
+                  .map((p) => ({ policyId: p.policyId, action: p.action, reason: p.reason })),
+              }
+            : null,
+          finalAction,
+          policyOverride,
         });
 
         const nextStatus =
-          decision.action === 'allow'
+          finalAction === 'allow'
             ? 'approved'
-            : decision.action === 'deny'
+            : finalAction === 'deny'
               ? 'denied'
-              : decision.action === 'escalate'
+              : finalAction === 'escalate'
                 ? 'escalated'
                 : 'pending';
 
         await intentService.updateStatus(intent.id, intent.tenantId, nextStatus, 'evaluating');
+
+        // Trigger webhook notifications for approved/denied statuses (fire and forget)
+        if (nextStatus === 'approved') {
+          webhookService.notifyIntent('intent.approved', intentId, tenantId, { finalAction, policyOverride }).catch((error) => {
+            logger.warn({ error, intentId }, 'Failed to send webhook notification');
+          });
+        } else if (nextStatus === 'denied') {
+          const reason = policyEvaluation?.finalReason ?? 'Denied by policy';
+          webhookService.notifyIntent('intent.denied', intentId, tenantId, { finalAction, reason }).catch((error) => {
+            logger.warn({ error, intentId }, 'Failed to send webhook notification');
+          });
+        }
+        // Note: 'escalated' status webhook is handled by escalation creation elsewhere
+
+        // Determine the audit event type based on final action
+        const auditEventType =
+          finalAction === 'allow'
+            ? 'intent.approved'
+            : finalAction === 'deny'
+              ? 'intent.denied'
+              : 'intent.escalated';
+
+        // Record decision audit event
+        auditHelper.recordIntentEvent(
+          tenantId,
+          auditEventType,
+          intentId,
+          { type: 'service', id: 'intent-queue' },
+          {
+            outcome: 'success',
+            stateChange: {
+              before: { status: 'evaluating' },
+              after: { status: nextStatus },
+            },
+            metadata: {
+              ruleAction: ruleDecision.action,
+              policyAction: policyEvaluation?.finalAction,
+              finalAction,
+              policyOverride,
+              trustScore: intent.trustScore,
+              trustLevel: intent.trustLevel,
+            },
+          }
+        ).catch((auditError) => {
+          logger.warn({ error: auditError }, 'Failed to record decision audit event');
+        });
+
         recordJobResult('decision', 'success', (Date.now() - startTime) / 1000);
       } catch (error) {
         recordJobResult('decision', 'failure', (Date.now() - startTime) / 1000);

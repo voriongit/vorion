@@ -1,34 +1,38 @@
 /**
  * Intent Cleanup Job
  *
- * Handles retention policy enforcement for intents and events.
+ * Handles retention policy enforcement for intents, events, and audit records.
  * Run as a scheduled job (cron) or call directly.
  */
 
 import { createLogger } from '../common/logger.js';
 import { getConfig } from '../common/config.js';
 import { IntentRepository } from './repository.js';
+import { createAuditService, type AuditCleanupResult } from '../audit/index.js';
 
 const logger = createLogger({ component: 'intent-cleanup' });
 
 export interface CleanupResult {
   eventsDeleted: number;
   intentsPurged: number;
+  auditCleanup?: AuditCleanupResult;
   durationMs: number;
   errors: string[];
 }
 
 /**
- * Run cleanup for old events and soft-deleted intents
+ * Run cleanup for old events, soft-deleted intents, and audit records
  */
 export async function runCleanup(): Promise<CleanupResult> {
   const startTime = performance.now();
   const config = getConfig();
   const repository = new IntentRepository();
+  const auditService = createAuditService();
   const errors: string[] = [];
 
   let eventsDeleted = 0;
   let intentsPurged = 0;
+  let auditCleanup: AuditCleanupResult | undefined;
 
   // Delete old events based on retention policy
   try {
@@ -60,16 +64,52 @@ export async function runCleanup(): Promise<CleanupResult> {
     logger.error({ error }, 'Failed to purge soft-deleted intents');
   }
 
+  // Run audit cleanup (archive + purge based on retention settings)
+  try {
+    auditCleanup = await auditService.runCleanup({
+      archiveAfterDays: config.audit.archiveAfterDays,
+      retentionDays: config.audit.retentionDays,
+      batchSize: config.audit.cleanupBatchSize,
+      archiveEnabled: config.audit.archiveEnabled,
+    });
+
+    if (auditCleanup.errors.length > 0) {
+      errors.push(...auditCleanup.errors);
+    }
+
+    logger.info(
+      {
+        auditArchived: auditCleanup.archived.recordsArchived,
+        auditPurged: auditCleanup.purged.recordsPurged,
+        archiveAfterDays: config.audit.archiveAfterDays,
+        retentionDays: config.audit.retentionDays,
+      },
+      'Audit cleanup completed'
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    errors.push(`Audit cleanup failed: ${message}`);
+    logger.error({ error }, 'Failed to run audit cleanup');
+  }
+
   const durationMs = Math.round(performance.now() - startTime);
 
   logger.info(
-    { eventsDeleted, intentsPurged, durationMs, errorCount: errors.length },
+    {
+      eventsDeleted,
+      intentsPurged,
+      auditArchived: auditCleanup?.archived.recordsArchived ?? 0,
+      auditPurged: auditCleanup?.purged.recordsPurged ?? 0,
+      durationMs,
+      errorCount: errors.length,
+    },
     'Cleanup job completed'
   );
 
   return {
     eventsDeleted,
     intentsPurged,
+    auditCleanup,
     durationMs,
     errors,
   };

@@ -35,6 +35,7 @@ vi.mock('../../../src/common/redis.js', () => {
     set: vi.fn().mockResolvedValue('OK'),
     get: vi.fn().mockResolvedValue(null),
     duplicate: vi.fn().mockReturnThis(),
+    eval: vi.fn().mockResolvedValue(1), // For lock release
   };
   return {
     getRedis: vi.fn(() => mockRedis),
@@ -350,45 +351,102 @@ describe('IntentService', () => {
   });
 
   describe('updateStatus', () => {
-    const mockIntent: Intent = {
-      id: 'intent-123',
-      tenantId: 'tenant-456',
-      entityId: '123e4567-e89b-12d3-a456-426614174000',
-      goal: 'Test goal',
-      context: {},
-      metadata: {},
-      status: 'approved',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    it('should update intent status with valid transition', async () => {
+      // Intent in 'evaluating' state can transition to 'approved'
+      const currentIntent: Intent = {
+        id: 'intent-123',
+        tenantId: 'tenant-456',
+        entityId: '123e4567-e89b-12d3-a456-426614174000',
+        goal: 'Test goal',
+        context: {},
+        metadata: {},
+        status: 'evaluating',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-    it('should update intent status', async () => {
-      mockRepository.updateStatus.mockResolvedValue(mockIntent);
+      const updatedIntent: Intent = {
+        ...currentIntent,
+        status: 'approved',
+      };
+
+      mockRepository.findById.mockResolvedValue(currentIntent);
+      mockRepository.updateStatus.mockResolvedValue(updatedIntent);
 
       const intent = await service.updateStatus('intent-123', 'tenant-456', 'approved');
 
-      expect(intent).toEqual(mockIntent);
+      expect(intent).toEqual(updatedIntent);
+      expect(mockRepository.findById).toHaveBeenCalledWith('intent-123', 'tenant-456');
       expect(mockRepository.updateStatus).toHaveBeenCalledWith('intent-123', 'tenant-456', 'approved');
       expect(mockRepository.recordEvent).toHaveBeenCalledWith({
         intentId: 'intent-123',
-        eventType: 'intent.status.changed',
-        payload: { status: 'approved' },
+        eventType: 'intent.approved',
+        payload: { status: 'approved', previousStatus: 'evaluating' },
       });
     });
 
-    it('should throw error for invalid status', async () => {
+    it('should throw StateMachineError for invalid transition', async () => {
+      // Intent in 'pending' state cannot directly transition to 'completed'
+      const currentIntent: Intent = {
+        id: 'intent-123',
+        tenantId: 'tenant-456',
+        entityId: '123e4567-e89b-12d3-a456-426614174000',
+        goal: 'Test goal',
+        context: {},
+        metadata: {},
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      mockRepository.findById.mockResolvedValue(currentIntent);
+
       await expect(
-        service.updateStatus('intent-123', 'tenant-456', 'invalid' as IntentStatus)
-      ).rejects.toThrow('Invalid intent status');
+        service.updateStatus('intent-123', 'tenant-456', 'completed')
+      ).rejects.toThrow('Invalid transition');
     });
 
     it('should return null if intent not found', async () => {
-      mockRepository.updateStatus.mockResolvedValue(null);
+      mockRepository.findById.mockResolvedValue(null);
 
       const intent = await service.updateStatus('nonexistent', 'tenant-456', 'approved');
 
       expect(intent).toBeNull();
+      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
       expect(mockRepository.recordEvent).not.toHaveBeenCalled();
+    });
+
+    it('should allow skipping validation with skipValidation option', async () => {
+      const currentIntent: Intent = {
+        id: 'intent-123',
+        tenantId: 'tenant-456',
+        entityId: '123e4567-e89b-12d3-a456-426614174000',
+        goal: 'Test goal',
+        context: {},
+        metadata: {},
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedIntent: Intent = {
+        ...currentIntent,
+        status: 'completed',
+      };
+
+      mockRepository.findById.mockResolvedValue(currentIntent);
+      mockRepository.updateStatus.mockResolvedValue(updatedIntent);
+
+      // This would normally fail validation, but skipValidation allows it
+      const intent = await service.updateStatus(
+        'intent-123',
+        'tenant-456',
+        'completed',
+        undefined,
+        { skipValidation: true }
+      );
+
+      expect(intent).toEqual(updatedIntent);
     });
   });
 
@@ -770,19 +828,25 @@ describe('Intent Cancellation', () => {
   });
 
   it('should cancel a pending intent', async () => {
-    const mockCancelledIntent: Intent = {
+    const mockPendingIntent: Intent = {
       id: 'intent-123',
       tenantId: 'tenant-456',
       entityId: '123e4567-e89b-12d3-a456-426614174000',
       goal: 'Test goal',
       context: {},
       metadata: {},
-      status: 'cancelled',
-      cancellationReason: 'User requested',
+      status: 'pending', // Must be in a cancellable state
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
+    const mockCancelledIntent: Intent = {
+      ...mockPendingIntent,
+      status: 'cancelled',
+      cancellationReason: 'User requested',
+    };
+
+    mockRepository.findById.mockResolvedValue(mockPendingIntent);
     mockRepository.cancelIntent.mockResolvedValue(mockCancelledIntent);
 
     const result = await service.cancel('intent-123', {
@@ -799,19 +863,25 @@ describe('Intent Cancellation', () => {
   });
 
   it('should record cancellation evaluation when cancelledBy is provided', async () => {
-    const mockCancelledIntent: Intent = {
+    const mockPendingIntent: Intent = {
       id: 'intent-123',
       tenantId: 'tenant-456',
       entityId: '123e4567-e89b-12d3-a456-426614174000',
       goal: 'Test goal',
       context: {},
       metadata: {},
-      status: 'cancelled',
-      cancellationReason: 'Admin override',
+      status: 'pending', // Must be in a cancellable state
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
+    const mockCancelledIntent: Intent = {
+      ...mockPendingIntent,
+      status: 'cancelled',
+      cancellationReason: 'Admin override',
+    };
+
+    mockRepository.findById.mockResolvedValue(mockPendingIntent);
     mockRepository.cancelIntent.mockResolvedValue(mockCancelledIntent);
 
     await service.cancel('intent-123', {
@@ -832,18 +902,24 @@ describe('Intent Cancellation', () => {
   });
 
   it('should record cancellation event', async () => {
-    const mockCancelledIntent: Intent = {
+    const mockPendingIntent: Intent = {
       id: 'intent-123',
       tenantId: 'tenant-456',
       entityId: '123e4567-e89b-12d3-a456-426614174000',
       goal: 'Test goal',
       context: {},
       metadata: {},
-      status: 'cancelled',
+      status: 'pending', // Must be in a cancellable state
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
+    const mockCancelledIntent: Intent = {
+      ...mockPendingIntent,
+      status: 'cancelled',
+    };
+
+    mockRepository.findById.mockResolvedValue(mockPendingIntent);
     mockRepository.cancelIntent.mockResolvedValue(mockCancelledIntent);
 
     await service.cancel('intent-123', {
@@ -861,8 +937,8 @@ describe('Intent Cancellation', () => {
     });
   });
 
-  it('should return null when intent cannot be cancelled', async () => {
-    mockRepository.cancelIntent.mockResolvedValue(null);
+  it('should return null when intent not found', async () => {
+    mockRepository.findById.mockResolvedValue(null);
 
     const result = await service.cancel('intent-123', {
       tenantId: 'tenant-456',
@@ -870,7 +946,31 @@ describe('Intent Cancellation', () => {
     });
 
     expect(result).toBeNull();
+    expect(mockRepository.cancelIntent).not.toHaveBeenCalled();
     expect(mockRepository.recordEvent).not.toHaveBeenCalled();
+  });
+
+  it('should throw error when intent is in non-cancellable state', async () => {
+    const mockCompletedIntent: Intent = {
+      id: 'intent-123',
+      tenantId: 'tenant-456',
+      entityId: '123e4567-e89b-12d3-a456-426614174000',
+      goal: 'Test goal',
+      context: {},
+      metadata: {},
+      status: 'completed', // Not cancellable
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    mockRepository.findById.mockResolvedValue(mockCompletedIntent);
+
+    await expect(
+      service.cancel('intent-123', {
+        tenantId: 'tenant-456',
+        reason: 'Too late',
+      })
+    ).rejects.toThrow('Cannot cancel intent');
   });
 });
 

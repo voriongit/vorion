@@ -4,11 +4,15 @@
  * Manages scheduled jobs for intent processing:
  * - Cleanup job for GDPR compliance (event retention, soft-delete purging)
  * - Escalation timeout checks
+ *
+ * Uses leader election to ensure only one instance runs scheduled tasks
+ * across multiple server instances.
  */
 
 import cron, { type ScheduledTask as CronTask } from 'node-cron';
 import { createLogger } from '../common/logger.js';
 import { getConfig } from '../common/config.js';
+import { getLeaderElection, type LeaderElection } from '../common/leader-election.js';
 import { runCleanup, type CleanupResult } from './cleanup.js';
 import { createEscalationService } from './escalation.js';
 import {
@@ -26,11 +30,15 @@ interface ScheduledTask {
 }
 
 const scheduledTasks: ScheduledTask[] = [];
+let leaderElection: LeaderElection | null = null;
 
 /**
- * Start all scheduled jobs
+ * Create and register all scheduled tasks (without starting them)
  */
-export function startScheduler(): void {
+function createScheduledTasks(): void {
+  // Clear any existing tasks
+  scheduledTasks.length = 0;
+
   const config = getConfig();
   const escalationService = createEscalationService();
 
@@ -39,6 +47,12 @@ export function startScheduler(): void {
   const cleanupTask = cron.createTask(
     config.intent.cleanupCronSchedule,
     async () => {
+      // Double-check we're still leader before running
+      if (!leaderElection?.isLeader()) {
+        logger.debug('Skipping cleanup job - not leader');
+        return;
+      }
+
       logger.info('Starting scheduled cleanup job');
       const startTime = Date.now();
 
@@ -81,6 +95,12 @@ export function startScheduler(): void {
   const timeoutTask = cron.createTask(
     config.intent.timeoutCheckCronSchedule,
     async () => {
+      // Double-check we're still leader before running
+      if (!leaderElection?.isLeader()) {
+        logger.debug('Skipping timeout check - not leader');
+        return;
+      }
+
       try {
         const processed = await escalationService.processTimeouts();
         if (processed > 0) {
@@ -101,8 +121,12 @@ export function startScheduler(): void {
     task: timeoutTask,
     cronExpression: config.intent.timeoutCheckCronSchedule,
   });
+}
 
-  // Start all tasks
+/**
+ * Start all cron tasks
+ */
+function startCronTasks(): void {
   for (const scheduledTask of scheduledTasks) {
     scheduledTask.task.start();
     logger.info(
@@ -110,17 +134,79 @@ export function startScheduler(): void {
       'Scheduled task started'
     );
   }
-
-  logger.info({ taskCount: scheduledTasks.length }, 'Scheduler started');
 }
 
 /**
- * Stop all scheduled jobs
+ * Stop all cron tasks
  */
-export function stopScheduler(): void {
+function stopCronTasks(): void {
   for (const scheduledTask of scheduledTasks) {
     scheduledTask.task.stop();
     logger.info({ name: scheduledTask.name }, 'Scheduled task stopped');
+  }
+}
+
+/**
+ * Start all scheduled jobs
+ *
+ * Uses leader election to ensure only one instance runs scheduled tasks.
+ * If this instance becomes the leader, it starts the cron jobs.
+ * If another instance is the leader, this instance periodically checks
+ * and will take over if the leader fails.
+ */
+export async function startScheduler(): Promise<void> {
+  // Initialize leader election
+  leaderElection = getLeaderElection();
+
+  // Create tasks (but don't start them yet)
+  createScheduledTasks();
+
+  // Try to become leader
+  const isLeader = await leaderElection.tryBecomeLeader();
+
+  if (isLeader) {
+    logger.info(
+      { instanceId: leaderElection.getInstanceId() },
+      'This instance is the scheduler leader'
+    );
+
+    // Start heartbeat to maintain leadership
+    leaderElection.startHeartbeat();
+
+    // Start cron jobs
+    startCronTasks();
+
+    logger.info({ taskCount: scheduledTasks.length }, 'Scheduler started as leader');
+  } else {
+    logger.info(
+      { instanceId: leaderElection.getInstanceId() },
+      'Another instance is the scheduler leader, waiting for leadership'
+    );
+
+    // Start periodic leader check - if we become leader, start the cron jobs
+    leaderElection.startLeaderCheck(() => {
+      logger.info(
+        { instanceId: leaderElection?.getInstanceId() },
+        'Acquired scheduler leadership, starting cron jobs'
+      );
+      startCronTasks();
+    });
+
+    logger.info('Scheduler started in standby mode');
+  }
+}
+
+/**
+ * Stop all scheduled jobs and resign leadership
+ */
+export async function stopScheduler(): Promise<void> {
+  // Stop cron tasks
+  stopCronTasks();
+
+  // Resign leadership (allows faster failover)
+  if (leaderElection) {
+    await leaderElection.resign();
+    leaderElection = null;
   }
 
   scheduledTasks.length = 0;
@@ -130,16 +216,24 @@ export function stopScheduler(): void {
 /**
  * Get status of all scheduled jobs
  */
-export function getSchedulerStatus(): Array<{
-  name: string;
-  cronExpression: string;
-  running: boolean;
-}> {
-  return scheduledTasks.map((t) => ({
-    name: t.name,
-    cronExpression: t.cronExpression,
-    running: true, // node-cron doesn't expose running state directly
-  }));
+export function getSchedulerStatus(): {
+  isLeader: boolean;
+  instanceId: string | null;
+  tasks: Array<{
+    name: string;
+    cronExpression: string;
+    running: boolean;
+  }>;
+} {
+  return {
+    isLeader: leaderElection?.isLeader() ?? false,
+    instanceId: leaderElection?.getInstanceId() ?? null,
+    tasks: scheduledTasks.map((t) => ({
+      name: t.name,
+      cronExpression: t.cronExpression,
+      running: leaderElection?.isLeader() ?? false,
+    })),
+  };
 }
 
 /**

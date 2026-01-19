@@ -3,14 +3,73 @@
  *
  * Per-tenant rate limiting with sliding window algorithm.
  * Uses Redis for distributed rate limiting across instances.
+ *
+ * Uses atomic Lua script to prevent race conditions under high contention.
  */
 
 import { getRedis } from '../common/redis.js';
 import { getConfig } from '../common/config.js';
 import { createLogger } from '../common/logger.js';
 import type { ID } from '../common/types.js';
+import { RateLimitError } from '../common/errors.js';
 
 const logger = createLogger({ component: 'ratelimit' });
+
+/**
+ * Lua script for atomic rate limit check-and-increment.
+ *
+ * This script runs atomically in Redis, preventing race conditions
+ * where multiple requests could briefly exceed the limit.
+ *
+ * KEYS[1] - The rate limit key (sorted set)
+ * ARGV[1] - Window start timestamp (entries older than this are removed)
+ * ARGV[2] - Current timestamp (now)
+ * ARGV[3] - Maximum allowed requests (limit)
+ * ARGV[4] - Unique request ID
+ * ARGV[5] - TTL for the key in seconds
+ *
+ * Returns: [allowed (0 or 1), currentCount, oldestTimestamp or 0]
+ */
+const RATE_LIMIT_LUA_SCRIPT = `
+local key = KEYS[1]
+local windowStart = tonumber(ARGV[1])
+local now = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+local requestId = ARGV[4]
+local ttl = tonumber(ARGV[5])
+
+-- Step 1: Remove old entries outside the window
+redis.call('ZREMRANGEBYSCORE', key, '-inf', windowStart)
+
+-- Step 2: Count current entries in window
+local currentCount = redis.call('ZCARD', key)
+
+-- Step 3: Check if we're under the limit
+if currentCount < limit then
+  -- Under limit: add the new request
+  redis.call('ZADD', key, now, requestId)
+  redis.call('EXPIRE', key, ttl)
+
+  -- Get oldest entry for reset calculation
+  local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+  local oldestTimestamp = 0
+  if #oldest >= 2 then
+    oldestTimestamp = tonumber(oldest[2])
+  end
+
+  return {1, currentCount + 1, oldestTimestamp}
+else
+  -- At or over limit: deny without adding
+  -- Get oldest entry for reset calculation
+  local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+  local oldestTimestamp = 0
+  if #oldest >= 2 then
+    oldestTimestamp = tonumber(oldest[2])
+  end
+
+  return {0, currentCount, oldestTimestamp}
+end
+`;
 
 export interface RateLimitConfig {
   /** Maximum requests per window */
@@ -41,12 +100,15 @@ export interface RateLimitHeaders {
   'Retry-After'?: string;
 }
 
-// Default rate limits per intent type
-const DEFAULT_LIMITS: Record<string, RateLimitConfig> = {
-  default: { limit: 100, windowSeconds: 60 },
-  'high-risk': { limit: 10, windowSeconds: 60 },
-  'data-export': { limit: 5, windowSeconds: 60 },
-  'admin-action': { limit: 20, windowSeconds: 60 },
+/**
+ * Map intent type names to config property names.
+ * Intent types use kebab-case (e.g., 'high-risk'), config uses camelCase (e.g., 'highRisk').
+ */
+const INTENT_TYPE_TO_CONFIG_KEY: Record<string, 'default' | 'highRisk' | 'dataExport' | 'adminAction'> = {
+  'default': 'default',
+  'high-risk': 'highRisk',
+  'data-export': 'dataExport',
+  'admin-action': 'adminAction',
 };
 
 /**
@@ -58,7 +120,16 @@ export class RateLimiter {
   private readonly keyPrefix = 'ratelimit:';
 
   /**
-   * Check and consume rate limit for a tenant
+   * Check and consume rate limit for a tenant.
+   *
+   * Uses an atomic Lua script to prevent race conditions under high contention.
+   * The script atomically:
+   * 1. Removes expired entries outside the sliding window
+   * 2. Counts current entries
+   * 3. Only adds the new request if under the limit
+   *
+   * This eliminates the race condition in the previous optimistic add pattern
+   * where multiple concurrent requests could briefly exceed the limit.
    */
   async checkLimit(
     tenantId: ID,
@@ -68,44 +139,34 @@ export class RateLimiter {
     const key = this.buildKey(tenantId, intentType);
     const now = Date.now();
     const windowStart = now - limitConfig.windowSeconds * 1000;
-
-    // Use Redis sorted set for sliding window
-    // Score = timestamp, Member = unique request ID
-    const multi = this.redis.multi();
-
-    // Remove old entries outside the window
-    multi.zremrangebyscore(key, '-inf', windowStart.toString());
-
-    // Count current entries in window
-    multi.zcard(key);
-
-    // Add current request (optimistically)
     const requestId = `${now}:${Math.random().toString(36).slice(2)}`;
-    multi.zadd(key, now, requestId);
+    const ttl = limitConfig.windowSeconds + 1;
 
-    // Set TTL on the key
-    multi.expire(key, limitConfig.windowSeconds + 1);
+    // Execute atomic Lua script for rate limiting
+    // Returns: [allowed (0 or 1), currentCount, oldestTimestamp]
+    const result = await this.redis.eval(
+      RATE_LIMIT_LUA_SCRIPT,
+      1,
+      key,
+      windowStart.toString(),
+      now.toString(),
+      limitConfig.limit.toString(),
+      requestId,
+      ttl.toString()
+    ) as [number, number, number];
 
-    const results = await multi.exec();
+    const [allowedFlag, currentCount, oldestTimestamp] = result;
+    const allowed = allowedFlag === 1;
 
-    // results[1] is the zcard result (count before adding)
-    const currentCount = (results?.[1]?.[1] as number) ?? 0;
-
-    const allowed = currentCount < limitConfig.limit;
-    const remaining = Math.max(0, limitConfig.limit - currentCount - 1);
-
-    // Calculate reset time
-    const oldestEntry = await this.redis.zrange(key, 0, 0, 'WITHSCORES');
+    // Calculate reset time based on oldest entry
     let resetIn = limitConfig.windowSeconds;
-    if (oldestEntry.length >= 2) {
-      const oldestTimestamp = parseInt(oldestEntry[1] ?? '0', 10);
+    if (oldestTimestamp > 0) {
       resetIn = Math.max(0, Math.ceil((oldestTimestamp + limitConfig.windowSeconds * 1000 - now) / 1000));
     }
 
-    if (!allowed) {
-      // Remove the request we just added since it's not allowed
-      await this.redis.zrem(key, requestId);
+    const remaining = Math.max(0, limitConfig.limit - currentCount);
 
+    if (!allowed) {
       logger.warn(
         { tenantId, intentType, current: currentCount, limit: limitConfig.limit },
         'Rate limit exceeded'
@@ -114,9 +175,9 @@ export class RateLimiter {
 
     const baseResult = {
       allowed,
-      current: currentCount + (allowed ? 1 : 0),
+      current: currentCount,
       limit: limitConfig.limit,
-      remaining: allowed ? remaining : 0,
+      remaining,
       resetIn,
     };
 
@@ -188,31 +249,45 @@ export class RateLimiter {
   }
 
   /**
-   * Get limit configuration for tenant/intent type
+   * Get limit configuration for tenant/intent type.
+   *
+   * Priority order:
+   * 1. Tenant-specific overrides (tenantMaxInFlight)
+   * 2. Intent type-specific limits from config (rateLimits.highRisk, etc.)
+   * 3. Default rate limit from config (rateLimits.default)
    */
   private getLimitConfig(tenantId: ID, intentType?: string | null): RateLimitConfig {
+    const rateLimits = this.config.intent.rateLimits;
+    // Default values (these are guaranteed by Zod schema defaults)
+    const defaultLimit = rateLimits.default.limit ?? 100;
+    const defaultWindow = rateLimits.default.windowSeconds ?? 60;
+
     // Check tenant-specific overrides first
     const tenantOverrides = this.config.intent.tenantMaxInFlight;
     const tenantLimit = tenantOverrides[tenantId];
     if (tenantLimit !== undefined) {
       return {
         limit: tenantLimit,
-        windowSeconds: 60,
+        windowSeconds: defaultWindow,
       };
     }
 
-    // Check intent type limits
+    // Check intent type limits from config
     if (intentType) {
-      const typeLimit = DEFAULT_LIMITS[intentType];
-      if (typeLimit) {
-        return typeLimit;
+      const configKey = INTENT_TYPE_TO_CONFIG_KEY[intentType];
+      if (configKey && rateLimits[configKey]) {
+        const typeConfig = rateLimits[configKey];
+        return {
+          limit: typeConfig.limit ?? defaultLimit,
+          windowSeconds: typeConfig.windowSeconds ?? defaultWindow,
+        };
       }
     }
 
-    // Use API rate limit from config
+    // Use default rate limit from config
     return {
-      limit: this.config.api.rateLimit,
-      windowSeconds: 60,
+      limit: defaultLimit,
+      windowSeconds: defaultWindow,
     };
   }
 
@@ -256,12 +331,14 @@ export function createRateLimitHook(rateLimiter: RateLimiter) {
     }
 
     if (!result.allowed) {
-      return reply.status(429).send({
-        error: {
-          code: 'RATE_LIMIT_EXCEEDED',
-          message: `Rate limit exceeded. Retry after ${result.retryAfter} seconds.`,
-          retryAfter: result.retryAfter,
-        },
+      // Throw a typed error for consistent error handling
+      const error = new RateLimitError(
+        `Rate limit exceeded. Retry after ${result.retryAfter} seconds.`,
+        result.retryAfter,
+        { tenantId, intentType, current: result.current, limit: result.limit }
+      );
+      return reply.status(error.statusCode).send({
+        error: error.toJSON(),
       });
     }
 

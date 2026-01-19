@@ -5,6 +5,7 @@
 import IORedis, { type Redis, type RedisOptions } from 'ioredis';
 import { getConfig } from './config.js';
 import { createLogger } from './logger.js';
+import { withTimeout } from './timeout.js';
 
 const redisLogger = createLogger({ component: 'redis' });
 
@@ -49,17 +50,26 @@ export async function closeRedis(): Promise<void> {
 /**
  * Check Redis health by running a PING command.
  * Returns true if Redis is healthy, false otherwise.
+ *
+ * @param timeoutMs - Optional timeout in milliseconds (defaults to config value)
  */
-export async function checkRedisHealth(): Promise<{
+export async function checkRedisHealth(timeoutMs?: number): Promise<{
   healthy: boolean;
   latencyMs?: number;
   error?: string;
+  timedOut?: boolean;
 }> {
   const client = getRedis();
+  const config = getConfig();
+  const timeout = timeoutMs ?? config.health.checkTimeoutMs;
   const start = performance.now();
 
   try {
-    const result = await client.ping();
+    const result = await withTimeout(
+      client.ping(),
+      timeout,
+      'Redis health check timed out'
+    );
     const latencyMs = Math.round(performance.now() - start);
 
     if (result === 'PONG') {
@@ -68,10 +78,18 @@ export async function checkRedisHealth(): Promise<{
     return { healthy: false, latencyMs, error: `Unexpected response: ${result}` };
   } catch (error) {
     const latencyMs = Math.round(performance.now() - start);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const isTimeout = errorMessage.includes('timed out');
+
+    if (isTimeout) {
+      redisLogger.warn({ latencyMs, timeoutMs: timeout }, 'Redis health check timed out');
+    }
+
     return {
       healthy: false,
       latencyMs,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: errorMessage,
+      timedOut: isTimeout,
     };
   }
 }

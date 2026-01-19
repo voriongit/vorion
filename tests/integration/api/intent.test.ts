@@ -12,12 +12,17 @@ import { createSigner } from 'fast-jwt';
 vi.mock('../../../src/common/config.js', () => ({
   getConfig: vi.fn(() => ({
     env: 'test',
-    jwt: { secret: 'test-secret-key-for-testing-12345' },
+    jwt: { secret: 'test-secret-key-for-testing-12345', requireJti: false },
     api: {
       port: 3000,
       host: '0.0.0.0',
       basePath: '/api/v1',
       rateLimit: 1000,
+    },
+    health: {
+      checkTimeoutMs: 5000,
+      readyTimeoutMs: 10000,
+      livenessTimeoutMs: 1000,
     },
     redis: {
       host: 'localhost',
@@ -71,6 +76,7 @@ vi.mock('../../../src/common/redis.js', () => {
     get: vi.fn().mockResolvedValue(null),
     duplicate: vi.fn().mockReturnThis(),
     ping: vi.fn().mockResolvedValue('PONG'),
+    eval: vi.fn().mockResolvedValue(1), // For lock release
   };
   return {
     getRedis: vi.fn(() => mockRedis),
@@ -78,9 +84,36 @@ vi.mock('../../../src/common/redis.js', () => {
   };
 });
 
-vi.mock('../../../src/common/db.js', () => ({
-  checkDatabaseHealth: vi.fn().mockResolvedValue({ healthy: true, latencyMs: 1 }),
-}));
+vi.mock('../../../src/common/db.js', () => {
+  const mockDb = {
+    insert: () => ({
+      values: () => ({
+        returning: () => Promise.resolve([]),
+      }),
+    }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => Promise.resolve([]),
+          }),
+          limit: () => Promise.resolve([]),
+        }),
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: () => ({
+          returning: () => Promise.resolve([]),
+        }),
+      }),
+    }),
+  };
+  return {
+    checkDatabaseHealth: () => Promise.resolve({ healthy: true, latencyMs: 1 }),
+    getDatabase: () => mockDb,
+  };
+});
 
 vi.mock('../../../src/intent/queues.js', () => ({
   enqueueIntentSubmission: vi.fn().mockResolvedValue(undefined),

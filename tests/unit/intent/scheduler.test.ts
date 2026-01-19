@@ -59,6 +59,23 @@ vi.mock('../../../src/intent/metrics.js', () => ({
   cleanupJobRuns: { inc: vi.fn() },
   recordsCleanedUp: { inc: vi.fn() },
   recordError: vi.fn(),
+  schedulerLeaderElections: { inc: vi.fn() },
+  schedulerIsLeader: { set: vi.fn() },
+}));
+
+// Mock leader election
+vi.mock('../../../src/common/leader-election.js', () => ({
+  getLeaderElection: vi.fn(() => ({
+    tryBecomeLeader: vi.fn().mockResolvedValue(true),
+    isLeader: vi.fn().mockReturnValue(true),
+    startHeartbeat: vi.fn(),
+    stopHeartbeat: vi.fn(),
+    resign: vi.fn().mockResolvedValue(undefined),
+    getInstanceId: vi.fn().mockReturnValue('test-instance-123'),
+    startLeaderCheck: vi.fn(),
+    stopLeaderCheck: vi.fn(),
+  })),
+  resetLeaderElection: vi.fn(),
 }));
 
 // Import after mocks are set up
@@ -73,72 +90,72 @@ import { runCleanup } from '../../../src/intent/cleanup.js';
 import { cleanupJobRuns, recordsCleanedUp } from '../../../src/intent/metrics.js';
 
 describe('Scheduler', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     // Stop any running tasks to clean state
-    stopScheduler();
+    await stopScheduler();
   });
 
-  afterEach(() => {
-    stopScheduler();
+  afterEach(async () => {
+    await stopScheduler();
   });
 
   describe('startScheduler', () => {
-    it('should start the cleanup task', () => {
-      startScheduler();
+    it('should start the cleanup task', async () => {
+      await startScheduler();
 
       expect(mockTask.start).toHaveBeenCalled();
     });
 
-    it('should start the timeout check task', () => {
-      startScheduler();
+    it('should start the timeout check task', async () => {
+      await startScheduler();
 
       // Should be called twice - once for cleanup, once for timeout check
       expect(mockTask.start).toHaveBeenCalledTimes(2);
     });
 
-    it('should register both tasks in scheduler status', () => {
-      startScheduler();
+    it('should register both tasks in scheduler status', async () => {
+      await startScheduler();
 
       const status = getSchedulerStatus();
 
-      expect(status).toHaveLength(2);
-      expect(status.map(s => s.name)).toContain('cleanup');
-      expect(status.map(s => s.name)).toContain('escalation-timeout');
+      expect(status.tasks).toHaveLength(2);
+      expect(status.tasks.map((s: { name: string }) => s.name)).toContain('cleanup');
+      expect(status.tasks.map((s: { name: string }) => s.name)).toContain('escalation-timeout');
     });
   });
 
   describe('stopScheduler', () => {
-    it('should stop all tasks', () => {
-      startScheduler();
-      stopScheduler();
+    it('should stop all tasks', async () => {
+      await startScheduler();
+      await stopScheduler();
 
       expect(mockTask.stop).toHaveBeenCalled();
     });
 
-    it('should clear the task list', () => {
-      startScheduler();
-      stopScheduler();
+    it('should clear the task list', async () => {
+      await startScheduler();
+      await stopScheduler();
 
       const status = getSchedulerStatus();
-      expect(status).toHaveLength(0);
+      expect(status.tasks).toHaveLength(0);
     });
   });
 
   describe('getSchedulerStatus', () => {
-    it('should return empty array when no tasks running', () => {
+    it('should return empty tasks array when no tasks running', () => {
       const status = getSchedulerStatus();
 
-      expect(status).toEqual([]);
+      expect(status.tasks).toEqual([]);
     });
 
-    it('should return task info when scheduler is running', () => {
-      startScheduler();
+    it('should return task info when scheduler is running', async () => {
+      await startScheduler();
 
       const status = getSchedulerStatus();
 
-      expect(status).toHaveLength(2);
-      status.forEach(task => {
+      expect(status.tasks).toHaveLength(2);
+      status.tasks.forEach((task: { name: string; cronExpression: string; running: boolean }) => {
         expect(task).toHaveProperty('name');
         expect(task).toHaveProperty('cronExpression');
         expect(task).toHaveProperty('running');
@@ -146,13 +163,13 @@ describe('Scheduler', () => {
       });
     });
 
-    it('should include correct cron expressions', () => {
-      startScheduler();
+    it('should include correct cron expressions', async () => {
+      await startScheduler();
 
       const status = getSchedulerStatus();
 
-      const cleanup = status.find(s => s.name === 'cleanup');
-      const timeout = status.find(s => s.name === 'escalation-timeout');
+      const cleanup = status.tasks.find((s: { name: string }) => s.name === 'cleanup');
+      const timeout = status.tasks.find((s: { name: string }) => s.name === 'escalation-timeout');
 
       expect(cleanup?.cronExpression).toBe('0 2 * * *');
       expect(timeout?.cronExpression).toBe('*/5 * * * *');
@@ -221,30 +238,30 @@ describe('Cron Schedule Validation', () => {
 });
 
 describe('Scheduler Integration', () => {
-  it('should handle multiple start/stop cycles', () => {
-    startScheduler();
-    expect(getSchedulerStatus()).toHaveLength(2);
+  it('should handle multiple start/stop cycles', async () => {
+    await startScheduler();
+    expect(getSchedulerStatus().tasks).toHaveLength(2);
 
-    stopScheduler();
-    expect(getSchedulerStatus()).toHaveLength(0);
+    await stopScheduler();
+    expect(getSchedulerStatus().tasks).toHaveLength(0);
 
-    startScheduler();
-    expect(getSchedulerStatus()).toHaveLength(2);
+    await startScheduler();
+    expect(getSchedulerStatus().tasks).toHaveLength(2);
 
-    stopScheduler();
-    expect(getSchedulerStatus()).toHaveLength(0);
+    await stopScheduler();
+    expect(getSchedulerStatus().tasks).toHaveLength(0);
   });
 
-  it('should not duplicate tasks on multiple starts', () => {
-    startScheduler();
+  it('should not duplicate tasks on multiple starts', async () => {
+    await startScheduler();
     const firstStatus = getSchedulerStatus();
 
     // Stop and start again
-    stopScheduler();
-    startScheduler();
+    await stopScheduler();
+    await startScheduler();
     const secondStatus = getSchedulerStatus();
 
-    expect(firstStatus.length).toBe(secondStatus.length);
-    expect(secondStatus).toHaveLength(2);
+    expect(firstStatus.tasks.length).toBe(secondStatus.tasks.length);
+    expect(secondStatus.tasks).toHaveLength(2);
   });
 });

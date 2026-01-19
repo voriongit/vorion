@@ -209,6 +209,124 @@ export const encryptionDuration = new Histogram({
 });
 
 // ============================================================================
+// Policy Evaluation Metrics
+// ============================================================================
+
+/**
+ * Policy evaluations total
+ */
+export const policyEvaluationsTotal = new Counter({
+  name: 'vorion_policy_evaluations_total',
+  help: 'Total policy evaluations',
+  labelNames: ['tenant_id', 'namespace', 'result'] as const, // result: allow, deny, escalate
+  registers: [intentRegistry],
+});
+
+/**
+ * Policy evaluation duration
+ */
+export const policyEvaluationDuration = new Histogram({
+  name: 'vorion_policy_evaluation_duration_seconds',
+  help: 'Time to evaluate policies',
+  labelNames: ['tenant_id', 'namespace'] as const,
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+  registers: [intentRegistry],
+});
+
+/**
+ * Policies matched per evaluation
+ */
+export const policiesMatchedPerEvaluation = new Histogram({
+  name: 'vorion_policies_matched_per_evaluation',
+  help: 'Number of policies that matched per evaluation',
+  labelNames: ['tenant_id', 'namespace'] as const,
+  buckets: [0, 1, 2, 3, 5, 10, 20],
+  registers: [intentRegistry],
+});
+
+/**
+ * Policy overrides (policy action differed from rule action)
+ */
+export const policyOverridesTotal = new Counter({
+  name: 'vorion_policy_overrides_total',
+  help: 'Total times policy evaluation overrode rule decision',
+  labelNames: ['tenant_id', 'rule_action', 'policy_action'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Policies loaded from cache vs database
+ */
+export const policyLoadSource = new Counter({
+  name: 'vorion_policy_load_source_total',
+  help: 'Policy load source (local cache, redis, database)',
+  labelNames: ['source'] as const, // source: local, redis, database
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// Database Metrics
+// ============================================================================
+
+/**
+ * Database query duration (histogram)
+ */
+export const dbQueryDuration = new Histogram({
+  name: 'vorion_db_query_duration_seconds',
+  help: 'Database query execution time in seconds',
+  labelNames: ['operation'] as const, // operation: select, insert, update, delete, other
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  registers: [intentRegistry],
+});
+
+/**
+ * Total database queries by operation type
+ */
+export const dbQueryTotal = new Counter({
+  name: 'vorion_db_query_total',
+  help: 'Total number of database queries by operation type',
+  labelNames: ['operation'] as const, // operation: select, insert, update, delete, other
+  registers: [intentRegistry],
+});
+
+/**
+ * Total failed database queries
+ */
+export const dbQueryErrorsTotal = new Counter({
+  name: 'vorion_db_query_errors_total',
+  help: 'Total number of failed database queries',
+  labelNames: ['operation', 'error_type'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Current active database connections
+ */
+export const dbPoolConnectionsActive = new Gauge({
+  name: 'vorion_db_pool_connections_active',
+  help: 'Current number of active database connections',
+  registers: [intentRegistry],
+});
+
+/**
+ * Current idle database connections
+ */
+export const dbPoolConnectionsIdle = new Gauge({
+  name: 'vorion_db_pool_connections_idle',
+  help: 'Current number of idle database connections',
+  registers: [intentRegistry],
+});
+
+/**
+ * Clients waiting for a connection
+ */
+export const dbPoolConnectionsWaiting = new Gauge({
+  name: 'vorion_db_pool_connections_waiting',
+  help: 'Number of clients waiting for a database connection',
+  registers: [intentRegistry],
+});
+
+// ============================================================================
 // Error Metrics
 // ============================================================================
 
@@ -243,6 +361,52 @@ export const recordsCleanedUp = new Counter({
   name: 'vorion_records_cleaned_up_total',
   help: 'Total records cleaned up',
   labelNames: ['type'] as const, // type: events, intents
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// Scheduler Leadership Metrics
+// ============================================================================
+
+/**
+ * Leader elections total (counts each time an instance becomes leader)
+ */
+export const schedulerLeaderElectionsTotal = new Counter({
+  name: 'vorion_scheduler_leader_elections_total',
+  help: 'Total number of scheduler leadership acquisitions',
+  registers: [intentRegistry],
+});
+
+/**
+ * Is this instance the scheduler leader (1 if leader, 0 if not)
+ */
+export const schedulerIsLeader = new Gauge({
+  name: 'vorion_scheduler_is_leader',
+  help: 'Whether this instance is the scheduler leader (1=leader, 0=not leader)',
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// Token Revocation Metrics
+// ============================================================================
+
+/**
+ * Tokens revoked total, labeled by revocation type
+ */
+export const tokensRevokedTotal = new Counter({
+  name: 'vorion_tokens_revoked_total',
+  help: 'Total number of tokens revoked',
+  labelNames: ['type'] as const, // type: single, user_all
+  registers: [intentRegistry],
+});
+
+/**
+ * Token revocation check results
+ */
+export const tokenRevocationChecks = new Counter({
+  name: 'vorion_token_revocation_checks_total',
+  help: 'Total token revocation checks performed',
+  labelNames: ['result'] as const, // result: valid, revoked, missing_jti
   registers: [intentRegistry],
 });
 
@@ -332,6 +496,81 @@ export function updateQueueGauges(
  */
 export function recordError(errorCode: string, component: string): void {
   errorsTotal.inc({ error_code: errorCode, component });
+}
+
+/**
+ * Record policy evaluation metrics
+ */
+export function recordPolicyEvaluation(
+  tenantId: string,
+  namespace: string,
+  result: 'allow' | 'deny' | 'escalate',
+  durationSeconds: number,
+  matchedCount: number
+): void {
+  policyEvaluationsTotal.inc({ tenant_id: tenantId, namespace, result });
+  policyEvaluationDuration.observe({ tenant_id: tenantId, namespace }, durationSeconds);
+  policiesMatchedPerEvaluation.observe({ tenant_id: tenantId, namespace }, matchedCount);
+}
+
+/**
+ * Record policy override
+ */
+export function recordPolicyOverride(
+  tenantId: string,
+  ruleAction: string,
+  policyAction: string
+): void {
+  policyOverridesTotal.inc({ tenant_id: tenantId, rule_action: ruleAction, policy_action: policyAction });
+}
+
+// ============================================================================
+// Database Metrics Helper Functions
+// ============================================================================
+
+/**
+ * Database operation types for labeling queries
+ */
+export type DbOperationType = 'select' | 'insert' | 'update' | 'delete' | 'other';
+
+/**
+ * Detect operation type from SQL query string
+ */
+export function detectOperationType(sql: string): DbOperationType {
+  const trimmed = sql.trim().toLowerCase();
+  if (trimmed.startsWith('select')) return 'select';
+  if (trimmed.startsWith('insert')) return 'insert';
+  if (trimmed.startsWith('update')) return 'update';
+  if (trimmed.startsWith('delete')) return 'delete';
+  return 'other';
+}
+
+/**
+ * Record a successful database query with timing
+ */
+export function recordDbQuery(operation: DbOperationType, durationSeconds: number): void {
+  dbQueryTotal.inc({ operation });
+  dbQueryDuration.observe({ operation }, durationSeconds);
+}
+
+/**
+ * Record a failed database query
+ */
+export function recordDbQueryError(operation: DbOperationType, errorType: string): void {
+  dbQueryErrorsTotal.inc({ operation, error_type: errorType });
+}
+
+/**
+ * Update database pool connection gauges
+ */
+export function updateDbPoolMetrics(
+  active: number,
+  idle: number,
+  waiting: number
+): void {
+  dbPoolConnectionsActive.set(active);
+  dbPoolConnectionsIdle.set(idle);
+  dbPoolConnectionsWaiting.set(waiting);
 }
 
 /**
