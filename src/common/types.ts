@@ -186,9 +186,10 @@ export interface TrustSignal {
   entityId: ID;
   type: string;
   value: number;
-  source: string;
+  weight?: number;
+  source?: string;
   timestamp: Timestamp;
-  metadata: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 /**

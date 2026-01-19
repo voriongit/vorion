@@ -3,12 +3,16 @@
  *
  * Creates and maintains cryptographically sealed records of all governance decisions.
  * Uses Ed25519 (or ECDSA P-256 fallback) for cryptographic signatures.
+ * Persists to PostgreSQL for durability.
  *
  * @packageDocumentation
  */
 
+import { eq, and, gte, lte, asc, desc } from 'drizzle-orm';
 import { createLogger } from '../common/logger.js';
-import { sign, verify, sha256, type SignatureResult } from '../common/crypto.js';
+import { sign, verify } from '../common/crypto.js';
+import { getDatabase, type Database } from '../common/db.js';
+import { proofs, proofChainMeta, type NewProof } from '../db/schema/proofs.js';
 import type { Proof, Decision, Intent, ID } from '../common/types.js';
 
 const logger = createLogger({ component: 'proof' });
@@ -58,107 +62,236 @@ export interface SignedProof extends Proof {
 }
 
 /**
- * PROOF service for evidence management
+ * Chain statistics
+ */
+export interface ChainStats {
+  totalProofs: number;
+  chainLength: number;
+  lastProofAt: string | null;
+}
+
+/**
+ * PROOF service for evidence management with PostgreSQL persistence
  */
 export class ProofService {
-  private proofs: Map<ID, SignedProof> = new Map();
-  private chain: SignedProof[] = [];
+  private db: Database | null = null;
+  private chainId: string = 'default';
   private lastHash: string = '0'.repeat(64);
+  private chainLength: number = 0;
+  private initialized: boolean = false;
+
+  /**
+   * Initialize the service and load chain state from database
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    this.db = await getDatabase();
+
+    // Load chain metadata
+    const meta = await this.db
+      .select()
+      .from(proofChainMeta)
+      .where(eq(proofChainMeta.chainId, this.chainId))
+      .limit(1);
+
+    if (meta.length > 0) {
+      this.lastHash = meta[0]!.lastHash;
+      this.chainLength = meta[0]!.chainLength;
+      logger.info(
+        { chainLength: this.chainLength, lastHash: this.lastHash.slice(0, 16) + '...' },
+        'Chain state loaded from database'
+      );
+    } else {
+      // Create initial chain metadata
+      await this.db.insert(proofChainMeta).values({
+        chainId: this.chainId,
+        lastHash: this.lastHash,
+        chainLength: 0,
+      });
+      logger.info('New proof chain initialized');
+    }
+
+    this.initialized = true;
+  }
+
+  /**
+   * Ensure service is initialized
+   */
+  private async ensureInitialized(): Promise<Database> {
+    if (!this.initialized || !this.db) {
+      await this.initialize();
+    }
+    return this.db!;
+  }
 
   /**
    * Create a new proof record with cryptographic signature
    */
   async create(request: ProofRequest): Promise<SignedProof> {
-    const proof: SignedProof = {
-      id: crypto.randomUUID(),
-      chainPosition: this.chain.length,
+    const db = await this.ensureInitialized();
+
+    const proofId = crypto.randomUUID();
+    const chainPosition = this.chainLength;
+    const createdAt = new Date();
+
+    // Build proof data for hashing
+    const proofData = {
+      id: proofId,
+      chainPosition,
       intentId: request.intent.id,
       entityId: request.intent.entityId,
       decision: request.decision,
       inputs: request.inputs,
       outputs: request.outputs,
-      hash: '', // Will be calculated
       previousHash: this.lastHash,
-      signature: '', // Will be signed
-      createdAt: new Date().toISOString(),
+      createdAt: createdAt.toISOString(),
     };
 
     // Calculate hash of the proof content
-    proof.hash = await this.calculateHash(proof);
-    this.lastHash = proof.hash;
+    const hash = await this.calculateHash(proofData);
 
     // Sign the hash with Ed25519/ECDSA
-    const signatureResult = await sign(proof.hash);
-    proof.signature = signatureResult.signature;
-    proof.signatureData = {
-      publicKey: signatureResult.publicKey,
-      algorithm: signatureResult.algorithm,
-      signedAt: signatureResult.signedAt,
+    const signatureResult = await sign(hash);
+
+    // Insert into database
+    const newProof: NewProof = {
+      id: proofId,
+      chainPosition,
+      intentId: request.intent.id,
+      entityId: request.intent.entityId,
+      decision: request.decision,
+      inputs: request.inputs,
+      outputs: request.outputs,
+      hash,
+      previousHash: this.lastHash,
+      signature: signatureResult.signature,
+      signaturePublicKey: signatureResult.publicKey,
+      signatureAlgorithm: signatureResult.algorithm,
+      signedAt: new Date(signatureResult.signedAt),
+      createdAt,
     };
 
-    // Store
-    this.proofs.set(proof.id, proof);
-    this.chain.push(proof);
+    await db.transaction(async (tx) => {
+      // Insert proof
+      await tx.insert(proofs).values(newProof);
+
+      // Update chain metadata
+      await tx
+        .update(proofChainMeta)
+        .set({
+          lastHash: hash,
+          chainLength: chainPosition + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(proofChainMeta.chainId, this.chainId));
+    });
+
+    // Update local state
+    this.lastHash = hash;
+    this.chainLength = chainPosition + 1;
+
+    const signedProof: SignedProof = {
+      id: proofId,
+      chainPosition,
+      intentId: request.intent.id,
+      entityId: request.intent.entityId,
+      decision: request.decision,
+      inputs: request.inputs,
+      outputs: request.outputs,
+      hash,
+      previousHash: proofData.previousHash,
+      signature: signatureResult.signature,
+      createdAt: createdAt.toISOString(),
+      signatureData: {
+        publicKey: signatureResult.publicKey,
+        algorithm: signatureResult.algorithm,
+        signedAt: signatureResult.signedAt,
+      },
+    };
 
     logger.info(
       {
-        proofId: proof.id,
-        intentId: proof.intentId,
-        chainPosition: proof.chainPosition,
+        proofId,
+        intentId: request.intent.id,
+        chainPosition,
         signed: true,
       },
       'Proof created and signed'
     );
 
-    return proof;
+    return signedProof;
   }
 
   /**
    * Get a proof by ID
    */
   async get(id: ID): Promise<SignedProof | undefined> {
-    return this.proofs.get(id);
+    const db = await this.ensureInitialized();
+
+    const result = await db
+      .select()
+      .from(proofs)
+      .where(eq(proofs.id, id))
+      .limit(1);
+
+    if (result.length === 0) return undefined;
+
+    return this.toSignedProof(result[0]!);
   }
 
   /**
    * Query proofs
    */
   async query(query: ProofQuery): Promise<SignedProof[]> {
-    let results = Array.from(this.proofs.values());
+    const db = await this.ensureInitialized();
+
+    const conditions = [];
 
     if (query.entityId) {
-      results = results.filter((p) => p.entityId === query.entityId);
+      conditions.push(eq(proofs.entityId, query.entityId));
     }
 
     if (query.intentId) {
-      results = results.filter((p) => p.intentId === query.intentId);
+      conditions.push(eq(proofs.intentId, query.intentId));
     }
 
     if (query.startDate) {
-      results = results.filter((p) => p.createdAt >= query.startDate!);
+      conditions.push(gte(proofs.createdAt, new Date(query.startDate)));
     }
 
     if (query.endDate) {
-      results = results.filter((p) => p.createdAt <= query.endDate!);
+      conditions.push(lte(proofs.createdAt, new Date(query.endDate)));
     }
 
-    // Sort by chain position (oldest first)
-    results.sort((a, b) => a.chainPosition - b.chainPosition);
-
-    // Apply pagination
     const offset = query.offset ?? 0;
     const limit = query.limit ?? 100;
-    return results.slice(offset, offset + limit);
+
+    const results = await db
+      .select()
+      .from(proofs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(asc(proofs.chainPosition))
+      .limit(limit)
+      .offset(offset);
+
+    return results.map((r) => this.toSignedProof(r));
   }
 
   /**
    * Verify a proof's integrity (hash, chain linkage, and signature)
    */
   async verify(id: ID): Promise<VerificationResult> {
-    const proof = this.proofs.get(id);
+    const db = await this.ensureInitialized();
     const issues: string[] = [];
 
-    if (!proof) {
+    const result = await db
+      .select()
+      .from(proofs)
+      .where(eq(proofs.id, id))
+      .limit(1);
+
+    if (result.length === 0) {
       return {
         valid: false,
         proofId: id,
@@ -168,13 +301,22 @@ export class ProofService {
       };
     }
 
+    const proof = result[0]!;
+
     // Verify hash
-    const expectedHash = await this.calculateHash({
-      ...proof,
-      hash: '',
-      signature: '',
-      signatureData: undefined,
-    });
+    const proofData = {
+      id: proof.id,
+      chainPosition: proof.chainPosition,
+      intentId: proof.intentId,
+      entityId: proof.entityId,
+      decision: proof.decision,
+      inputs: proof.inputs,
+      outputs: proof.outputs,
+      previousHash: proof.previousHash,
+      createdAt: proof.createdAt.toISOString(),
+    };
+
+    const expectedHash = await this.calculateHash(proofData);
 
     if (proof.hash !== expectedHash) {
       issues.push('Hash mismatch - proof content may have been tampered');
@@ -182,21 +324,33 @@ export class ProofService {
 
     // Verify chain linkage
     if (proof.chainPosition > 0) {
-      const previous = this.chain[proof.chainPosition - 1];
-      if (previous && proof.previousHash !== previous.hash) {
-        issues.push('Chain linkage broken - previous hash does not match');
+      const previousResult = await db
+        .select()
+        .from(proofs)
+        .where(eq(proofs.chainPosition, proof.chainPosition - 1))
+        .limit(1);
+
+      if (previousResult.length > 0) {
+        const previous = previousResult[0]!;
+        if (proof.previousHash !== previous.hash) {
+          issues.push('Chain linkage broken - previous hash does not match');
+        }
+      } else {
+        issues.push('Previous proof in chain not found');
       }
     }
 
     // Verify cryptographic signature
-    if (proof.signature && proof.signatureData?.publicKey) {
+    if (proof.signature && proof.signaturePublicKey) {
       const sigResult = await verify(
         proof.hash,
         proof.signature,
-        proof.signatureData.publicKey
+        proof.signaturePublicKey
       );
       if (!sigResult.valid) {
-        issues.push(`Signature verification failed: ${sigResult.error || 'invalid signature'}`);
+        issues.push(
+          `Signature verification failed: ${sigResult.error || 'invalid signature'}`
+        );
       }
     } else {
       issues.push('Missing signature or public key');
@@ -229,11 +383,18 @@ export class ProofService {
     lastValidPosition: number;
     issues: string[];
   }> {
+    const db = await this.ensureInitialized();
     const issues: string[] = [];
     let lastValidPosition = -1;
 
-    for (let i = 0; i < this.chain.length; i++) {
-      const proof = this.chain[i]!;
+    // Get all proofs in order
+    const allProofs = await db
+      .select()
+      .from(proofs)
+      .orderBy(asc(proofs.chainPosition));
+
+    for (let i = 0; i < allProofs.length; i++) {
+      const proof = allProofs[i]!;
       const verification = await this.verify(proof.id);
 
       if (!verification.valid) {
@@ -243,6 +404,16 @@ export class ProofService {
 
       lastValidPosition = i;
     }
+
+    // Update chain metadata with verification result
+    await db
+      .update(proofChainMeta)
+      .set({
+        lastVerifiedAt: new Date(),
+        lastVerifiedPosition: lastValidPosition,
+        updatedAt: new Date(),
+      })
+      .where(eq(proofChainMeta.chainId, this.chainId));
 
     return {
       valid: issues.length === 0,
@@ -254,7 +425,9 @@ export class ProofService {
   /**
    * Calculate hash for a proof record
    */
-  private async calculateHash(proof: Omit<Proof, 'hash'>): Promise<string> {
+  private async calculateHash(
+    proof: Omit<Proof, 'hash' | 'signature'>
+  ): Promise<string> {
     const data = JSON.stringify({
       id: proof.id,
       chainPosition: proof.chainPosition,
@@ -276,19 +449,47 @@ export class ProofService {
   }
 
   /**
+   * Convert database row to SignedProof
+   */
+  private toSignedProof(row: typeof proofs.$inferSelect): SignedProof {
+    return {
+      id: row.id,
+      chainPosition: row.chainPosition,
+      intentId: row.intentId,
+      entityId: row.entityId,
+      decision: row.decision,
+      inputs: row.inputs,
+      outputs: row.outputs,
+      hash: row.hash,
+      previousHash: row.previousHash,
+      signature: row.signature,
+      createdAt: row.createdAt.toISOString(),
+      signatureData: row.signaturePublicKey
+        ? {
+            publicKey: row.signaturePublicKey,
+            algorithm: row.signatureAlgorithm ?? 'unknown',
+            signedAt: row.signedAt?.toISOString() ?? row.createdAt.toISOString(),
+          }
+        : undefined,
+    };
+  }
+
+  /**
    * Get chain statistics
    */
-  getStats(): {
-    totalProofs: number;
-    chainLength: number;
-    lastProofAt: string | null;
-  } {
-    const lastProof = this.chain[this.chain.length - 1];
+  async getStats(): Promise<ChainStats> {
+    const db = await this.ensureInitialized();
+
+    const result = await db
+      .select()
+      .from(proofs)
+      .orderBy(desc(proofs.createdAt))
+      .limit(1);
 
     return {
-      totalProofs: this.proofs.size,
-      chainLength: this.chain.length,
-      lastProofAt: lastProof?.createdAt ?? null,
+      totalProofs: this.chainLength,
+      chainLength: this.chainLength,
+      lastProofAt: result.length > 0 ? result[0]!.createdAt.toISOString() : null,
     };
   }
 }

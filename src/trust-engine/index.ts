@@ -2,16 +2,26 @@
  * Trust Engine - Behavioral Trust Scoring
  *
  * Calculates and maintains trust scores for entities based on behavioral signals.
+ * Persists to PostgreSQL for durability.
  *
  * @packageDocumentation
  */
 
+import { eq, and, gte, desc, sql } from 'drizzle-orm';
 import { createLogger } from '../common/logger.js';
+import { getDatabase, type Database } from '../common/db.js';
+import {
+  trustRecords,
+  trustSignals,
+  trustHistory,
+  type NewTrustRecord,
+  type NewTrustSignal,
+  type NewTrustHistory,
+} from '../db/schema/trust.js';
 import type {
-  Entity,
   TrustScore,
   TrustLevel,
-  TrustSignal,
+  TrustSignal as TrustSignalType,
   TrustComponents,
   ID,
 } from '../common/types.js';
@@ -58,7 +68,7 @@ export interface TrustRecord {
   score: TrustScore;
   level: TrustLevel;
   components: TrustComponents;
-  signals: TrustSignal[];
+  signals: TrustSignalType[];
   lastCalculatedAt: string;
   history: TrustHistoryEntry[];
 }
@@ -84,32 +94,79 @@ export interface TrustCalculation {
 }
 
 /**
- * Trust Engine service
+ * Trust Engine service with PostgreSQL persistence
  */
 export class TrustEngine {
-  private records: Map<ID, TrustRecord> = new Map();
-  private decayRate: number;
+  private db: Database | null = null;
+  private _decayRate: number;
+  private initialized: boolean = false;
 
   constructor(decayRate: number = 0.01) {
-    this.decayRate = decayRate;
+    this._decayRate = decayRate;
+  }
+
+  /**
+   * Initialize the service
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    this.db = await getDatabase();
+    this.initialized = true;
+    logger.info('Trust engine initialized with database persistence');
+  }
+
+  /**
+   * Ensure service is initialized
+   */
+  private async ensureInitialized(): Promise<Database> {
+    if (!this.initialized || !this.db) {
+      await this.initialize();
+    }
+    return this.db!;
   }
 
   /**
    * Calculate trust score for an entity
    */
   async calculate(entityId: ID): Promise<TrustCalculation> {
-    const record = this.records.get(entityId);
-    const signals = record?.signals ?? [];
+    const db = await this.ensureInitialized();
+
+    // Get recent signals for the entity (last 7 days for weighted calculation)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const signals = await db
+      .select()
+      .from(trustSignals)
+      .where(
+        and(
+          eq(trustSignals.entityId, entityId),
+          gte(trustSignals.timestamp, sevenDaysAgo)
+        )
+      )
+      .orderBy(desc(trustSignals.timestamp))
+      .limit(1000);
+
+    // Convert to domain signals
+    const domainSignals: TrustSignalType[] = signals.map((s) => ({
+      id: s.id,
+      entityId: s.entityId,
+      type: s.type,
+      value: s.value,
+      weight: s.weight,
+      source: s.source ?? '',
+      metadata: (s.metadata as Record<string, unknown>) ?? {},
+      timestamp: s.timestamp.toISOString(),
+    }));
 
     // Calculate component scores
-    const components = this.calculateComponents(signals);
+    const components = this.calculateComponents(domainSignals);
 
     // Calculate weighted total
     const score = Math.round(
       components.behavioral * SIGNAL_WEIGHTS.behavioral * 1000 +
-      components.compliance * SIGNAL_WEIGHTS.compliance * 1000 +
-      components.identity * SIGNAL_WEIGHTS.identity * 1000 +
-      components.context * SIGNAL_WEIGHTS.context * 1000
+        components.compliance * SIGNAL_WEIGHTS.compliance * 1000 +
+        components.identity * SIGNAL_WEIGHTS.identity * 1000 +
+        components.context * SIGNAL_WEIGHTS.context * 1000
     );
 
     // Clamp to valid range
@@ -135,66 +192,178 @@ export class TrustEngine {
    * Get trust score for an entity
    */
   async getScore(entityId: ID): Promise<TrustRecord | undefined> {
-    const record = this.records.get(entityId);
+    const db = await this.ensureInitialized();
 
-    if (record) {
-      // Apply decay if stale
-      const staleness = Date.now() - new Date(record.lastCalculatedAt).getTime();
-      if (staleness > 60000) {
-        // Recalculate if older than 1 minute
-        const calculation = await this.calculate(entityId);
-        record.score = calculation.score;
-        record.level = calculation.level;
-        record.components = calculation.components;
-        record.lastCalculatedAt = new Date().toISOString();
-      }
+    const result = await db
+      .select()
+      .from(trustRecords)
+      .where(eq(trustRecords.entityId, entityId))
+      .limit(1);
+
+    if (result.length === 0) return undefined;
+
+    const record = result[0]!;
+
+    // Check if recalculation is needed (older than 1 minute)
+    const staleness = Date.now() - record.lastCalculatedAt.getTime();
+    if (staleness > 60000) {
+      // Recalculate
+      const calculation = await this.calculate(entityId);
+
+      // Update record
+      await db
+        .update(trustRecords)
+        .set({
+          score: calculation.score,
+          level: calculation.level.toString() as '0' | '1' | '2' | '3' | '4',
+          behavioralScore: calculation.components.behavioral,
+          complianceScore: calculation.components.compliance,
+          identityScore: calculation.components.identity,
+          contextScore: calculation.components.context,
+          lastCalculatedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(trustRecords.entityId, entityId));
+
+      record.score = calculation.score;
+      record.level = calculation.level.toString() as '0' | '1' | '2' | '3' | '4';
+      record.behavioralScore = calculation.components.behavioral;
+      record.complianceScore = calculation.components.compliance;
+      record.identityScore = calculation.components.identity;
+      record.contextScore = calculation.components.context;
+      record.lastCalculatedAt = new Date();
     }
 
-    return record;
+    // Get recent signals
+    const signals = await db
+      .select()
+      .from(trustSignals)
+      .where(eq(trustSignals.entityId, entityId))
+      .orderBy(desc(trustSignals.timestamp))
+      .limit(100);
+
+    // Get history
+    const history = await db
+      .select()
+      .from(trustHistory)
+      .where(eq(trustHistory.entityId, entityId))
+      .orderBy(desc(trustHistory.timestamp))
+      .limit(100);
+
+    return {
+      entityId: record.entityId,
+      score: record.score,
+      level: parseInt(record.level) as TrustLevel,
+      components: {
+        behavioral: record.behavioralScore,
+        compliance: record.complianceScore,
+        identity: record.identityScore,
+        context: record.contextScore,
+      },
+      signals: signals.map((s) => ({
+        id: s.id,
+        entityId: s.entityId,
+        type: s.type,
+        value: s.value,
+        weight: s.weight,
+        source: s.source ?? '',
+        metadata: (s.metadata as Record<string, unknown>) ?? {},
+        timestamp: s.timestamp.toISOString(),
+      })),
+      lastCalculatedAt: record.lastCalculatedAt.toISOString(),
+      history: history.map((h) => ({
+        score: h.score,
+        level: parseInt(h.level) as TrustLevel,
+        reason: h.reason,
+        timestamp: h.timestamp.toISOString(),
+      })),
+    };
   }
 
   /**
    * Record a trust signal
    */
-  async recordSignal(signal: TrustSignal): Promise<void> {
-    let record = this.records.get(signal.entityId);
+  async recordSignal(signal: TrustSignalType): Promise<void> {
+    const db = await this.ensureInitialized();
 
-    if (!record) {
-      record = this.createInitialRecord(signal.entityId);
-      this.records.set(signal.entityId, record);
+    // Insert the signal
+    const newSignal: NewTrustSignal = {
+      entityId: signal.entityId,
+      type: signal.type,
+      value: signal.value,
+      weight: signal.weight ?? 1.0,
+      source: signal.source ?? null,
+      metadata: signal.metadata ?? null,
+      timestamp: signal.timestamp ? new Date(signal.timestamp) : new Date(),
+    };
+
+    const [insertedSignal] = await db
+      .insert(trustSignals)
+      .values(newSignal)
+      .returning();
+
+    // Get or create trust record
+    let record = await db
+      .select()
+      .from(trustRecords)
+      .where(eq(trustRecords.entityId, signal.entityId))
+      .limit(1);
+
+    if (record.length === 0) {
+      // Create initial record
+      const initialRecord: NewTrustRecord = {
+        entityId: signal.entityId,
+        score: 200,
+        level: '1',
+        behavioralScore: 0.5,
+        complianceScore: 0.5,
+        identityScore: 0.5,
+        contextScore: 0.5,
+        signalCount: 1,
+        lastCalculatedAt: new Date(),
+      };
+
+      await db.insert(trustRecords).values(initialRecord);
+      record = [{ ...initialRecord, id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date() }] as any;
     }
 
-    // Add signal
-    record.signals.push(signal);
-
-    // Keep only recent signals (last 1000)
-    if (record.signals.length > 1000) {
-      record.signals = record.signals.slice(-1000);
-    }
+    const currentRecord = record[0]!;
+    const previousScore = currentRecord.score;
+    const previousLevel = parseInt(currentRecord.level) as TrustLevel;
 
     // Recalculate
     const calculation = await this.calculate(signal.entityId);
 
     // Update record
-    const previousScore = record.score;
-    record.score = calculation.score;
-    record.level = calculation.level;
-    record.components = calculation.components;
-    record.lastCalculatedAt = new Date().toISOString();
+    await db
+      .update(trustRecords)
+      .set({
+        score: calculation.score,
+        level: calculation.level.toString() as '0' | '1' | '2' | '3' | '4',
+        behavioralScore: calculation.components.behavioral,
+        complianceScore: calculation.components.compliance,
+        identityScore: calculation.components.identity,
+        contextScore: calculation.components.context,
+        signalCount: sql`${trustRecords.signalCount} + 1`,
+        lastCalculatedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(trustRecords.entityId, signal.entityId));
 
     // Record history if significant change
     if (Math.abs(calculation.score - previousScore) >= 10) {
-      record.history.push({
+      const historyEntry: NewTrustHistory = {
+        entityId: signal.entityId,
         score: calculation.score,
-        level: calculation.level,
+        previousScore,
+        level: calculation.level.toString() as '0' | '1' | '2' | '3' | '4',
+        previousLevel: previousLevel.toString() as '0' | '1' | '2' | '3' | '4',
         reason: `Signal: ${signal.type}`,
-        timestamp: new Date().toISOString(),
-      });
+        signalId: insertedSignal?.id,
+        timestamp: new Date(),
+      };
 
-      // Keep last 100 history entries
-      if (record.history.length > 100) {
-        record.history = record.history.slice(-100);
-      }
+      await db.insert(trustHistory).values(historyEntry);
     }
 
     logger.debug(
@@ -210,9 +379,43 @@ export class TrustEngine {
   /**
    * Initialize trust for a new entity
    */
-  async initializeEntity(entityId: ID, initialLevel: TrustLevel = 1): Promise<TrustRecord> {
+  async initializeEntity(
+    entityId: ID,
+    initialLevel: TrustLevel = 1
+  ): Promise<TrustRecord> {
+    const db = await this.ensureInitialized();
+
     const score = TRUST_THRESHOLDS[initialLevel].min;
-    const record: TrustRecord = {
+    const now = new Date();
+
+    const newRecord: NewTrustRecord = {
+      entityId,
+      score,
+      level: initialLevel.toString() as '0' | '1' | '2' | '3' | '4',
+      behavioralScore: 0.5,
+      complianceScore: 0.5,
+      identityScore: 0.5,
+      contextScore: 0.5,
+      signalCount: 0,
+      lastCalculatedAt: now,
+    };
+
+    await db.insert(trustRecords).values(newRecord);
+
+    // Record initial history
+    const historyEntry: NewTrustHistory = {
+      entityId,
+      score,
+      level: initialLevel.toString() as '0' | '1' | '2' | '3' | '4',
+      reason: 'Initial registration',
+      timestamp: now,
+    };
+
+    await db.insert(trustHistory).values(historyEntry);
+
+    logger.info({ entityId, initialLevel }, 'Entity trust initialized');
+
+    return {
       entityId,
       score,
       level: initialLevel,
@@ -223,21 +426,16 @@ export class TrustEngine {
         context: 0.5,
       },
       signals: [],
-      lastCalculatedAt: new Date().toISOString(),
+      lastCalculatedAt: now.toISOString(),
       history: [
         {
           score,
           level: initialLevel,
           reason: 'Initial registration',
-          timestamp: new Date().toISOString(),
+          timestamp: now.toISOString(),
         },
       ],
     };
-
-    this.records.set(entityId, record);
-    logger.info({ entityId, initialLevel }, 'Entity trust initialized');
-
-    return record;
   }
 
   /**
@@ -255,7 +453,7 @@ export class TrustEngine {
   /**
    * Calculate component scores from signals
    */
-  private calculateComponents(signals: TrustSignal[]): TrustComponents {
+  private calculateComponents(signals: TrustSignalType[]): TrustComponents {
     // Group signals by type
     const behavioral = signals.filter((s) => s.type.startsWith('behavioral.'));
     const compliance = signals.filter((s) => s.type.startsWith('compliance.'));
@@ -273,7 +471,10 @@ export class TrustEngine {
   /**
    * Calculate average signal value with default
    */
-  private averageSignalValue(signals: TrustSignal[], defaultValue: number): number {
+  private averageSignalValue(
+    signals: TrustSignalType[],
+    defaultValue: number
+  ): number {
     if (signals.length === 0) return defaultValue;
 
     // Weight recent signals more heavily
@@ -283,9 +484,12 @@ export class TrustEngine {
 
     for (const signal of signals) {
       const age = now - new Date(signal.timestamp).getTime();
-      const weight = Math.exp(-age / (7 * 24 * 60 * 60 * 1000)); // 7-day half-life
-      weightedSum += signal.value * weight;
-      totalWeight += weight;
+      const timeWeight = Math.exp(-age / (7 * 24 * 60 * 60 * 1000)); // 7-day half-life
+      const signalWeight = signal.weight ?? 1.0;
+      const combinedWeight = timeWeight * signalWeight;
+
+      weightedSum += signal.value * combinedWeight;
+      totalWeight += combinedWeight;
     }
 
     return totalWeight > 0 ? weightedSum / totalWeight : defaultValue;
@@ -312,26 +516,6 @@ export class TrustEngine {
 
     return factors;
   }
-
-  /**
-   * Create initial trust record
-   */
-  private createInitialRecord(entityId: ID): TrustRecord {
-    return {
-      entityId,
-      score: 200, // Start at L1 minimum
-      level: 1,
-      components: {
-        behavioral: 0.5,
-        compliance: 0.5,
-        identity: 0.5,
-        context: 0.5,
-      },
-      signals: [],
-      lastCalculatedAt: new Date().toISOString(),
-      history: [],
-    };
-  }
 }
 
 /**
@@ -340,3 +524,6 @@ export class TrustEngine {
 export function createTrustEngine(decayRate?: number): TrustEngine {
   return new TrustEngine(decayRate);
 }
+
+// Re-export types
+export type { TrustRecord, TrustHistoryEntry, TrustCalculation };
