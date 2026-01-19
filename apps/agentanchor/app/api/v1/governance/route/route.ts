@@ -4,37 +4,41 @@
  * POST /api/v1/governance/route - Route an action through the matrix
  * GET /api/v1/governance/route - Get the full matrix visualization
  *
+ * Supports two modes:
+ * 1. Explicit trustScore provided - uses that score directly
+ * 2. agentId provided - fetches trust score from trust engine
+ *
  * @see lib/governance/matrix-router.ts
+ * @see lib/governance/trust-engine-bridge.ts
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { MatrixRouter } from '@/lib/governance/matrix-router';
 import { RiskLevel, TrustTier } from '@/lib/governance/types';
+import {
+  getTrustBasedRouting,
+  recordGovernanceOutcome,
+  getEnhancedTrustStatus,
+} from '@/lib/governance/trust-engine-bridge';
 
 // =============================================================================
 // POST - Route an action
 // =============================================================================
 
 interface RouteRequestBody {
-  trustScore: number;
+  trustScore?: number;
   riskLevel: RiskLevel;
   actionType: string;
   agentId?: string;
   context?: Record<string, unknown>;
+  useTrustEngine?: boolean; // If true, fetch trust from engine using agentId
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: RouteRequestBody = await request.json();
 
-    // Validate required fields
-    if (typeof body.trustScore !== 'number') {
-      return NextResponse.json(
-        { error: 'trustScore is required and must be a number' },
-        { status: 400 }
-      );
-    }
-
+    // Validate risk level
     if (!body.riskLevel || !['low', 'medium', 'high', 'critical'].includes(body.riskLevel)) {
       return NextResponse.json(
         { error: 'riskLevel is required and must be one of: low, medium, high, critical' },
@@ -49,20 +53,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate trust score range
-    if (body.trustScore < 0 || body.trustScore > 1000) {
+    // Determine trust score - either from trust engine or provided directly
+    let trustScore: number;
+    let trustEngineData = null;
+
+    if (body.useTrustEngine && body.agentId) {
+      // Use trust engine to get/validate trust score
+      const trustRouting = await getTrustBasedRouting(body.agentId, body.riskLevel);
+      trustScore = trustRouting.trustScore;
+
+      // Get enhanced status for response
+      trustEngineData = await getEnhancedTrustStatus(body.agentId);
+    } else if (typeof body.trustScore === 'number') {
+      // Use provided trust score
+      trustScore = body.trustScore;
+
+      // Validate trust score range
+      if (trustScore < 0 || trustScore > 1000) {
+        return NextResponse.json(
+          { error: 'trustScore must be between 0 and 1000' },
+          { status: 400 }
+        );
+      }
+    } else {
       return NextResponse.json(
-        { error: 'trustScore must be between 0 and 1000' },
+        { error: 'Either trustScore or (useTrustEngine: true + agentId) is required' },
         { status: 400 }
       );
     }
 
     // Determine agent tier from trust score
-    const agentTier = getTierFromScore(body.trustScore);
+    const agentTier = getTierFromScore(trustScore);
 
     // Route the action through the matrix
     const result = MatrixRouter.route({
-      trustScore: body.trustScore,
+      trustScore,
       riskLevel: body.riskLevel,
       agentTier,
       actionType: body.actionType,
@@ -75,7 +100,7 @@ export async function POST(request: NextRequest) {
       policyResult = MatrixRouter.checkPolicy({
         actionType: body.actionType,
         agentId: body.agentId || 'unknown',
-        trustScore: body.trustScore,
+        trustScore,
         context: body.context,
       });
     }
@@ -95,10 +120,11 @@ export async function POST(request: NextRequest) {
         maxLatencyMs: result.route.maxLatencyMs,
       },
       input: {
-        trustScore: body.trustScore,
+        trustScore,
         riskLevel: body.riskLevel,
         agentTier,
         actionType: body.actionType,
+        agentId: body.agentId,
       },
       result: {
         canProceed: result.canProceed,
@@ -107,6 +133,7 @@ export async function POST(request: NextRequest) {
       },
       policyCheck: policyResult,
       governanceDecision,
+      trustEngine: trustEngineData, // Include trust engine data if used
     });
   } catch (error) {
     console.error('Matrix routing error:', error);

@@ -21,3 +21,4 @@ export * from './agent-wrapper';
 export * from './shadow-mode';
 export * from './observer-queue';
 export * from './matrix-router';
+export * from './trust-engine-bridge';
