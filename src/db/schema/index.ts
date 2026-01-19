@@ -8,3 +8,4 @@
 
 export * from './proofs.js';
 export * from './trust.js';
+export * from './escalations.js';

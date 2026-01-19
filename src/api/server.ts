@@ -6,12 +6,14 @@
  * @packageDocumentation
  */
 
-import Fastify, { FastifyInstance } from 'fastify';
+import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { createLogger, logger } from '../common/logger.js';
 import { getConfig } from '../common/config.js';
+import { authenticate, requireTenantAccess } from './auth.js';
+import { createEscalationService } from '../escalation/index.js';
 
 const apiLogger = createLogger({ component: 'api' });
 
@@ -64,38 +66,259 @@ export async function createServer(): Promise<FastifyInstance> {
   server.register(
     async (api) => {
       // Intent routes
-      api.post('/intents', async (request, reply) => {
+      api.post('/intents', async (_request, _reply) => {
         // TODO: Implement intent submission
         return { message: 'Intent submission - not implemented' };
       });
 
-      api.get('/intents/:id', async (request, reply) => {
+      api.get('/intents/:id', async (_request, _reply) => {
         // TODO: Implement intent retrieval
         return { message: 'Intent retrieval - not implemented' };
       });
 
       // Proof routes
-      api.get('/proofs/:id', async (request, reply) => {
+      api.get('/proofs/:id', async (_request, _reply) => {
         // TODO: Implement proof retrieval
         return { message: 'Proof retrieval - not implemented' };
       });
 
-      api.post('/proofs/:id/verify', async (request, reply) => {
+      api.post('/proofs/:id/verify', async (_request, _reply) => {
         // TODO: Implement proof verification
         return { message: 'Proof verification - not implemented' };
       });
 
       // Trust routes
-      api.get('/trust/:entityId', async (request, reply) => {
+      api.get('/trust/:entityId', async (_request, _reply) => {
         // TODO: Implement trust retrieval
         return { message: 'Trust retrieval - not implemented' };
       });
 
       // Constraint routes
-      api.post('/constraints/validate', async (request, reply) => {
+      api.post('/constraints/validate', async (_request, _reply) => {
         // TODO: Implement constraint validation
         return { message: 'Constraint validation - not implemented' };
       });
+
+      // Escalation routes (authenticated with tenant authorization)
+      const escalationService = createEscalationService();
+
+      // Create escalation
+      api.post<{
+        Body: {
+          intentId: string;
+          entityId: string;
+          reason: string;
+          priority?: 'low' | 'medium' | 'high' | 'critical';
+          escalatedTo: string;
+          context?: Record<string, unknown>;
+          requestedAction?: string;
+          timeoutMinutes?: number;
+        };
+      }>(
+        '/escalations',
+        { preHandler: [authenticate] },
+        async (request, reply) => {
+          if (!request.auth) {
+            return reply.status(401).send({ error: { code: 'UNAUTHORIZED' } });
+          }
+
+          const escalation = await escalationService.create({
+            tenantId: request.auth.tenantId,
+            intentId: request.body.intentId,
+            entityId: request.body.entityId,
+            reason: request.body.reason,
+            priority: request.body.priority,
+            escalatedTo: request.body.escalatedTo,
+            escalatedBy: request.auth.userId,
+            context: request.body.context,
+            requestedAction: request.body.requestedAction,
+            timeoutMinutes: request.body.timeoutMinutes,
+          });
+
+          return reply.status(201).send(escalation);
+        }
+      );
+
+      // Get escalation by ID (with tenant check)
+      api.get<{ Params: { id: string } }>(
+        '/escalations/:id',
+        {
+          preHandler: [
+            authenticate,
+            requireTenantAccess((req) => req.auth?.tenantId),
+          ],
+        },
+        async (request, reply) => {
+          if (!request.auth) {
+            return reply.status(401).send({ error: { code: 'UNAUTHORIZED' } });
+          }
+
+          const escalation = await escalationService.get(
+            request.params.id,
+            request.auth.tenantId
+          );
+
+          if (!escalation) {
+            return reply.status(404).send({
+              error: { code: 'NOT_FOUND', message: 'Escalation not found' },
+            });
+          }
+
+          return escalation;
+        }
+      );
+
+      // List escalations for tenant
+      api.get<{
+        Querystring: {
+          status?: 'pending' | 'approved' | 'rejected' | 'timeout' | 'cancelled';
+          intentId?: string;
+          entityId?: string;
+          escalatedTo?: string;
+          limit?: number;
+          offset?: number;
+        };
+      }>(
+        '/escalations',
+        { preHandler: [authenticate] },
+        async (request, reply) => {
+          if (!request.auth) {
+            return reply.status(401).send({ error: { code: 'UNAUTHORIZED' } });
+          }
+
+          const escalations = await escalationService.query({
+            tenantId: request.auth.tenantId,
+            ...request.query,
+          });
+
+          return { escalations, count: escalations.length };
+        }
+      );
+
+      // Resolve escalation (approve/reject)
+      api.post<{
+        Params: { id: string };
+        Body: {
+          resolution: 'approved' | 'rejected';
+          notes?: string;
+        };
+      }>(
+        '/escalations/:id/resolve',
+        {
+          preHandler: [
+            authenticate,
+            requireTenantAccess((req) => req.auth?.tenantId),
+          ],
+        },
+        async (request, reply) => {
+          if (!request.auth) {
+            return reply.status(401).send({ error: { code: 'UNAUTHORIZED' } });
+          }
+
+          try {
+            const escalation = await escalationService.resolve(
+              {
+                escalationId: request.params.id,
+                resolution: request.body.resolution,
+                resolvedBy: request.auth.userId,
+                notes: request.body.notes,
+              },
+              request.auth.tenantId
+            );
+
+            if (!escalation) {
+              return reply.status(404).send({
+                error: { code: 'NOT_FOUND', message: 'Escalation not found' },
+              });
+            }
+
+            return escalation;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to resolve escalation';
+            return reply.status(400).send({
+              error: { code: 'INVALID_OPERATION', message },
+            });
+          }
+        }
+      );
+
+      // Cancel escalation
+      api.post<{
+        Params: { id: string };
+        Body: { reason?: string };
+      }>(
+        '/escalations/:id/cancel',
+        {
+          preHandler: [
+            authenticate,
+            requireTenantAccess((req) => req.auth?.tenantId),
+          ],
+        },
+        async (request, reply) => {
+          if (!request.auth) {
+            return reply.status(401).send({ error: { code: 'UNAUTHORIZED' } });
+          }
+
+          try {
+            const escalation = await escalationService.cancel(
+              request.params.id,
+              request.auth.tenantId,
+              request.auth.userId,
+              request.body.reason
+            );
+
+            if (!escalation) {
+              return reply.status(404).send({
+                error: { code: 'NOT_FOUND', message: 'Escalation not found' },
+              });
+            }
+
+            return escalation;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to cancel escalation';
+            return reply.status(400).send({
+              error: { code: 'INVALID_OPERATION', message },
+            });
+          }
+        }
+      );
+
+      // Get escalation audit trail
+      api.get<{ Params: { id: string } }>(
+        '/escalations/:id/audit',
+        {
+          preHandler: [
+            authenticate,
+            requireTenantAccess((req) => req.auth?.tenantId),
+          ],
+        },
+        async (request, reply) => {
+          if (!request.auth) {
+            return reply.status(401).send({ error: { code: 'UNAUTHORIZED' } });
+          }
+
+          const audit = await escalationService.getAuditTrail(
+            request.params.id,
+            request.auth.tenantId
+          );
+
+          return { audit };
+        }
+      );
+
+      // Get pending escalation count
+      api.get(
+        '/escalations/pending/count',
+        { preHandler: [authenticate] },
+        async (request, reply) => {
+          if (!request.auth) {
+            return reply.status(401).send({ error: { code: 'UNAUTHORIZED' } });
+          }
+
+          const count = await escalationService.getPendingCount(request.auth.tenantId);
+          return { count };
+        }
+      );
     },
     { prefix: config.api.basePath }
   );
