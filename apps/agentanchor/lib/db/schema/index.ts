@@ -11,6 +11,9 @@ export * from './users'
 // Agents & Trust
 export * from './agents'
 
+// Trust Scores (atsf-core persistence)
+export * from './trust-scores'
+
 // Council Governance
 export * from './council'
 

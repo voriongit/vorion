@@ -22,34 +22,6 @@ CREATE INDEX IF NOT EXISTS "trust_scores_score_idx" ON "trust_scores" USING btre
 CREATE INDEX IF NOT EXISTS "trust_scores_level_idx" ON "trust_scores" USING btree ("level");
 CREATE INDEX IF NOT EXISTS "trust_scores_updated_idx" ON "trust_scores" USING btree ("updated_at");
 
--- RLS Policies
-ALTER TABLE "trust_scores" ENABLE ROW LEVEL SECURITY;
-
--- Allow read access to all authenticated users
-CREATE POLICY "trust_scores_read_all" ON "trust_scores"
-  FOR SELECT
-  TO authenticated
-  USING (true);
-
--- Allow service role full access
-CREATE POLICY "trust_scores_service_all" ON "trust_scores"
-  FOR ALL
-  TO service_role
-  USING (true)
-  WITH CHECK (true);
-
--- Allow insert/update from API routes (using anon role with proper auth)
-CREATE POLICY "trust_scores_insert_anon" ON "trust_scores"
-  FOR INSERT
-  TO anon
-  WITH CHECK (true);
-
-CREATE POLICY "trust_scores_update_anon" ON "trust_scores"
-  FOR UPDATE
-  TO anon
-  USING (true)
-  WITH CHECK (true);
-
 COMMENT ON TABLE "trust_scores" IS 'Trust engine records for AI agents - atsf-core persistence';
 COMMENT ON COLUMN "trust_scores"."entity_id" IS 'Agent or entity unique identifier';
 COMMENT ON COLUMN "trust_scores"."score" IS 'Current trust score (0-1000)';

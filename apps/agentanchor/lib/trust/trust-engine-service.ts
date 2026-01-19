@@ -1,11 +1,13 @@
 /**
  * Trust Engine Service
  *
- * Integrates atsf-core trust engine with Supabase persistence for AgentAnchor.
+ * Integrates atsf-core trust engine with Drizzle/Neon persistence for AgentAnchor.
  * Provides trust scoring, recovery, and decay for AI agents.
  */
 
-import { createClient } from '@/lib/supabase/server'
+import { eq, sql } from 'drizzle-orm'
+import { db } from '@/lib/db'
+import { trustScores, type SelectTrustScore, type InsertTrustScore } from '@/lib/db/schema/trust-scores'
 import {
   TrustEngine,
   createTrustEngine,
@@ -14,11 +16,8 @@ import {
   TRUST_LEVEL_NAMES,
   TRUST_THRESHOLDS,
 } from '@vorionsys/atsf-core/trust-engine'
-import {
-  SupabasePersistenceProvider,
-  type DatabaseClient,
-} from '@vorionsys/atsf-core/persistence'
-import type { TrustSignal, TrustLevel, TrustScore } from '@vorionsys/atsf-core/types'
+import type { PersistenceProvider, TrustRecordQuery } from '@vorionsys/atsf-core/persistence'
+import type { TrustSignal, TrustLevel, TrustScore, ID } from '@vorionsys/atsf-core/types'
 
 // Singleton trust engine instance
 let trustEngineInstance: TrustEngine | null = null
@@ -47,130 +46,126 @@ const DEFAULT_CONFIG: TrustEngineConfig = {
 }
 
 /**
- * Create Supabase client adapter for atsf-core
+ * Drizzle-based persistence provider for atsf-core
  */
-function createSupabaseAdapter(): DatabaseClient {
-  const supabase = createClient()
+class DrizzlePersistenceProvider implements PersistenceProvider {
+  readonly name = 'drizzle'
 
-  return {
-    from: (table: string) => {
-      let query = supabase.from(table)
+  async initialize(): Promise<void> {
+    // Verify table exists by attempting a count
+    try {
+      await db.select({ count: sql<number>`count(*)` }).from(trustScores)
+      console.log('[TrustEngine] Drizzle persistence initialized')
+    } catch (err) {
+      console.warn('[TrustEngine] Trust scores table may not exist. Run migrations.')
+    }
+  }
 
-      // Create a chainable query builder
-      const builder: any = {
-        _query: query,
-        _selectColumns: '*',
-        _filters: [] as Array<{ type: string; column: string; value: unknown }>,
-        _orderColumn: null as string | null,
-        _orderAsc: false,
-        _rangeFrom: null as number | null,
-        _rangeTo: null as number | null,
-        _single: false,
+  async save(record: TrustRecord): Promise<void> {
+    const row: InsertTrustScore = {
+      entityId: record.entityId,
+      score: record.score,
+      level: record.level,
+      components: record.components as Record<string, unknown>,
+      signals: record.signals as unknown[],
+      lastCalculatedAt: new Date(record.lastCalculatedAt),
+      history: record.history as unknown[],
+      recentFailures: record.recentFailures,
+      recentSuccesses: record.recentSuccesses ?? [],
+      peakScore: record.peakScore ?? record.score,
+      consecutiveSuccesses: record.consecutiveSuccesses ?? 0,
+      updatedAt: new Date(),
+    }
 
-        select(columns?: string) {
-          this._selectColumns = columns || '*'
-          return this
+    await db
+      .insert(trustScores)
+      .values(row)
+      .onConflictDoUpdate({
+        target: trustScores.entityId,
+        set: {
+          score: row.score,
+          level: row.level,
+          components: row.components,
+          signals: row.signals,
+          lastCalculatedAt: row.lastCalculatedAt,
+          history: row.history,
+          recentFailures: row.recentFailures,
+          recentSuccesses: row.recentSuccesses,
+          peakScore: row.peakScore,
+          consecutiveSuccesses: row.consecutiveSuccesses,
+          updatedAt: row.updatedAt,
         },
+      })
+  }
 
-        insert(data: Record<string, unknown> | Record<string, unknown>[]) {
-          this._query = supabase.from(table).insert(data)
-          return this
-        },
+  async get(entityId: ID): Promise<TrustRecord | undefined> {
+    const rows = await db
+      .select()
+      .from(trustScores)
+      .where(eq(trustScores.entityId, entityId))
+      .limit(1)
 
-        update(data: Record<string, unknown>) {
-          this._query = supabase.from(table).update(data)
-          return this
-        },
+    if (rows.length === 0) return undefined
+    return this.rowToRecord(rows[0])
+  }
 
-        upsert(data: Record<string, unknown> | Record<string, unknown>[], options?: { onConflict?: string }) {
-          this._query = supabase.from(table).upsert(data, options)
-          return this
-        },
+  async delete(entityId: ID): Promise<boolean> {
+    await db.delete(trustScores).where(eq(trustScores.entityId, entityId))
+    return true
+  }
 
-        delete() {
-          this._query = supabase.from(table).delete()
-          return this
-        },
+  async listIds(): Promise<ID[]> {
+    const rows = await db.select({ entityId: trustScores.entityId }).from(trustScores)
+    return rows.map((r) => r.entityId)
+  }
 
-        eq(column: string, value: unknown) {
-          this._filters.push({ type: 'eq', column, value })
-          return this
-        },
+  async query(options: TrustRecordQuery = {}): Promise<TrustRecord[]> {
+    // Basic query - could be enhanced with proper filters
+    const rows = await db.select().from(trustScores)
+    return rows.map((r) => this.rowToRecord(r))
+  }
 
-        gte(column: string, value: unknown) {
-          this._filters.push({ type: 'gte', column, value })
-          return this
-        },
+  async exists(entityId: ID): Promise<boolean> {
+    const rows = await db
+      .select({ entityId: trustScores.entityId })
+      .from(trustScores)
+      .where(eq(trustScores.entityId, entityId))
+      .limit(1)
+    return rows.length > 0
+  }
 
-        lte(column: string, value: unknown) {
-          this._filters.push({ type: 'lte', column, value })
-          return this
-        },
+  async count(): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` }).from(trustScores)
+    return Number(result[0]?.count ?? 0)
+  }
 
-        order(column: string, options?: { ascending?: boolean }) {
-          this._orderColumn = column
-          this._orderAsc = options?.ascending ?? false
-          return this
-        },
+  async clear(): Promise<void> {
+    await db.delete(trustScores)
+  }
 
-        range(from: number, to: number) {
-          this._rangeFrom = from
-          this._rangeTo = to
-          return this
-        },
+  async close(): Promise<void> {
+    // Drizzle/Neon doesn't need explicit closing
+  }
 
-        single() {
-          this._single = true
-          return this
-        },
-
-        async then<T>(
-          resolve: (result: { data: T | null; error: { message: string; code?: string } | null; count?: number }) => void,
-          reject?: (error: Error) => void
-        ) {
-          try {
-            // Build the query
-            let finalQuery = supabase.from(table).select(this._selectColumns)
-
-            // Apply filters
-            for (const filter of this._filters) {
-              if (filter.type === 'eq') {
-                finalQuery = finalQuery.eq(filter.column, filter.value)
-              } else if (filter.type === 'gte') {
-                finalQuery = finalQuery.gte(filter.column, filter.value)
-              } else if (filter.type === 'lte') {
-                finalQuery = finalQuery.lte(filter.column, filter.value)
-              }
-            }
-
-            // Apply ordering
-            if (this._orderColumn) {
-              finalQuery = finalQuery.order(this._orderColumn, { ascending: this._orderAsc })
-            }
-
-            // Apply range
-            if (this._rangeFrom !== null && this._rangeTo !== null) {
-              finalQuery = finalQuery.range(this._rangeFrom, this._rangeTo)
-            }
-
-            // Apply single
-            if (this._single) {
-              finalQuery = finalQuery.single()
-            }
-
-            const result = await finalQuery
-            resolve(result as any)
-          } catch (error) {
-            if (reject) {
-              reject(error as Error)
-            } else {
-              resolve({ data: null, error: { message: (error as Error).message } })
-            }
-          }
-        }
-      }
-
-      return builder
+  private rowToRecord(row: SelectTrustScore): TrustRecord {
+    const components = row.components as Record<string, number>
+    return {
+      entityId: row.entityId,
+      score: row.score as TrustScore,
+      level: row.level as TrustLevel,
+      components: {
+        behavioral: components.behavioral ?? 0.5,
+        compliance: components.compliance ?? 0.5,
+        identity: components.identity ?? 0.5,
+        context: components.context ?? 0.5,
+      },
+      signals: (row.signals ?? []) as TrustRecord['signals'],
+      lastCalculatedAt: row.lastCalculatedAt.toISOString(),
+      history: (row.history ?? []) as TrustRecord['history'],
+      recentFailures: row.recentFailures ?? [],
+      recentSuccesses: row.recentSuccesses ?? [],
+      peakScore: row.peakScore as TrustScore,
+      consecutiveSuccesses: row.consecutiveSuccesses,
     }
   }
 }
@@ -183,15 +178,8 @@ export async function getTrustEngine(): Promise<TrustEngine> {
     return trustEngineInstance
   }
 
-  // Create Supabase adapter
-  const client = createSupabaseAdapter()
-
-  // Create persistence provider
-  const persistence = new SupabasePersistenceProvider({
-    client,
-    tableName: 'trust_scores',
-    debug: process.env.NODE_ENV === 'development',
-  })
+  // Create Drizzle persistence provider
+  const persistence = new DrizzlePersistenceProvider()
 
   // Initialize persistence
   await persistence.initialize()
