@@ -28,6 +28,9 @@ import { ZodError } from 'zod';
 
 const logger = createLogger({ component: 'response-middleware' });
 
+/** Header name for request ID tracking */
+export const REQUEST_ID_HEADER = 'X-Request-ID';
+
 /**
  * Extended request interface with trace context
  */
@@ -87,15 +90,20 @@ export function registerResponseMiddleware(
   // Decorate request with responseContext
   server.decorateRequest('responseContext', null);
 
-  // Add response context to each request
-  server.addHook('onRequest', async (request) => {
+  // Add response context to each request and set X-Request-ID header
+  server.addHook('onRequest', async (request, reply) => {
     const traceContext = getTraceContext() ?? request.traceContext;
+    // Use incoming request ID or generate a new one
+    const requestId = (request.headers[REQUEST_ID_HEADER.toLowerCase()] as string) ?? randomUUID();
 
     request.responseContext = {
-      requestId: (request.headers['x-request-id'] as string) ?? randomUUID(),
+      requestId,
       traceId: traceContext?.traceId,
       startTime: Date.now(),
     };
+
+    // Always set X-Request-ID header in response
+    reply.header(REQUEST_ID_HEADER, requestId);
   });
 
   // Optionally wrap all responses in standard envelope

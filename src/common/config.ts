@@ -31,6 +31,8 @@ const configSchema = z.object({
     basePath: z.string().default('/api/v1'),
     timeout: z.coerce.number().default(30000),
     rateLimit: z.coerce.number().default(1000),
+    /** Separate rate limit for bulk operations (default: 10 requests per minute) */
+    bulkRateLimit: z.coerce.number().default(10),
   }),
 
   health: z.object({
@@ -53,6 +55,17 @@ const configSchema = z.object({
     poolIdleTimeoutMs: z.coerce.number().min(0).default(10000),
     poolConnectionTimeoutMs: z.coerce.number().min(0).default(5000),
     metricsIntervalMs: z.coerce.number().min(1000).default(5000),
+    /**
+     * Default statement timeout for database queries in milliseconds.
+     * Queries exceeding this timeout will be cancelled by PostgreSQL.
+     * Default: 30000 (30 seconds)
+     */
+    statementTimeoutMs: z.coerce.number().min(1000).max(600000).default(30000),
+    /**
+     * Extended timeout for long-running queries (reports, exports) in milliseconds.
+     * Default: 120000 (2 minutes)
+     */
+    longQueryTimeoutMs: z.coerce.number().min(1000).max(600000).default(120000),
   }),
 
   redis: z.object({
@@ -167,6 +180,9 @@ const configSchema = z.object({
     // Scheduled jobs
     cleanupCronSchedule: z.string().default('0 2 * * *'), // 2 AM daily
     timeoutCheckCronSchedule: z.string().default('*/5 * * * *'), // Every 5 minutes
+    // Graceful shutdown timeout in milliseconds
+    // Maximum time to wait for in-flight requests and workers to complete during shutdown
+    shutdownTimeoutMs: z.coerce.number().min(5000).max(300000).default(30000),
     // Rate limiting configuration per intent type
     rateLimits: z.object({
       default: z.object({
@@ -186,7 +202,7 @@ const configSchema = z.object({
         windowSeconds: z.coerce.number().min(1).default(60),
       }),
     }).default({}),
-    // Policy evaluation circuit breaker configuration
+    // Policy evaluation circuit breaker configuration (legacy - prefer circuitBreaker.policyEngine)
     policyCircuitBreaker: z.object({
       /** Number of consecutive failures before opening the circuit (default: 5) */
       failureThreshold: z.coerce.number().min(1).max(100).default(5),
@@ -194,6 +210,60 @@ const configSchema = z.object({
       resetTimeoutMs: z.coerce.number().min(1000).max(300000).default(30000),
     }).default({}),
   }),
+
+  // Per-service circuit breaker configuration
+  circuitBreaker: z.object({
+    database: z.object({
+      /** Number of failures before opening the circuit (default: 5) */
+      failureThreshold: z.coerce.number().min(1).max(100).default(5),
+      /** Time in ms before attempting to close the circuit (default: 30000) */
+      resetTimeoutMs: z.coerce.number().min(1000).max(600000).default(30000),
+      /** Maximum attempts in half-open state before reopening (default: 3) */
+      halfOpenMaxAttempts: z.coerce.number().min(1).max(20).default(3),
+      /** Time window in ms to monitor for failures (default: 60000) */
+      monitorWindowMs: z.coerce.number().min(1000).max(600000).default(60000),
+    }).default({}),
+    redis: z.object({
+      /** Number of failures before opening the circuit (default: 10) */
+      failureThreshold: z.coerce.number().min(1).max(100).default(10),
+      /** Time in ms before attempting to close the circuit (default: 10000) */
+      resetTimeoutMs: z.coerce.number().min(1000).max(600000).default(10000),
+      /** Maximum attempts in half-open state before reopening (default: 5) */
+      halfOpenMaxAttempts: z.coerce.number().min(1).max(20).default(5),
+      /** Time window in ms to monitor for failures (default: 30000) */
+      monitorWindowMs: z.coerce.number().min(1000).max(600000).default(30000),
+    }).default({}),
+    webhook: z.object({
+      /** Number of failures before opening the circuit (default: 3) */
+      failureThreshold: z.coerce.number().min(1).max(100).default(3),
+      /** Time in ms before attempting to close the circuit (default: 60000) */
+      resetTimeoutMs: z.coerce.number().min(1000).max(600000).default(60000),
+      /** Maximum attempts in half-open state before reopening (default: 2) */
+      halfOpenMaxAttempts: z.coerce.number().min(1).max(20).default(2),
+      /** Time window in ms to monitor for failures (default: 120000) */
+      monitorWindowMs: z.coerce.number().min(1000).max(600000).default(120000),
+    }).default({}),
+    policyEngine: z.object({
+      /** Number of failures before opening the circuit (default: 5) */
+      failureThreshold: z.coerce.number().min(1).max(100).default(5),
+      /** Time in ms before attempting to close the circuit (default: 15000) */
+      resetTimeoutMs: z.coerce.number().min(1000).max(600000).default(15000),
+      /** Maximum attempts in half-open state before reopening (default: 3) */
+      halfOpenMaxAttempts: z.coerce.number().min(1).max(20).default(3),
+      /** Time window in ms to monitor for failures (default: 60000) */
+      monitorWindowMs: z.coerce.number().min(1000).max(600000).default(60000),
+    }).default({}),
+    trustEngine: z.object({
+      /** Number of failures before opening the circuit (default: 5) */
+      failureThreshold: z.coerce.number().min(1).max(100).default(5),
+      /** Time in ms before attempting to close the circuit (default: 15000) */
+      resetTimeoutMs: z.coerce.number().min(1000).max(600000).default(15000),
+      /** Maximum attempts in half-open state before reopening (default: 3) */
+      halfOpenMaxAttempts: z.coerce.number().min(1).max(20).default(3),
+      /** Time window in ms to monitor for failures (default: 60000) */
+      monitorWindowMs: z.coerce.number().min(1000).max(600000).default(60000),
+    }).default({}),
+  }).default({}),
 
   webhook: z.object({
     // HTTP request timeout for webhook delivery (default: 10s, min: 1s, max: 60s)
@@ -349,6 +419,7 @@ export function loadConfig(): Config {
       basePath: process.env['VORION_API_BASE_PATH'],
       timeout: process.env['VORION_API_TIMEOUT'],
       rateLimit: process.env['VORION_API_RATE_LIMIT'],
+      bulkRateLimit: process.env['VORION_API_BULK_RATE_LIMIT'],
     },
 
     health: {
@@ -368,6 +439,8 @@ export function loadConfig(): Config {
       poolIdleTimeoutMs: process.env['VORION_DB_POOL_IDLE_TIMEOUT'],
       poolConnectionTimeoutMs: process.env['VORION_DB_POOL_CONNECTION_TIMEOUT'],
       metricsIntervalMs: process.env['VORION_DB_METRICS_INTERVAL_MS'],
+      statementTimeoutMs: process.env['VORION_DB_STATEMENT_TIMEOUT_MS'],
+      longQueryTimeoutMs: process.env['VORION_DB_LONG_QUERY_TIMEOUT_MS'],
     },
 
     redis: {
@@ -434,6 +507,7 @@ export function loadConfig(): Config {
       escalationDefaultRecipient: process.env['VORION_INTENT_ESCALATION_RECIPIENT'],
       cleanupCronSchedule: process.env['VORION_INTENT_CLEANUP_CRON'],
       timeoutCheckCronSchedule: process.env['VORION_INTENT_TIMEOUT_CHECK_CRON'],
+      shutdownTimeoutMs: process.env['VORION_SHUTDOWN_TIMEOUT_MS'],
       rateLimits: {
         default: {
           limit: process.env['VORION_RATELIMIT_DEFAULT_LIMIT'],
@@ -455,6 +529,39 @@ export function loadConfig(): Config {
       policyCircuitBreaker: {
         failureThreshold: process.env['VORION_POLICY_CIRCUIT_FAILURE_THRESHOLD'],
         resetTimeoutMs: process.env['VORION_POLICY_CIRCUIT_RESET_TIMEOUT_MS'],
+      },
+    },
+
+    circuitBreaker: {
+      database: {
+        failureThreshold: process.env['VORION_CB_DATABASE_FAILURE_THRESHOLD'],
+        resetTimeoutMs: process.env['VORION_CB_DATABASE_RESET_TIMEOUT_MS'],
+        halfOpenMaxAttempts: process.env['VORION_CB_DATABASE_HALF_OPEN_MAX_ATTEMPTS'],
+        monitorWindowMs: process.env['VORION_CB_DATABASE_MONITOR_WINDOW_MS'],
+      },
+      redis: {
+        failureThreshold: process.env['VORION_CB_REDIS_FAILURE_THRESHOLD'],
+        resetTimeoutMs: process.env['VORION_CB_REDIS_RESET_TIMEOUT_MS'],
+        halfOpenMaxAttempts: process.env['VORION_CB_REDIS_HALF_OPEN_MAX_ATTEMPTS'],
+        monitorWindowMs: process.env['VORION_CB_REDIS_MONITOR_WINDOW_MS'],
+      },
+      webhook: {
+        failureThreshold: process.env['VORION_CB_WEBHOOK_FAILURE_THRESHOLD'],
+        resetTimeoutMs: process.env['VORION_CB_WEBHOOK_RESET_TIMEOUT_MS'],
+        halfOpenMaxAttempts: process.env['VORION_CB_WEBHOOK_HALF_OPEN_MAX_ATTEMPTS'],
+        monitorWindowMs: process.env['VORION_CB_WEBHOOK_MONITOR_WINDOW_MS'],
+      },
+      policyEngine: {
+        failureThreshold: process.env['VORION_CB_POLICY_ENGINE_FAILURE_THRESHOLD'],
+        resetTimeoutMs: process.env['VORION_CB_POLICY_ENGINE_RESET_TIMEOUT_MS'],
+        halfOpenMaxAttempts: process.env['VORION_CB_POLICY_ENGINE_HALF_OPEN_MAX_ATTEMPTS'],
+        monitorWindowMs: process.env['VORION_CB_POLICY_ENGINE_MONITOR_WINDOW_MS'],
+      },
+      trustEngine: {
+        failureThreshold: process.env['VORION_CB_TRUST_ENGINE_FAILURE_THRESHOLD'],
+        resetTimeoutMs: process.env['VORION_CB_TRUST_ENGINE_RESET_TIMEOUT_MS'],
+        halfOpenMaxAttempts: process.env['VORION_CB_TRUST_ENGINE_HALF_OPEN_MAX_ATTEMPTS'],
+        monitorWindowMs: process.env['VORION_CB_TRUST_ENGINE_MONITOR_WINDOW_MS'],
       },
     },
 

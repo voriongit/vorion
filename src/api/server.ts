@@ -25,6 +25,8 @@ import { z } from 'zod';
 import {
   createIntentService,
   intentSubmissionSchema,
+  bulkIntentSubmissionSchema,
+  PAYLOAD_LIMITS,
 } from '../intent/index.js';
 import { createAuditService } from '../audit/service.js';
 import type { ChainIntegrityResult } from '../audit/types.js';
@@ -42,10 +44,23 @@ import {
   retryDeadLetterJob,
   enqueueIntentSubmission,
 } from '../intent/queues.js';
+import {
+  isServerShuttingDown,
+  shutdownRequestHook,
+  shutdownResponseHook,
+  gracefulShutdown,
+  registerShutdownHandlers,
+  getActiveRequestCount,
+} from '../intent/shutdown.js';
 import { createEscalationService } from '../intent/escalation.js';
 import { createWebhookService, type WebhookEventType } from '../intent/webhooks.js';
 import { getMetrics, getMetricsContentType, tokenRevocationChecks } from '../intent/metrics.js';
 import { startScheduler, stopScheduler, getSchedulerStatus, runCleanupNow } from '../intent/scheduler.js';
+import {
+  livenessCheck as intentLivenessCheck,
+  readinessCheck as intentReadinessCheck,
+  validateStartupDependencies,
+} from '../intent/health.js';
 import {
   createGdprService,
   enqueueGdprExport,
@@ -443,6 +458,8 @@ export async function createServer(): Promise<FastifyInstance> {
     logger: logger as unknown as FastifyInstance['log'],
     requestIdHeader: 'x-request-id',
     requestIdLogLabel: 'requestId',
+    // Enforce body size limit at HTTP layer (matches schema validation limit)
+    bodyLimit: PAYLOAD_LIMITS.MAX_PAYLOAD_SIZE_BYTES,
   });
 
   await server.register(fastifyJwt, {
@@ -481,10 +498,16 @@ export async function createServer(): Promise<FastifyInstance> {
     reply.header('traceparent', traceContext.traceparent);
   });
 
+  // Graceful shutdown hooks - track active requests and reject new ones during shutdown
+  // This must run after trace context hook but before route handlers
+  server.addHook('onRequest', shutdownRequestHook);
+  server.addHook('onResponse', shutdownResponseHook);
+
   // Liveness check endpoint - minimal self-check with process info
   server.get('/health', async (_request, reply) => {
     const start = performance.now();
     const memUsage = process.memoryUsage();
+    const shuttingDown = isServerShuttingDown();
 
     try {
       // Minimal async self-check with timeout
@@ -495,6 +518,27 @@ export async function createServer(): Promise<FastifyInstance> {
       );
 
       const latencyMs = Math.round(performance.now() - start);
+
+      // During shutdown, return 503 to signal load balancers to stop sending traffic
+      if (shuttingDown) {
+        return reply.status(503).send({
+          status: 'shutting_down',
+          version: process.env['npm_package_version'],
+          environment: config.env,
+          process: {
+            uptimeSeconds: Math.round(process.uptime()),
+            memoryUsageMb: {
+              rss: Math.round(memUsage.rss / 1024 / 1024),
+              heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+              heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+              external: Math.round(memUsage.external / 1024 / 1024),
+            },
+            activeRequests: getActiveRequestCount(),
+          },
+          latencyMs,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       return reply.send({
         status: 'healthy',
@@ -508,6 +552,7 @@ export async function createServer(): Promise<FastifyInstance> {
             heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
             external: Math.round(memUsage.external / 1024 / 1024),
           },
+          activeRequests: getActiveRequestCount(),
         },
         latencyMs,
         timestamp: new Date().toISOString(),
@@ -635,6 +680,26 @@ export async function createServer(): Promise<FastifyInstance> {
       tasks: schedulerStatus.tasks,
       timestamp: new Date().toISOString(),
     };
+  });
+
+  // INTENT module health check endpoints (no auth required for Kubernetes probes)
+  server.get(`${config.api.basePath}/intent/health`, async (_request, reply) => {
+    // Liveness check - is the process alive?
+    const result = await intentLivenessCheck();
+    return reply.send({
+      status: result.alive ? 'healthy' : 'unhealthy',
+      alive: result.alive,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  server.get(`${config.api.basePath}/intent/ready`, async (_request, reply) => {
+    // Readiness check - can the service handle requests?
+    const healthStatus = await intentReadinessCheck();
+
+    const statusCode = healthStatus.status === 'healthy' ? 200 : 503;
+
+    return reply.status(statusCode).send(healthStatus);
   });
 
   // API routes
@@ -768,6 +833,64 @@ export async function createServer(): Promise<FastifyInstance> {
         return sendSuccess(reply, intent, HttpStatus.ACCEPTED, request);
       });
 
+      /**
+       * Bulk create intents for batch processing efficiency.
+       *
+       * This endpoint allows submitting multiple intents in a single request.
+       * Each intent in the batch is processed individually, and the response
+       * includes details about successful and failed items.
+       *
+       * Rate limiting:
+       * - Separate rate limit for bulk operations (10 requests per minute by default)
+       * - This is lower than single intent submissions to prevent abuse
+       * - Each bulk request counts as 1 request regardless of item count
+       *
+       * Response status codes:
+       * - 202 Accepted: All items processed successfully
+       * - 207 Multi-Status: Some items succeeded, some failed
+       * - 400 Bad Request: All items failed
+       *
+       * @param intents - Array of 1-100 intent submissions
+       * @param options - Optional processing options (stopOnError, returnPartial)
+       */
+      api.post('/intents/bulk', {
+        config: {
+          rateLimit: {
+            max: config.api.bulkRateLimit ?? 10, // Default: 10 bulk requests per minute
+            timeWindow: '1 minute',
+          },
+        },
+      }, async (request, reply) => {
+        const tenantId = await getTenantId(request);
+        const body = bulkIntentSubmissionSchema.parse(request.body ?? {});
+
+        const result = await intentService.submitBulk(body.intents, {
+          tenantId,
+          stopOnError: body.options?.stopOnError ?? false,
+        });
+
+        // Determine appropriate HTTP status code:
+        // - 202 Accepted: All items processed successfully
+        // - 207 Multi-Status: Partial success (some succeeded, some failed)
+        // - 400 Bad Request: All items failed
+        let status: number;
+        if (result.stats.failed === 0) {
+          status = HttpStatus.ACCEPTED;
+        } else if (result.stats.succeeded > 0) {
+          status = 207; // Multi-Status
+        } else {
+          status = HttpStatus.BAD_REQUEST;
+        }
+
+        return reply.status(status).send({
+          data: result,
+          meta: {
+            requestId: request.id,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      });
+
       api.get('/intents/:id', async (request, reply) => {
         const tenantId = await getTenantId(request);
         const params = intentIdParamsSchema.parse(request.params ?? {});
@@ -792,13 +915,12 @@ export async function createServer(): Promise<FastifyInstance> {
         if (query.status) listOptions.status = query.status as IntentStatus;
         if (query.limit) listOptions.limit = query.limit;
         if (query.cursor) listOptions.cursor = query.cursor;
-        const intents = await intentService.list(listOptions);
+        const result = await intentService.list(listOptions);
 
-        // Use standardized cursor pagination response
-        const nextCursor = intents.length > 0 ? intents[intents.length - 1]?.id : undefined;
-        return sendCursorPaginated(reply, intents, {
-          nextCursor,
-          hasMore: intents.length === (query.limit ?? 50),
+        // Use standardized cursor pagination response with PaginatedResult
+        return sendCursorPaginated(reply, result.items, {
+          nextCursor: result.nextCursor,
+          hasMore: result.hasMore,
         }, request);
       });
 
@@ -1960,38 +2082,24 @@ export async function createServer(): Promise<FastifyInstance> {
  */
 export async function startServer(): Promise<void> {
   const config = getConfig();
+
+  // Validate startup dependencies before accepting requests
+  // If DB or Redis connectivity fails, exit with code 1
+  try {
+    await validateStartupDependencies();
+  } catch (error) {
+    apiLogger.error({ error }, 'Startup validation failed - exiting');
+    process.exit(1);
+  }
+
   const server = await createServer();
 
-  // Graceful shutdown handler
-  const shutdown = async (signal: string) => {
-    apiLogger.info({ signal }, 'Shutdown signal received');
-
-    try {
-      // Stop accepting new requests
-      await server.close();
-      apiLogger.info('HTTP server closed');
-
-      // Stop scheduled jobs and resign leadership (allows faster failover)
-      await stopScheduler();
-      apiLogger.info('Scheduler stopped and leadership resigned');
-
-      // Shutdown workers gracefully
-      await shutdownWorkers();
-      apiLogger.info('Workers shutdown complete');
-
-      // Shutdown GDPR workers
-      await shutdownGdprWorker();
-      apiLogger.info('GDPR workers shutdown complete');
-
-      process.exit(0);
-    } catch (error) {
-      apiLogger.error({ error }, 'Error during shutdown');
-      process.exit(1);
-    }
-  };
-
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  // Register graceful shutdown handlers using the centralized shutdown module
+  // This handles SIGTERM (Kubernetes) and SIGINT (Ctrl+C) signals
+  // and coordinates shutdown of HTTP server, workers, database, and Redis
+  registerShutdownHandlers(server, {
+    timeoutMs: config.intent.shutdownTimeoutMs ?? 30000,
+  });
 
   try {
     await server.listen({

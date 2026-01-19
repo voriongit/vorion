@@ -109,6 +109,8 @@ let mockDb: ReturnType<typeof createMockDb>;
 
 vi.mock('../../../src/common/db.js', () => ({
   getDatabase: vi.fn(() => mockDb),
+  withLongQueryTimeout: vi.fn((fn) => fn()), // Execute the function directly
+  withStatementTimeout: vi.fn((fn) => fn()),
 }));
 
 // Mock audit service

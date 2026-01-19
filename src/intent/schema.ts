@@ -470,9 +470,43 @@ export const consentPolicies = pgTable('consent_policies', {
 }));
 
 // =============================================================================
+// AUDIT READS (SOC2 Compliance - Read Access Logging)
+// =============================================================================
+
+/**
+ * Tracks read access to resources for SOC2 compliance.
+ * Logs who accessed/viewed data, when, and from where.
+ */
+export const auditReads = pgTable('audit_reads', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: text('tenant_id').notNull(),
+  userId: text('user_id').notNull(),
+  action: text('action').notNull(), // 'intent.read', 'intent.read_list', etc.
+  resourceType: text('resource_type').notNull(), // 'intent', 'escalation', 'webhook', 'user_data'
+  resourceId: text('resource_id').notNull(),
+  metadata: jsonb('metadata'), // Additional context (query params, filters, etc.)
+  ipAddress: text('ip_address'), // IPv4 or IPv6 (max 45 chars)
+  userAgent: text('user_agent'),
+  timestamp: timestamp('timestamp', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  // Primary compliance query: find all access by a user
+  userIdx: index('audit_reads_user_idx').on(table.userId, table.timestamp),
+  // Tenant-scoped queries
+  tenantIdx: index('audit_reads_tenant_idx').on(table.tenantId, table.timestamp),
+  // Resource access history
+  resourceIdx: index('audit_reads_resource_idx').on(table.resourceType, table.resourceId, table.timestamp),
+  // Action filtering for compliance reports
+  actionIdx: index('audit_reads_action_idx').on(table.action, table.timestamp),
+  // Combined tenant + user for efficient filtered queries
+  tenantUserIdx: index('audit_reads_tenant_user_idx').on(table.tenantId, table.userId, table.timestamp),
+}));
+
+// =============================================================================
 // TYPE EXPORTS
 // =============================================================================
 
+export type AuditReadRow = typeof auditReads.$inferSelect;
+export type NewAuditReadRow = typeof auditReads.$inferInsert;
 export type UserConsentRow = typeof userConsents.$inferSelect;
 export type NewUserConsentRow = typeof userConsents.$inferInsert;
 export type ConsentPolicyRow = typeof consentPolicies.$inferSelect;

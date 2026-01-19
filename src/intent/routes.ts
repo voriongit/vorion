@@ -11,10 +11,23 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { JWT } from '@fastify/jwt';
 import { z } from 'zod';
 import { getOpenApiSpec, getOpenApiSpecJson } from './openapi.js';
-import { createIntentService, intentSubmissionSchema, IntentService } from './index.js';
+import {
+  createIntentService,
+  intentSubmissionSchema,
+  IntentService,
+  DEFAULT_PAGE_SIZE,
+  MAX_PAGE_SIZE,
+} from './index.js';
 import { createEscalationService, type EscalationStatus } from './escalation.js';
 import type { IntentStatus } from '../common/types.js';
 import { INTENT_STATUSES } from '../common/types.js';
+import {
+  recordAudit,
+  queryAuditLog,
+  extractRequestMetadata,
+  type AuditAction,
+  type AuditResourceType,
+} from './audit.js';
 
 // Extend FastifyRequest to include JWT methods when JWT plugin is registered
 declare module 'fastify' {
@@ -56,6 +69,12 @@ const intentIdParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
+/**
+ * Pagination query schema with strict validation.
+ * - limit: min 1, max MAX_PAGE_SIZE (1000), defaults to DEFAULT_PAGE_SIZE (50)
+ * - offset: min 0, used for offset-based pagination
+ * - cursor: UUID for cursor-based pagination (mutually exclusive with offset)
+ */
 const intentListQuerySchema = z.object({
   entityId: z.string().uuid().optional(),
   status: z
@@ -64,9 +83,16 @@ const intentListQuerySchema = z.object({
       message: 'Invalid status',
     })
     .optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
   cursor: z.string().uuid().optional(),
-});
+}).refine(
+  (data) => !(data.offset !== undefined && data.cursor !== undefined),
+  {
+    message: 'Cannot use both offset and cursor pagination simultaneously',
+    path: ['cursor'],
+  }
+);
 
 const intentCancelBodySchema = z.object({
   reason: z.string().min(1).max(500),
@@ -100,7 +126,19 @@ const entityIdParamsSchema = z.object({
 });
 
 const eventsQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).optional().default(10),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(DEFAULT_PAGE_SIZE),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+});
+
+const auditQuerySchema = z.object({
+  userId: z.string().optional(),
+  action: z.string().optional(),
+  resourceType: z.string().optional(),
+  resourceId: z.string().optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  limit: z.coerce.number().int().min(1).max(1000).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
 });
 
 // ============================================================================
@@ -133,6 +171,39 @@ export async function registerIntentRoutes(
       throw new Error('Tenant context missing from token');
     }
     return payload.tenantId;
+  }
+
+  // Helper to get user ID from JWT (for audit logging)
+  function getUserId(request: FastifyRequest): string {
+    return request.user?.sub ?? 'anonymous';
+  }
+
+  // Helper to check if user has admin role (for audit query endpoint)
+  function isAdmin(request: FastifyRequest): boolean {
+    const roles = request.user?.roles ?? [];
+    return roles.includes('admin') || roles.includes('compliance_officer');
+  }
+
+  // Helper to log read audit (fire-and-forget)
+  function logReadAudit(
+    request: FastifyRequest,
+    tenantId: string,
+    action: AuditAction,
+    resourceType: AuditResourceType,
+    resourceId: string,
+    metadata?: Record<string, unknown>
+  ): void {
+    const { ipAddress, userAgent } = extractRequestMetadata(request);
+    recordAudit({
+      tenantId,
+      userId: getUserId(request),
+      action,
+      resourceType,
+      resourceId,
+      metadata,
+      ipAddress,
+      userAgent,
+    });
   }
 
   server.register(
@@ -232,25 +303,49 @@ export async function registerIntentRoutes(
       });
 
       /**
-       * GET / - List intents
+       * GET / - List intents with pagination
+       *
+       * Supports both cursor-based and offset-based pagination:
+       * - Cursor-based: Use `cursor` param with previous page's nextCursor
+       * - Offset-based: Use `offset` param (cannot be combined with cursor)
+       *
+       * Response includes full pagination metadata:
+       * { items, total?, limit, offset?, nextCursor?, hasMore }
        */
       api.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const query = intentListQuerySchema.parse(request.query ?? {});
-        const listOptions: Parameters<IntentService['list']>[0] = { tenantId };
+
+        // Build list options with pagination parameters
+        const listOptions: Parameters<IntentService['list']>[0] = {
+          tenantId,
+          limit: query.limit,
+          offset: query.offset,
+          cursor: query.cursor,
+        };
         if (query.entityId) listOptions.entityId = query.entityId;
         if (query.status) listOptions.status = query.status;
-        if (query.limit) listOptions.limit = query.limit;
-        if (query.cursor) listOptions.cursor = query.cursor;
-        const intents = await getIntentService().list(listOptions);
 
-        const nextCursor = intents.length > 0 ? intents[intents.length - 1]?.id : undefined;
+        const result = await getIntentService().list(listOptions);
+
+        // Log read audit for SOC2 compliance
+        logReadAudit(request, tenantId, 'intent.read_list', 'intent', '*', {
+          entityId: query.entityId,
+          status: query.status,
+          limit: result.limit,
+          offset: result.offset,
+          cursor: query.cursor,
+          resultCount: result.items.length,
+          hasMore: result.hasMore,
+        });
+
+        // Return paginated response with full metadata
         return reply.send({
-          data: intents,
-          pagination: {
-            nextCursor,
-            hasMore: intents.length === (query.limit ?? 50),
-          },
+          items: result.items,
+          limit: result.limit,
+          offset: result.offset,
+          nextCursor: result.nextCursor,
+          hasMore: result.hasMore,
         });
       });
 
@@ -266,6 +361,10 @@ export async function registerIntentRoutes(
             error: { code: 'INTENT_NOT_FOUND', message: 'Intent not found' },
           });
         }
+
+        // Log read audit for SOC2 compliance
+        logReadAudit(request, tenantId, 'intent.read', 'intent', params.id);
+
         return reply.send({
           ...result.intent,
           events: result.events,
@@ -407,6 +506,12 @@ export async function registerIntentRoutes(
             error: { code: 'ESCALATION_NOT_FOUND', message: 'No escalation for this intent' },
           });
         }
+
+        // Log read audit for SOC2 compliance
+        logReadAudit(request, tenantId, 'escalation.read', 'escalation', escalation.id, {
+          intentId: params.id,
+        });
+
         return reply.send(escalation);
       });
 
@@ -462,16 +567,16 @@ export async function registerIntentRoutes(
         const tenantId = await getTenantId(request);
         const params = entityIdParamsSchema.parse(request.params ?? {});
 
-        // Get all intents for the entity
-        const intents = await getIntentService().list({
+        // Get all intents for the entity (using MAX_PAGE_SIZE limit)
+        const intentsResult = await getIntentService().list({
           tenantId,
           entityId: params.entityId,
-          limit: 1000, // Get all intents up to a reasonable limit
+          limit: MAX_PAGE_SIZE, // Get all intents up to the maximum allowed limit
         });
 
         // Get events and evaluations for each intent
         const intentsWithDetails = await Promise.all(
-          intents.map(async (intent) => {
+          intentsResult.items.map(async (intent) => {
             const details = await getIntentService().getWithEvents(intent.id, tenantId);
             return details;
           })
@@ -479,11 +584,17 @@ export async function registerIntentRoutes(
 
         // Get escalations for the entity's intents
         const escalations = await Promise.all(
-          intents.map(async (intent) => {
+          intentsResult.items.map(async (intent) => {
             const escalation = await getEscalationService().getByIntentId(intent.id, tenantId);
             return escalation;
           })
         );
+
+        // Log GDPR export audit for SOC2 compliance
+        logReadAudit(request, tenantId, 'gdpr.export', 'user_data', params.entityId, {
+          intentCount: intentsResult.items.length,
+          escalationCount: escalations.filter(Boolean).length,
+        });
 
         return reply.send({
           entityId: params.entityId,
@@ -500,26 +611,89 @@ export async function registerIntentRoutes(
         const tenantId = await getTenantId(request);
         const params = entityIdParamsSchema.parse(request.params ?? {});
 
-        // Get all intents for the entity
-        const intents = await getIntentService().list({
+        // Get all intents for the entity (using MAX_PAGE_SIZE limit)
+        const intentsResult = await getIntentService().list({
           tenantId,
           entityId: params.entityId,
-          limit: 1000,
+          limit: MAX_PAGE_SIZE,
         });
 
         // Soft delete each intent
         let erasedCount = 0;
-        for (const intent of intents) {
+        for (const intent of intentsResult.items) {
           const deleted = await getIntentService().delete(intent.id, tenantId);
           if (deleted) {
             erasedCount++;
           }
         }
 
+        // Log GDPR erase audit for SOC2 compliance
+        logReadAudit(request, tenantId, 'gdpr.erase', 'user_data', params.entityId, {
+          intentsErased: erasedCount,
+        });
+
         return reply.send({
           entityId: params.entityId,
           intentsErased: erasedCount,
           erasedAt: new Date().toISOString(),
+        });
+      });
+
+      // ========================================================================
+      // Audit Endpoints (SOC2 Compliance)
+      // ========================================================================
+
+      /**
+       * GET /audit - Query audit log (admin only)
+       *
+       * This endpoint allows compliance officers and administrators to query
+       * the read audit log for SOC2 compliance reporting.
+       */
+      api.get('/audit', async (request: FastifyRequest, reply: FastifyReply) => {
+        const tenantId = await getTenantId(request);
+
+        // Authorization check - only admin or compliance_officer roles
+        if (!isAdmin(request)) {
+          return reply.status(403).send({
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Audit log access requires admin or compliance_officer role',
+            },
+          });
+        }
+
+        const query = auditQuerySchema.parse(request.query ?? {});
+
+        const result = await queryAuditLog({
+          tenantId,
+          userId: query.userId,
+          action: query.action as AuditAction | undefined,
+          resourceType: query.resourceType as AuditResourceType | undefined,
+          resourceId: query.resourceId,
+          from: query.from,
+          to: query.to,
+          limit: query.limit,
+          offset: query.offset,
+        });
+
+        return reply.send({
+          data: result.entries.map((entry) => ({
+            id: entry.id,
+            userId: entry.userId,
+            action: entry.action,
+            resourceType: entry.resourceType,
+            resourceId: entry.resourceId,
+            metadata: entry.metadata,
+            ipAddress: entry.ipAddress,
+            userAgent: entry.userAgent,
+            timestamp: entry.timestamp.toISOString(),
+          })),
+          pagination: {
+            total: result.total,
+            hasMore: result.hasMore,
+            offset: query.offset ?? 0,
+            limit: query.limit ?? 50,
+          },
         });
       });
     },

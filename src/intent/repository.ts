@@ -8,8 +8,13 @@ import type {
   TrustScore,
   EvaluationPayload,
 } from '../common/types.js';
-import { getDatabase } from '../common/db.js';
+import {
+  getDatabase,
+  withStatementTimeout,
+  DEFAULT_STATEMENT_TIMEOUT_MS,
+} from '../common/db.js';
 import { getConfig } from '../common/config.js';
+import { VorionError } from '../common/types.js';
 import {
   encryptObject,
   decryptObject,
@@ -32,15 +37,51 @@ import {
   type NewIntentRow,
 } from './schema.js';
 
+// =============================================================================
+// PAGINATION CONSTANTS
+// =============================================================================
+
+/** Default page size when no limit is specified */
+export const DEFAULT_PAGE_SIZE = 50;
+
+/** Maximum allowed page size to prevent unbounded queries */
+export const MAX_PAGE_SIZE = 1000;
+
+/**
+ * Paginated result with metadata for cursor/offset-based pagination
+ */
+export interface PaginatedResult<T> {
+  /** The items in the current page */
+  items: T[];
+  /** Total count of matching items (if available) */
+  total?: number;
+  /** The limit used for this query */
+  limit: number;
+  /** The offset used for this query (for offset-based pagination) */
+  offset?: number;
+  /** Cursor for the next page (for cursor-based pagination) */
+  nextCursor?: ID;
+  /** Whether there are more items after this page */
+  hasMore: boolean;
+}
+
 export interface ListIntentFilters {
   tenantId: ID;
   entityId?: ID;
   status?: IntentStatus;
+  /** Page size limit (default: DEFAULT_PAGE_SIZE, max: MAX_PAGE_SIZE) */
   limit?: number;
-  /** Cursor for pagination (intent ID) */
+  /** Offset for pagination (default: 0) */
+  offset?: number;
+  /** Cursor for pagination (intent ID) - mutually exclusive with offset */
   cursor?: ID;
   /** Include soft-deleted intents */
   includeDeleted?: boolean;
+  /**
+   * If true, throw an error when limit exceeds MAX_PAGE_SIZE instead of silently capping.
+   * Default: false (silently cap to MAX_PAGE_SIZE for backwards compatibility)
+   */
+  strictLimitValidation?: boolean;
 }
 
 export interface IntentEventRecord {
@@ -167,6 +208,32 @@ export class IntentRepository {
 
       return mapRow(intentRow);
     });
+  }
+
+  /**
+   * Create multiple intents in a single batch operation.
+   *
+   * This method provides optimized performance for bulk inserts by using
+   * a single database transaction. Note that individual intents will not
+   * have initial events recorded - use this for high-performance scenarios
+   * where event tracking can be handled separately.
+   *
+   * @param intentsData - Array of intent data to insert
+   * @returns Array of created intents
+   */
+  async createIntentsBatch(intentsData: NewIntentRow[]): Promise<Intent[]> {
+    if (intentsData.length === 0) {
+      return [];
+    }
+
+    const encryptedData = intentsData.map((data) => ({
+      ...data,
+      context: encryptIfEnabled(data.context as Record<string, unknown>),
+      metadata: encryptIfEnabled((data.metadata ?? {}) as Record<string, unknown>),
+    }));
+
+    const rows = await this.db.insert(intents).values(encryptedData).returning();
+    return rows.map(mapRow);
   }
 
   async findById(id: ID, tenantId: ID): Promise<Intent | null> {
@@ -307,47 +374,105 @@ export class IntentRepository {
   }
 
   /**
-   * List intents with cursor-based pagination
+   * List intents with cursor-based or offset-based pagination.
+   * Enforces strict pagination limits to prevent unbounded queries.
+   * Uses statement timeout to prevent long-running queries.
+   *
+   * @param filters - Query filters and pagination options
+   * @returns Paginated result with items and pagination metadata
+   * @throws VorionError if strictLimitValidation is true and limit > MAX_PAGE_SIZE
+   * @throws StatementTimeoutError if the query exceeds the timeout
    */
-  async listIntents(filters: ListIntentFilters): Promise<Intent[]> {
-    const { tenantId, entityId, status, limit = 50, cursor, includeDeleted } = filters;
-    const clauses = [eq(intents.tenantId, tenantId)];
+  async listIntents(filters: ListIntentFilters): Promise<PaginatedResult<Intent>> {
+    const {
+      tenantId,
+      entityId,
+      status,
+      cursor,
+      includeDeleted,
+      strictLimitValidation = false,
+      offset = 0,
+    } = filters;
 
-    if (!includeDeleted) {
-      clauses.push(isNull(intents.deletedAt));
+    // Validate and enforce pagination limits
+    const requestedLimit = filters.limit ?? DEFAULT_PAGE_SIZE;
+
+    if (strictLimitValidation && requestedLimit > MAX_PAGE_SIZE) {
+      throw new VorionError(
+        `Requested limit ${requestedLimit} exceeds maximum allowed limit of ${MAX_PAGE_SIZE}`,
+        'PAGINATION_LIMIT_EXCEEDED'
+      );
     }
 
-    if (entityId) {
-      clauses.push(eq(intents.entityId, entityId));
-    }
+    // Cap limit at MAX_PAGE_SIZE (silently if not strict)
+    const limit = Math.min(requestedLimit, MAX_PAGE_SIZE);
 
-    if (status) {
-      clauses.push(eq(intents.status, status));
-    }
+    return withStatementTimeout(async () => {
+      const clauses = [eq(intents.tenantId, tenantId)];
 
-    // Cursor-based pagination: get items created before cursor
-    if (cursor) {
-      // First get the cursor intent's createdAt
-      const [cursorIntent] = await this.db
-        .select({ createdAt: intents.createdAt })
-        .from(intents)
-        .where(eq(intents.id, cursor));
-
-      if (cursorIntent?.createdAt) {
-        clauses.push(lt(intents.createdAt, cursorIntent.createdAt));
+      if (!includeDeleted) {
+        clauses.push(isNull(intents.deletedAt));
       }
-    }
 
-    const whereClause = clauses.length > 1 ? and(...clauses) : clauses[0];
+      if (entityId) {
+        clauses.push(eq(intents.entityId, entityId));
+      }
 
-    const rows = await this.db
-      .select()
-      .from(intents)
-      .where(whereClause)
-      .orderBy(desc(intents.createdAt))
-      .limit(Math.min(limit, 100));
+      if (status) {
+        clauses.push(eq(intents.status, status));
+      }
 
-    return rows.map(mapRow);
+      // Cursor-based pagination: get items created before cursor
+      if (cursor) {
+        // First get the cursor intent's createdAt
+        const [cursorIntent] = await this.db
+          .select({ createdAt: intents.createdAt })
+          .from(intents)
+          .where(eq(intents.id, cursor));
+
+        if (cursorIntent?.createdAt) {
+          clauses.push(lt(intents.createdAt, cursorIntent.createdAt));
+        }
+      }
+
+      const whereClause = clauses.length > 1 ? and(...clauses) : clauses[0];
+
+      // Query with LIMIT + 1 to detect hasMore
+      const rows = await this.db
+        .select()
+        .from(intents)
+        .where(whereClause)
+        .orderBy(desc(intents.createdAt))
+        .limit(limit + 1)
+        .offset(cursor ? 0 : offset); // Only use offset for offset-based pagination
+
+      // Determine if there are more results
+      const hasMore = rows.length > limit;
+      const resultRows = hasMore ? rows.slice(0, limit) : rows;
+      const items = resultRows.map(mapRow);
+
+      // Determine next cursor for cursor-based pagination
+      const lastItem = items[items.length - 1];
+
+      // Build result object conditionally to satisfy exactOptionalPropertyTypes
+      const result: PaginatedResult<Intent> = {
+        items,
+        limit,
+        hasMore,
+      };
+
+      // Only include offset for offset-based pagination (not cursor-based)
+      if (!cursor) {
+        result.offset = offset;
+      }
+
+      // Only include nextCursor when there are more results
+      if (hasMore && lastItem) {
+        result.nextCursor = lastItem.id;
+      }
+
+      return result;
+    }, DEFAULT_STATEMENT_TIMEOUT_MS, 'listIntents');
   }
 
   /**
@@ -378,15 +503,36 @@ export class IntentRepository {
     });
   }
 
-  async getRecentEvents(intentId: ID, limit = 10): Promise<IntentEventRecord[]> {
+  /**
+   * Get recent events for an intent with pagination limits.
+   *
+   * @param intentId - The intent ID to get events for
+   * @param limit - Page size limit (default: DEFAULT_PAGE_SIZE, max: MAX_PAGE_SIZE)
+   * @param offset - Offset for pagination (default: 0)
+   * @returns Paginated result with events and pagination metadata
+   */
+  async getRecentEvents(
+    intentId: ID,
+    limit: number = DEFAULT_PAGE_SIZE,
+    offset: number = 0
+  ): Promise<PaginatedResult<IntentEventRecord>> {
+    // Enforce pagination limits
+    const effectiveLimit = Math.min(limit, MAX_PAGE_SIZE);
+
+    // Query with LIMIT + 1 to detect hasMore
     const rows = await this.db
       .select()
       .from(intentEvents)
       .where(eq(intentEvents.intentId, intentId))
       .orderBy(desc(intentEvents.occurredAt))
-      .limit(limit);
+      .limit(effectiveLimit + 1)
+      .offset(offset);
 
-    return rows.map((row) => ({
+    // Determine if there are more results
+    const hasMore = rows.length > effectiveLimit;
+    const resultRows = hasMore ? rows.slice(0, effectiveLimit) : rows;
+
+    const items = resultRows.map((row) => ({
       id: row.id,
       intentId: row.intentId,
       eventType: row.eventType,
@@ -395,6 +541,13 @@ export class IntentRepository {
       hash: row.hash,
       previousHash: row.previousHash,
     }));
+
+    return {
+      items,
+      limit: effectiveLimit,
+      offset,
+      hasMore,
+    };
   }
 
   /**
@@ -487,13 +640,41 @@ export class IntentRepository {
     return mapEvaluation(row);
   }
 
-  async listEvaluations(intentId: ID): Promise<IntentEvaluationRecord[]> {
+  /**
+   * List evaluations for an intent with pagination limits.
+   *
+   * @param intentId - The intent ID to get evaluations for
+   * @param limit - Page size limit (default: DEFAULT_PAGE_SIZE, max: MAX_PAGE_SIZE)
+   * @param offset - Offset for pagination (default: 0)
+   * @returns Paginated result with evaluations and pagination metadata
+   */
+  async listEvaluations(
+    intentId: ID,
+    limit: number = DEFAULT_PAGE_SIZE,
+    offset: number = 0
+  ): Promise<PaginatedResult<IntentEvaluationRecord>> {
+    // Enforce pagination limits
+    const effectiveLimit = Math.min(limit, MAX_PAGE_SIZE);
+
+    // Query with LIMIT + 1 to detect hasMore
     const rows = await this.db
       .select()
       .from(intentEvaluations)
       .where(eq(intentEvaluations.intentId, intentId))
-      .orderBy(desc(intentEvaluations.createdAt));
-    return rows.map(mapEvaluation);
+      .orderBy(desc(intentEvaluations.createdAt))
+      .limit(effectiveLimit + 1)
+      .offset(offset);
+
+    // Determine if there are more results
+    const hasMore = rows.length > effectiveLimit;
+    const resultRows = hasMore ? rows.slice(0, effectiveLimit) : rows;
+
+    return {
+      items: resultRows.map(mapEvaluation),
+      limit: effectiveLimit,
+      offset,
+      hasMore,
+    };
   }
 
   async countActiveIntents(tenantId: ID): Promise<number> {

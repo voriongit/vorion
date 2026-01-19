@@ -29,7 +29,7 @@ import {
   updateCircuitBreakerFailures,
 } from './metrics.js';
 import {
-  CircuitBreaker,
+  getCircuitBreaker,
   type CircuitState,
 } from '../common/circuit-breaker.js';
 import {
@@ -97,17 +97,13 @@ const auditHelper = createAuditHelper(auditService);
 const webhookService = createWebhookService();
 
 // Policy evaluation circuit breaker - prevents cascading failures when policy engine is unhealthy
-const policyCircuitBreaker = new CircuitBreaker({
-  name: 'policy-evaluator',
-  failureThreshold: getConfig().intent.policyCircuitBreaker.failureThreshold,
-  resetTimeoutMs: getConfig().intent.policyCircuitBreaker.resetTimeoutMs,
-  onStateChange: (from: CircuitState, to: CircuitState) => {
-    recordCircuitBreakerStateChange('policy-evaluator', from, to);
-    logger.info(
-      { circuitBreaker: 'policy-evaluator', from, to },
-      'Policy circuit breaker state changed'
-    );
-  },
+// Uses per-service circuit breaker configuration from the registry
+const policyCircuitBreaker = getCircuitBreaker('policyEngine', (from: CircuitState, to: CircuitState) => {
+  recordCircuitBreakerStateChange('policy-engine', from, to);
+  logger.info(
+    { circuitBreaker: 'policy-engine', from, to },
+    'Policy circuit breaker state changed'
+  );
 });
 
 /**
@@ -531,7 +527,7 @@ export function registerIntentWorkers(service: IntentService): void {
             // Check if circuit is open - if so, skip policy evaluation immediately
             const isCircuitOpen = await policyCircuitBreaker.isOpen();
             if (isCircuitOpen) {
-              recordCircuitBreakerExecution('policy-evaluator', 'rejected');
+              recordCircuitBreakerExecution('policy-engine', 'rejected');
               logger.warn(
                 { intentId: intent.id, circuitState: 'OPEN' },
                 'Policy circuit breaker is OPEN, skipping policy evaluation and using rules only'
@@ -600,11 +596,11 @@ export function registerIntentWorkers(service: IntentService): void {
 
                 // Handle circuit breaker result
                 if (circuitResult.success) {
-                  recordCircuitBreakerExecution('policy-evaluator', 'success');
+                  recordCircuitBreakerExecution('policy-engine', 'success');
                   return { evaluation: circuitResult.result ?? null };
                 } else if (circuitResult.circuitOpen) {
                   // Circuit opened during execution (shouldn't happen as we check above)
-                  recordCircuitBreakerExecution('policy-evaluator', 'rejected');
+                  recordCircuitBreakerExecution('policy-engine', 'rejected');
                   logger.warn(
                     { intentId: intent.id },
                     'Policy circuit breaker opened during evaluation, continuing with rules only'
@@ -612,7 +608,7 @@ export function registerIntentWorkers(service: IntentService): void {
                   return { evaluation: null, circuitOpen: true };
                 } else {
                   // Execution failed - circuit breaker already recorded the failure
-                  recordCircuitBreakerExecution('policy-evaluator', 'failure');
+                  recordCircuitBreakerExecution('policy-engine', 'failure');
                   logger.warn(
                     { intentId: intent.id, error: circuitResult.error },
                     'Policy evaluation failed (circuit breaker tracked), continuing with rules only'

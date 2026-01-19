@@ -1,11 +1,12 @@
 /**
- * Trust Score Caching
+ * Trust Score Cache with Stampede Prevention
  *
- * Provides Redis-based caching for trust scores to reduce load on the trust engine
- * for repeated entity lookups.
+ * Uses probabilistic early refresh to prevent cache stampede:
+ * - Items refresh early with probability based on remaining TTL
+ * - Prevents thundering herd when cache expires
+ * - TTL jitter prevents synchronized expiration
  *
- * Key pattern: trust:score:${tenantId}:${entityId}
- * TTL: Configured via trust.cacheTtl (default 30 seconds)
+ * Key pattern: trust:${tenantId}:${entityId}
  *
  * @packageDocumentation
  */
@@ -19,16 +20,49 @@ import { intentRegistry } from '../intent/metrics.js';
 
 const logger = createLogger({ component: 'trust-cache' });
 
+// ============================================================================
+// Configuration Constants
+// ============================================================================
+
+/**
+ * Default cache TTL in seconds (5 minutes)
+ */
+const CACHE_TTL_SECONDS = 300;
+
+/**
+ * Start early refresh checks in last 60 seconds of TTL
+ */
+const EARLY_REFRESH_WINDOW_SECONDS = 60;
+
+/**
+ * Tuning parameter for early refresh probability (XFetch beta)
+ */
+const BETA = 1.0;
+
+/**
+ * Maximum jitter percentage (0-10% of base TTL)
+ */
+const JITTER_PERCENTAGE = 0.1;
+
 /**
  * Redis key prefix for trust score cache
  */
-const CACHE_KEY_PREFIX = 'trust:score';
+const CACHE_KEY_PREFIX = 'trust';
+
+// ============================================================================
+// Cache Entry Types
+// ============================================================================
 
 /**
- * Build cache key for a trust score
+ * Cached trust score with timing metadata for PER
  */
-function buildCacheKey(tenantId: string, entityId: string): string {
-  return `${CACHE_KEY_PREFIX}:${tenantId}:${entityId}`;
+interface CachedTrustScore {
+  /** The trust record data */
+  record: TrustRecord;
+  /** Unix timestamp when cached (seconds) */
+  cachedAt: number;
+  /** Unix timestamp when entry expires (seconds) */
+  expiresAt: number;
 }
 
 // ============================================================================
@@ -80,12 +114,181 @@ export function recordCacheError(operation: string): void {
   trustCacheOperations.inc({ operation, result: 'error' });
 }
 
+/**
+ * Record an early refresh triggered by PER
+ */
+export function recordEarlyRefresh(): void {
+  trustCacheOperations.inc({ operation: 'early_refresh', result: 'triggered' });
+}
+
 // ============================================================================
-// Cache Functions
+// TTL Jitter
 // ============================================================================
 
 /**
- * Get a cached trust score for an entity
+ * Add jitter to TTL to prevent synchronized expiration
+ *
+ * Adds 0-10% random jitter to the base TTL to stagger cache expiration
+ * across multiple entries, reducing the chance of thundering herd.
+ *
+ * @param baseTTL - Base TTL in seconds
+ * @returns TTL with jitter added
+ */
+export function getTTLWithJitter(baseTTL: number): number {
+  const jitter = Math.random() * JITTER_PERCENTAGE * baseTTL;
+  return Math.floor(baseTTL + jitter);
+}
+
+// ============================================================================
+// Probabilistic Early Refresh (XFetch Algorithm)
+// ============================================================================
+
+/**
+ * Determine if we should refresh early using XFetch algorithm
+ *
+ * The probability of refresh increases as the cache entry approaches expiration.
+ * This spreads out refresh requests over time instead of all hitting at once
+ * when the entry expires.
+ *
+ * @param cachedAt - Unix timestamp when entry was cached (seconds)
+ * @param expiresAt - Unix timestamp when entry expires (seconds)
+ * @returns true if early refresh should be triggered
+ */
+export function shouldRefreshEarly(cachedAt: number, expiresAt: number): boolean {
+  const now = Date.now() / 1000;
+  const remaining = expiresAt - now;
+
+  // If already expired, definitely refresh
+  if (remaining <= 0) {
+    return true;
+  }
+
+  // If not in early refresh window, don't refresh
+  if (remaining > EARLY_REFRESH_WINDOW_SECONDS) {
+    return false;
+  }
+
+  // XFetch probability: increases as remaining decreases
+  // probability = (window - remaining) / window * beta
+  const probability =
+    ((EARLY_REFRESH_WINDOW_SECONDS - remaining) / EARLY_REFRESH_WINDOW_SECONDS) * BETA;
+
+  return Math.random() < probability;
+}
+
+// ============================================================================
+// Cache Key Functions
+// ============================================================================
+
+/**
+ * Build cache key for a trust score
+ */
+function buildCacheKey(tenantId: string, entityId: string): string {
+  return `${CACHE_KEY_PREFIX}:${tenantId}:${entityId}`;
+}
+
+// ============================================================================
+// Cache Functions with Stampede Prevention
+// ============================================================================
+
+/**
+ * Get a cached trust score with probabilistic early refresh
+ *
+ * Uses the XFetch algorithm to probabilistically refresh cache entries
+ * before they expire, preventing cache stampede.
+ *
+ * @param entityId - The entity ID to look up
+ * @param tenantId - The tenant ID for namespace isolation
+ * @param fetchFn - Function to fetch fresh data on cache miss or early refresh
+ * @returns The TrustRecord (cached or fresh)
+ */
+export async function getCachedTrustScoreWithRefresh(
+  entityId: string,
+  tenantId: string,
+  fetchFn: () => Promise<TrustRecord>
+): Promise<TrustRecord> {
+  const redis = getRedis();
+  const cacheKey = buildCacheKey(tenantId, entityId);
+
+  try {
+    const cached = await redis.get(cacheKey);
+
+    if (cached) {
+      const data: CachedTrustScore = JSON.parse(cached);
+
+      // Check if we should refresh early (probabilistic)
+      if (shouldRefreshEarly(data.cachedAt, data.expiresAt)) {
+        recordEarlyRefresh();
+        // Refresh in background, return stale data immediately
+        refreshInBackground(cacheKey, fetchFn);
+        logger.debug(
+          { entityId, tenantId, remaining: data.expiresAt - Date.now() / 1000 },
+          'Early refresh triggered'
+        );
+      }
+
+      recordCacheHit();
+      return data.record;
+    }
+  } catch (error) {
+    // Cache miss or error - fetch fresh
+    recordCacheError('get');
+    logger.warn({ error, entityId, tenantId }, 'Cache read failed, fetching fresh');
+  }
+
+  // Cache miss - fetch and cache
+  recordCacheMiss();
+  return fetchAndCache(cacheKey, fetchFn);
+}
+
+/**
+ * Fetch fresh data and store in cache
+ */
+async function fetchAndCache(
+  cacheKey: string,
+  fetchFn: () => Promise<TrustRecord>
+): Promise<TrustRecord> {
+  const record = await fetchFn();
+  const now = Math.floor(Date.now() / 1000);
+  const ttl = getTTLWithJitter(CACHE_TTL_SECONDS);
+
+  const cacheData: CachedTrustScore = {
+    record,
+    cachedAt: now,
+    expiresAt: now + ttl,
+  };
+
+  const redis = getRedis();
+  try {
+    await redis.setex(cacheKey, ttl, JSON.stringify(cacheData));
+    recordCacheSet();
+  } catch (error) {
+    recordCacheError('set');
+    logger.warn({ error, cacheKey }, 'Failed to cache trust score');
+  }
+
+  return record;
+}
+
+/**
+ * Refresh cache in background without blocking
+ */
+function refreshInBackground(
+  cacheKey: string,
+  fetchFn: () => Promise<TrustRecord>
+): void {
+  // Fire and forget - don't await
+  fetchAndCache(cacheKey, fetchFn).catch((error) => {
+    logger.error({ error, cacheKey }, 'Background cache refresh failed');
+  });
+}
+
+// ============================================================================
+// Legacy Cache Functions (backwards compatibility)
+// ============================================================================
+
+/**
+ * Get a cached trust score for an entity (legacy API)
  *
  * @param entityId - The entity ID to look up
  * @param tenantId - The tenant ID for namespace isolation
@@ -102,10 +305,10 @@ export async function getCachedTrustScore(
     const cached = await redis.get(cacheKey);
 
     if (cached) {
-      const record = JSON.parse(cached) as TrustRecord;
+      const data: CachedTrustScore = JSON.parse(cached);
       recordCacheHit();
       logger.debug({ entityId, tenantId, cacheKey }, 'Trust score cache hit');
-      return record;
+      return data.record;
     }
 
     recordCacheMiss();
@@ -123,7 +326,7 @@ export async function getCachedTrustScore(
 }
 
 /**
- * Cache a trust score for an entity
+ * Cache a trust score for an entity (legacy API)
  *
  * @param entityId - The entity ID
  * @param tenantId - The tenant ID for namespace isolation
@@ -137,21 +340,23 @@ export async function cacheTrustScore(
   const redis = getRedis();
   const config = getConfig();
   const cacheKey = buildCacheKey(tenantId, entityId);
-  const ttl = config.trust.cacheTtl; // TTL in seconds
+  const baseTtl = config.trust.cacheTtl || CACHE_TTL_SECONDS;
+  const ttl = getTTLWithJitter(baseTtl);
+  const now = Math.floor(Date.now() / 1000);
+
+  const cacheData: CachedTrustScore = {
+    record: score,
+    cachedAt: now,
+    expiresAt: now + ttl,
+  };
 
   try {
-    await redis.setex(cacheKey, ttl, JSON.stringify(score));
+    await redis.setex(cacheKey, ttl, JSON.stringify(cacheData));
     recordCacheSet();
-    logger.debug(
-      { entityId, tenantId, cacheKey, ttl },
-      'Trust score cached'
-    );
+    logger.debug({ entityId, tenantId, cacheKey, ttl }, 'Trust score cached');
   } catch (error) {
     recordCacheError('set');
-    logger.warn(
-      { error, entityId, tenantId, cacheKey },
-      'Error caching trust score'
-    );
+    logger.warn({ error, entityId, tenantId, cacheKey }, 'Error caching trust score');
     // Don't throw - caching failures should not block the main flow
   }
 }
@@ -175,10 +380,7 @@ export async function invalidateTrustScore(
   try {
     await redis.del(cacheKey);
     recordCacheInvalidation();
-    logger.debug(
-      { entityId, tenantId, cacheKey },
-      'Trust score cache invalidated'
-    );
+    logger.debug({ entityId, tenantId, cacheKey }, 'Trust score cache invalidated');
   } catch (error) {
     recordCacheError('invalidate');
     logger.warn(
@@ -215,15 +417,9 @@ export async function invalidateTenantTrustScores(tenantId: string): Promise<voi
       }
     } while (cursor !== '0');
 
-    logger.info(
-      { tenantId, keysDeleted },
-      'Tenant trust score cache invalidated'
-    );
+    logger.info({ tenantId, keysDeleted }, 'Tenant trust score cache invalidated');
   } catch (error) {
     recordCacheError('invalidate_tenant');
-    logger.warn(
-      { error, tenantId },
-      'Error invalidating tenant trust score cache'
-    );
+    logger.warn({ error, tenantId }, 'Error invalidating tenant trust score cache');
   }
 }

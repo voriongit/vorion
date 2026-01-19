@@ -6,7 +6,7 @@
  * Includes SSRF protection to prevent internal network access.
  */
 
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
 import { getConfig } from '../common/config.js';
 import { createLogger } from '../common/logger.js';
 import { getRedis } from '../common/redis.js';
@@ -206,6 +206,142 @@ export async function validateWebhookUrlAtRuntime(url: string): Promise<{ valid:
     logger.warn({ url, error }, 'Failed to resolve webhook URL');
     return { valid: false, reason: 'Failed to resolve webhook URL hostname' };
   }
+}
+
+// =============================================================================
+// HMAC Signature Generation and Verification
+// =============================================================================
+
+/**
+ * Header name for the HMAC signature
+ * Format: v1=<hmac-sha256-hex>
+ */
+export const SIGNATURE_HEADER = 'X-Vorion-Signature';
+
+/**
+ * Header name for the signature timestamp (Unix seconds)
+ * Used to prevent replay attacks
+ */
+export const SIGNATURE_TIMESTAMP_HEADER = 'X-Vorion-Timestamp';
+
+/**
+ * Current signature version
+ * Allows for future signature algorithm upgrades
+ */
+const SIGNATURE_VERSION = 'v1';
+
+/**
+ * Generate HMAC-SHA256 signature for webhook payload.
+ *
+ * The signature is computed over a signed payload that combines the timestamp
+ * and the JSON payload body to prevent replay attacks. The format is:
+ *
+ *   signedPayload = `${timestamp}.${payload}`
+ *   signature = HMAC-SHA256(secret, signedPayload)
+ *
+ * The returned signature string includes a version prefix:
+ *   `v1=<hex-encoded-hmac>`
+ *
+ * This versioning allows future algorithm upgrades while maintaining
+ * backward compatibility.
+ *
+ * @param payload - The JSON payload string to sign
+ * @param secret - The webhook secret shared with the recipient
+ * @param timestamp - Unix timestamp in seconds when the request was generated
+ * @returns Versioned signature string in format "v1=<hmac-hex>"
+ *
+ * @example
+ * ```typescript
+ * const payload = JSON.stringify({ event: 'test' });
+ * const timestamp = Math.floor(Date.now() / 1000);
+ * const signature = generateSignature(payload, 'whsec_xxx', timestamp);
+ * // Returns: "v1=abc123..."
+ * ```
+ */
+function generateSignature(payload: string, secret: string, timestamp: number): string {
+  const signedPayload = `${timestamp}.${payload}`;
+  const hmac = createHmac('sha256', secret)
+    .update(signedPayload)
+    .digest('hex');
+  return `${SIGNATURE_VERSION}=${hmac}`;
+}
+
+/**
+ * Verify webhook signature for incoming requests.
+ *
+ * This function is exported for use in client SDKs to verify that webhook
+ * requests originated from Vorion and haven't been tampered with.
+ *
+ * ## Security Features
+ *
+ * 1. **Timestamp Validation**: Rejects requests with timestamps older than
+ *    `toleranceSeconds` (default: 5 minutes) to prevent replay attacks.
+ *
+ * 2. **Timing-Safe Comparison**: Uses constant-time comparison to prevent
+ *    timing attacks that could leak information about the expected signature.
+ *
+ * 3. **Signed Payload**: The signature covers both timestamp and payload,
+ *    ensuring neither can be modified independently.
+ *
+ * ## Usage in Client SDKs
+ *
+ * ```typescript
+ * import { verifyWebhookSignature, SIGNATURE_HEADER, SIGNATURE_TIMESTAMP_HEADER } from '@vorion/sdk';
+ *
+ * app.post('/webhook', (req, res) => {
+ *   const signature = req.headers[SIGNATURE_HEADER.toLowerCase()];
+ *   const timestamp = parseInt(req.headers[SIGNATURE_TIMESTAMP_HEADER.toLowerCase()], 10);
+ *   const payload = JSON.stringify(req.body);
+ *
+ *   if (!verifyWebhookSignature(payload, signature, process.env.WEBHOOK_SECRET, timestamp)) {
+ *     return res.status(401).send('Invalid signature');
+ *   }
+ *
+ *   // Process webhook...
+ * });
+ * ```
+ *
+ * @param payload - The raw JSON payload string from the request body
+ * @param signature - The signature from the X-Vorion-Signature header
+ * @param secret - The webhook secret configured for this endpoint
+ * @param timestamp - The timestamp from the X-Vorion-Timestamp header (Unix seconds)
+ * @param toleranceSeconds - Maximum age of the request in seconds (default: 300 = 5 minutes)
+ * @returns true if the signature is valid and timestamp is within tolerance
+ *
+ * @throws Never throws - returns false for any invalid input
+ */
+export function verifyWebhookSignature(
+  payload: string,
+  signature: string,
+  secret: string,
+  timestamp: number,
+  toleranceSeconds = 300
+): boolean {
+  // Validate inputs
+  if (!payload || !signature || !secret || !timestamp) {
+    return false;
+  }
+
+  // Check timestamp is within tolerance (prevent replay attacks)
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - timestamp) > toleranceSeconds) {
+    return false;
+  }
+
+  // Generate expected signature
+  const expectedSignature = generateSignature(payload, secret, timestamp);
+
+  // Convert to buffers for timing-safe comparison
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+
+  // Signatures must be same length for timing-safe comparison
+  if (signatureBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  // Constant-time comparison to prevent timing attacks
+  return timingSafeEqual(signatureBuffer, expectedBuffer);
 }
 
 export type WebhookEventType =
@@ -1134,6 +1270,7 @@ export class WebhookService {
     }
 
     const body = JSON.stringify(payload);
+    const timestamp = Math.floor(Date.now() / 1000);
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'User-Agent': 'Vorion-Webhook/1.0',
@@ -1141,13 +1278,12 @@ export class WebhookService {
       'X-Webhook-Delivery': payload.id,
     };
 
-    // Add signature if secret is configured
+    // Add HMAC signature if secret is configured
+    // The signature includes the timestamp to prevent replay attacks
     if (secret) {
-      const { createHmac } = await import('node:crypto');
-      const signature = createHmac('sha256', secret)
-        .update(body)
-        .digest('hex');
-      headers['X-Webhook-Signature'] = `sha256=${signature}`;
+      const signature = generateSignature(body, secret, timestamp);
+      headers[SIGNATURE_HEADER] = signature;
+      headers[SIGNATURE_TIMESTAMP_HEADER] = String(timestamp);
     }
 
     const controller = new AbortController();

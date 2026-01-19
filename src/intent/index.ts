@@ -31,7 +31,10 @@ import type {
 } from '../common/types.js';
 import {
   IntentRepository,
+  DEFAULT_PAGE_SIZE,
+  MAX_PAGE_SIZE,
   type IntentEventRecord,
+  type PaginatedResult,
 } from './repository.js';
 import { enqueueIntentSubmission } from './queues.js';
 import {
@@ -59,20 +62,62 @@ import {
 
 const logger = createLogger({ component: 'intent' });
 
-const MAX_CONTEXT_BYTES = 64 * 1024;
+// Payload size limits for security and performance
+const MAX_PAYLOAD_SIZE_BYTES = 1024 * 1024; // 1MB max total payload
+const MAX_CONTEXT_BYTES = 64 * 1024; // 64KB max context (backward compatible)
+const MAX_CONTEXT_KEYS = 100;
+const MAX_STRING_LENGTH = 10000;
 const REDACTION_PLACEHOLDER = '[REDACTED]';
+
+/** Export constants for use in tests and configuration */
+export const PAYLOAD_LIMITS = {
+  MAX_PAYLOAD_SIZE_BYTES,
+  MAX_CONTEXT_BYTES,
+  MAX_CONTEXT_KEYS,
+  MAX_STRING_LENGTH,
+} as const;
+
+/**
+ * Schema for validating intent payload records with size limits
+ */
+export const intentPayloadSchema = z.record(z.unknown())
+  .refine(
+    (payload) => {
+      const size = Buffer.byteLength(JSON.stringify(payload), 'utf8');
+      return size <= MAX_PAYLOAD_SIZE_BYTES;
+    },
+    { message: `Payload exceeds maximum size of ${MAX_PAYLOAD_SIZE_BYTES} bytes` }
+  )
+  .refine(
+    (payload) => Object.keys(payload).length <= MAX_CONTEXT_KEYS,
+    { message: `Payload exceeds maximum of ${MAX_CONTEXT_KEYS} keys` }
+  );
 
 export const intentSubmissionSchema = z
   .object({
     entityId: z.string().uuid(),
-    goal: z.string().min(1).max(1024),
-    context: z.record(z.any()),
-    metadata: z.record(z.any()).optional(),
-    intentType: z.string().min(1).max(128).optional(),
-    priority: z.number().int().min(0).max(9).default(0),
-    idempotencyKey: z.string().max(128).optional(),
+    goal: z.string().min(1).max(MAX_STRING_LENGTH),
+    context: intentPayloadSchema,
+    metadata: z.record(z.unknown()).optional(),
+    intentType: z.string().max(100).optional(),
+    priority: z.number().int().min(0).max(10).default(0),
+    idempotencyKey: z.string().max(255).optional(),
   })
   .superRefine((value, ctx) => {
+    // Check total payload size
+    const totalPayloadBytes = Buffer.byteLength(
+      JSON.stringify(value),
+      'utf8'
+    );
+    if (totalPayloadBytes > MAX_PAYLOAD_SIZE_BYTES) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Total payload exceeds maximum size of ${MAX_PAYLOAD_SIZE_BYTES} bytes`,
+        path: [],
+      });
+    }
+
+    // Check context size (backward compatible with original limit)
     const contextBytes = Buffer.byteLength(
       JSON.stringify(value.context ?? {}),
       'utf8'
@@ -87,6 +132,61 @@ export const intentSubmissionSchema = z
   });
 
 export type IntentSubmission = z.infer<typeof intentSubmissionSchema>;
+
+/**
+ * Schema for bulk intent submission options
+ */
+export const bulkIntentOptionsSchema = z.object({
+  /** Stop processing on first error (default: false - continue processing all items) */
+  stopOnError: z.boolean().default(false),
+  /** Return successful items even if some fail (default: true) */
+  returnPartial: z.boolean().default(true),
+});
+
+export type BulkIntentOptions = z.infer<typeof bulkIntentOptionsSchema>;
+
+/**
+ * Schema for bulk intent submission request
+ */
+export const bulkIntentSubmissionSchema = z.object({
+  /** Array of intents to submit (1-100 items) */
+  intents: z.array(intentSubmissionSchema).min(1).max(100),
+  /** Optional processing options */
+  options: bulkIntentOptionsSchema.optional(),
+});
+
+export type BulkIntentSubmission = z.infer<typeof bulkIntentSubmissionSchema>;
+
+/**
+ * Result for a single failed intent in bulk submission
+ */
+export interface BulkIntentFailure {
+  /** Index of the failed intent in the original array */
+  index: number;
+  /** The original input that failed */
+  input: IntentSubmission;
+  /** Error message describing the failure */
+  error: string;
+}
+
+/**
+ * Result of bulk intent submission
+ */
+export interface BulkIntentResult {
+  /** Successfully created intents */
+  successful: Intent[];
+  /** Failed intents with error details */
+  failed: BulkIntentFailure[];
+  /** Summary statistics */
+  stats: {
+    /** Total number of intents in the request */
+    total: number;
+    /** Number of successfully created intents */
+    succeeded: number;
+    /** Number of failed intents */
+    failed: number;
+  };
+}
 
 export interface SubmitOptions {
   tenantId: ID;
@@ -105,9 +205,17 @@ export interface ListOptions {
   tenantId: ID;
   entityId?: ID;
   status?: IntentStatus;
+  /** Page size limit (default: 50, max: 1000) */
   limit?: number;
-  /** Cursor for pagination (last intent ID from previous page) */
+  /** Offset for pagination (default: 0) */
+  offset?: number;
+  /** Cursor for pagination (last intent ID from previous page) - mutually exclusive with offset */
   cursor?: ID;
+  /**
+   * If true, throw an error when limit exceeds MAX_PAGE_SIZE instead of silently capping.
+   * Default: false (silently cap to MAX_PAGE_SIZE for backwards compatibility)
+   */
+  strictLimitValidation?: boolean;
 }
 
 export interface CancelOptions {
@@ -275,9 +383,9 @@ export class IntentService {
   async getWithEvents(id: ID, tenantId: ID): Promise<IntentWithEvents | null> {
     const intent = await this.repository.findById(id, tenantId);
     if (!intent) return null;
-    const events = await this.repository.getRecentEvents(intent.id);
-    const evaluations = await this.repository.listEvaluations(intent.id);
-    return { intent, events, evaluations };
+    const eventsResult = await this.repository.getRecentEvents(intent.id);
+    const evaluationsResult = await this.repository.listEvaluations(intent.id);
+    return { intent, events: eventsResult.items, evaluations: evaluationsResult.items };
   }
 
   async updateStatus(
@@ -401,8 +509,114 @@ export class IntentService {
     return intent;
   }
 
-  async list(options: ListOptions): Promise<Intent[]> {
+  /**
+   * List intents with pagination.
+   * Returns paginated results with metadata for cursor/offset-based pagination.
+   *
+   * @param options - List options including pagination parameters
+   * @returns Paginated result with intents and pagination metadata
+   */
+  async list(options: ListOptions): Promise<PaginatedResult<Intent>> {
     return this.repository.listIntents(options);
+  }
+
+  /**
+   * Submit multiple intents in bulk for batch processing efficiency.
+   *
+   * This method processes intents sequentially, recording success/failure for each.
+   * By default, it continues processing even if some intents fail.
+   *
+   * @param submissions - Array of intent submissions to process
+   * @param options - Bulk submission options including tenantId and stopOnError flag
+   * @returns BulkIntentResult with successful intents, failed intents, and statistics
+   *
+   * @example
+   * ```typescript
+   * const result = await intentService.submitBulk(
+   *   [
+   *     { entityId: 'uuid1', goal: 'Goal 1', context: {} },
+   *     { entityId: 'uuid2', goal: 'Goal 2', context: {} },
+   *   ],
+   *   { tenantId: 'tenant-1', stopOnError: false }
+   * );
+   * // result.stats.succeeded === 2
+   * ```
+   */
+  async submitBulk(
+    submissions: IntentSubmission[],
+    options: {
+      tenantId: ID;
+      stopOnError?: boolean;
+      trustSnapshot?: Record<string, unknown> | null;
+      trustLevel?: TrustLevel;
+      bypassTrustGate?: boolean;
+      userId?: ID;
+      bypassConsentCheck?: boolean;
+    }
+  ): Promise<BulkIntentResult> {
+    const results: BulkIntentResult = {
+      successful: [],
+      failed: [],
+      stats: { total: submissions.length, succeeded: 0, failed: 0 },
+    };
+
+    logger.info(
+      { tenantId: options.tenantId, count: submissions.length },
+      'Starting bulk intent submission'
+    );
+
+    for (let i = 0; i < submissions.length; i++) {
+      const submission = submissions[i];
+      if (!submission) continue;
+
+      try {
+        const intent = await this.submit(submission, {
+          tenantId: options.tenantId,
+          trustSnapshot: options.trustSnapshot,
+          trustLevel: options.trustLevel,
+          bypassTrustGate: options.bypassTrustGate,
+          userId: options.userId,
+          bypassConsentCheck: options.bypassConsentCheck,
+        });
+
+        results.successful.push(intent);
+        results.stats.succeeded++;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+        results.failed.push({
+          index: i,
+          input: submission,
+          error: errorMessage,
+        });
+        results.stats.failed++;
+
+        logger.warn(
+          { tenantId: options.tenantId, index: i, error: errorMessage },
+          'Bulk intent submission failed for item'
+        );
+
+        if (options.stopOnError) {
+          logger.info(
+            { tenantId: options.tenantId, stoppedAtIndex: i, processed: i + 1, total: submissions.length },
+            'Bulk intent submission stopped due to stopOnError flag'
+          );
+          break;
+        }
+      }
+    }
+
+    logger.info(
+      {
+        tenantId: options.tenantId,
+        total: results.stats.total,
+        succeeded: results.stats.succeeded,
+        failed: results.stats.failed,
+      },
+      'Bulk intent submission completed'
+    );
+
+    return results;
   }
 
   async updateTrustMetadata(
@@ -715,3 +929,23 @@ export {
 export {
   registerIntentRoutes,
 } from './routes.js';
+
+// Re-export graceful shutdown utilities
+export {
+  isServerShuttingDown,
+  getActiveRequestCount,
+  trackRequest,
+  gracefulShutdown,
+  registerShutdownHandlers,
+  shutdownRequestHook,
+  shutdownResponseHook,
+  resetShutdownState,
+  type GracefulShutdownOptions,
+} from './shutdown.js';
+
+// Re-export pagination constants and types from repository
+export {
+  DEFAULT_PAGE_SIZE,
+  MAX_PAGE_SIZE,
+  type PaginatedResult,
+} from './repository.js';

@@ -300,6 +300,16 @@ export const dbQueryErrorsTotal = new Counter({
 });
 
 /**
+ * Total database query timeouts (statement_timeout exceeded)
+ */
+export const queryTimeouts = new Counter({
+  name: 'vorion_db_query_timeouts_total',
+  help: 'Number of database query timeouts (statement_timeout exceeded)',
+  labelNames: ['operation'] as const,
+  registers: [intentRegistry],
+});
+
+/**
  * Current active database connections
  */
 export const dbPoolConnectionsActive = new Gauge({
@@ -544,6 +554,61 @@ export const circuitBreakerFailures = new Gauge({
 });
 
 // ============================================================================
+// Per-Service Circuit Breaker Metrics
+// ============================================================================
+
+/**
+ * Per-service circuit breaker state gauge (0=CLOSED, 1=HALF_OPEN, 2=OPEN)
+ * Uses 'service' label for service-specific identification
+ */
+export const serviceCircuitBreakerState = new Gauge({
+  name: 'vorion_service_circuit_breaker_state',
+  help: 'Current circuit breaker state per service (0=CLOSED, 1=HALF_OPEN, 2=OPEN)',
+  labelNames: ['service'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Per-service circuit breaker failures total
+ */
+export const serviceCircuitBreakerFailuresTotal = new Counter({
+  name: 'vorion_service_circuit_breaker_failures_total',
+  help: 'Total failures recorded by circuit breaker per service',
+  labelNames: ['service'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Per-service circuit breaker trips (circuit opening)
+ */
+export const serviceCircuitBreakerTripsTotal = new Counter({
+  name: 'vorion_service_circuit_breaker_trips_total',
+  help: 'Total number of times circuit breaker has tripped (opened) per service',
+  labelNames: ['service'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Per-service circuit breaker recovery (circuit closing after half-open)
+ */
+export const serviceCircuitBreakerRecoveriesTotal = new Counter({
+  name: 'vorion_service_circuit_breaker_recoveries_total',
+  help: 'Total number of times circuit breaker has recovered (closed from half-open) per service',
+  labelNames: ['service'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Per-service circuit breaker half-open attempts
+ */
+export const serviceCircuitBreakerHalfOpenAttempts = new Gauge({
+  name: 'vorion_service_circuit_breaker_half_open_attempts',
+  help: 'Current number of half-open attempts per service',
+  labelNames: ['service'] as const,
+  registers: [intentRegistry],
+});
+
+// ============================================================================
 // Error Metrics
 // ============================================================================
 
@@ -778,6 +843,13 @@ export function recordDbQueryError(operation: DbOperationType, errorType: string
 }
 
 /**
+ * Record a database query timeout (statement_timeout exceeded)
+ */
+export function recordQueryTimeout(operation: string): void {
+  queryTimeouts.inc({ operation });
+}
+
+/**
  * Update database pool connection gauges
  */
 export function updateDbPoolMetrics(
@@ -940,6 +1012,80 @@ export function recordCircuitBreakerExecution(
  */
 export function updateCircuitBreakerFailures(name: string, failureCount: number): void {
   circuitBreakerFailures.set({ name }, failureCount);
+}
+
+// ============================================================================
+// Per-Service Circuit Breaker Metrics Helper Functions
+// ============================================================================
+
+/**
+ * Update per-service circuit breaker state gauge
+ * This is the primary metric for monitoring circuit breaker state per service
+ */
+export function updateServiceCircuitBreakerState(
+  service: string,
+  state: CircuitBreakerStateType
+): void {
+  serviceCircuitBreakerState.set({ service }, CIRCUIT_STATE_VALUES[state]);
+}
+
+/**
+ * Record a failure for a service's circuit breaker
+ */
+export function recordServiceCircuitBreakerFailure(service: string): void {
+  serviceCircuitBreakerFailuresTotal.inc({ service });
+}
+
+/**
+ * Record a circuit breaker trip (circuit opening) for a service
+ */
+export function recordServiceCircuitBreakerTrip(service: string): void {
+  serviceCircuitBreakerTripsTotal.inc({ service });
+}
+
+/**
+ * Record a circuit breaker recovery (circuit closing from half-open) for a service
+ */
+export function recordServiceCircuitBreakerRecovery(service: string): void {
+  serviceCircuitBreakerRecoveriesTotal.inc({ service });
+}
+
+/**
+ * Update the current half-open attempts gauge for a service
+ */
+export function updateServiceCircuitBreakerHalfOpenAttempts(
+  service: string,
+  attempts: number
+): void {
+  serviceCircuitBreakerHalfOpenAttempts.set({ service }, attempts);
+}
+
+/**
+ * Record a complete circuit breaker state change for a service
+ * This is a convenience function that updates multiple metrics at once
+ */
+export function recordServiceCircuitBreakerStateChange(
+  service: string,
+  fromState: CircuitBreakerStateType,
+  toState: CircuitBreakerStateType
+): void {
+  // Update the state gauge
+  updateServiceCircuitBreakerState(service, toState);
+
+  // Also update the generic circuit breaker metrics for backward compatibility
+  circuitBreakerStateChanges.inc({
+    name: service,
+    from_state: fromState,
+    to_state: toState,
+  });
+  circuitBreakerState.set({ name: service }, CIRCUIT_STATE_VALUES[toState]);
+
+  // Record specific events
+  if (toState === 'OPEN') {
+    recordServiceCircuitBreakerTrip(service);
+  } else if (fromState === 'HALF_OPEN' && toState === 'CLOSED') {
+    recordServiceCircuitBreakerRecovery(service);
+  }
 }
 
 /**

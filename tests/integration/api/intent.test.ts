@@ -191,9 +191,16 @@ vi.mock('../../../src/intent/repository.js', () => ({
       return null;
     }),
     listIntents: vi.fn(async (options: any) => {
-      return Array.from(mockIntentData.values()).filter(
+      const items = Array.from(mockIntentData.values()).filter(
         (intent) => intent.tenantId === options.tenantId && !intent.deletedAt
       );
+      // Return PaginatedResult format expected by service
+      return {
+        items,
+        hasMore: false,
+        limit: options.limit ?? 50,
+        offset: options.offset ?? 0,
+      };
     }),
     recordEvent: vi.fn(async (data: any) => {
       const event = {
@@ -205,7 +212,8 @@ vi.mock('../../../src/intent/repository.js', () => ({
       return event;
     }),
     getRecentEvents: vi.fn(async (intentId: string) => {
-      return mockEventData.filter((e) => e.intentId === intentId);
+      // Return object with items array expected by service
+      return { items: mockEventData.filter((e) => e.intentId === intentId) };
     }),
     recordEvaluation: vi.fn(async (data: any) => {
       const evaluation = {
@@ -217,7 +225,8 @@ vi.mock('../../../src/intent/repository.js', () => ({
       return evaluation;
     }),
     listEvaluations: vi.fn(async (intentId: string) => {
-      return mockEvaluationData.filter((e) => e.intentId === intentId);
+      // Return object with items array expected by service
+      return { items: mockEvaluationData.filter((e) => e.intentId === intentId) };
     }),
     countActiveIntents: vi.fn().mockResolvedValue(0),
     updateTrustMetadata: vi.fn(),
@@ -627,6 +636,7 @@ describe('Intent API Integration Tests', () => {
 
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.payload);
+      // Response uses standard envelope: { success, data, meta: { cursor } }
       expect(body).toHaveProperty('data');
       expect(Array.isArray(body.data)).toBe(true);
       expect(body.data.length).toBe(2);

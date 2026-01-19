@@ -13,7 +13,7 @@ import { eq, and, desc, inArray } from 'drizzle-orm';
 import { createLogger } from '../common/logger.js';
 import { getConfig } from '../common/config.js';
 import { getRedis } from '../common/redis.js';
-import { getDatabase } from '../common/db.js';
+import { getDatabase, withLongQueryTimeout } from '../common/db.js';
 import { createAuditService, createAuditHelper } from '../audit/index.js';
 import type { ID } from '../common/types.js';
 import {
@@ -134,10 +134,12 @@ export class GdprService {
 
   /**
    * Export all user data for GDPR compliance (Article 15 - Right of Access)
+   * Uses extended statement timeout for complex multi-table queries.
    *
    * @param userId - The user/entity ID to export data for
    * @param tenantId - The tenant context
    * @returns Complete export data structure
+   * @throws StatementTimeoutError if the query exceeds the long query timeout
    */
   async exportUserData(userId: ID, tenantId: ID): Promise<GdprExportData> {
     const exportId = randomUUID();
@@ -145,145 +147,148 @@ export class GdprService {
 
     logger.info({ userId, tenantId, exportId }, 'Starting GDPR data export');
 
-    // Fetch all user intents (including soft-deleted for complete history)
-    const userIntents = await this.db
-      .select()
-      .from(intents)
-      .where(
-        and(
-          eq(intents.entityId, userId),
-          eq(intents.tenantId, tenantId)
-        )
-      )
-      .orderBy(desc(intents.createdAt));
-
-    const intentIds = userIntents.map((i) => i.id);
-
-    // Fetch events for all user intents
-    let userEvents: typeof intentEvents.$inferSelect[] = [];
-    if (intentIds.length > 0) {
-      userEvents = await this.db
+    // Use long query timeout for GDPR exports as they can involve complex joins
+    return withLongQueryTimeout(async () => {
+      // Fetch all user intents (including soft-deleted for complete history)
+      const userIntents = await this.db
         .select()
-        .from(intentEvents)
-        .where(inArray(intentEvents.intentId, intentIds))
-        .orderBy(desc(intentEvents.occurredAt));
-    }
-
-    // Fetch escalations for user intents
-    let userEscalations: typeof escalations.$inferSelect[] = [];
-    if (intentIds.length > 0) {
-      userEscalations = await this.db
-        .select()
-        .from(escalations)
+        .from(intents)
         .where(
           and(
-            inArray(escalations.intentId, intentIds),
-            eq(escalations.tenantId, tenantId)
+            eq(intents.entityId, userId),
+            eq(intents.tenantId, tenantId)
           )
         )
-        .orderBy(desc(escalations.createdAt));
-    }
+        .orderBy(desc(intents.createdAt));
 
-    // Fetch audit records where user is the actor or target
-    const userAuditRecords = await this.db
-      .select()
-      .from(auditRecords)
-      .where(
-        and(
-          eq(auditRecords.tenantId, tenantId),
-          eq(auditRecords.actorId, userId)
+      const intentIds = userIntents.map((i) => i.id);
+
+      // Fetch events for all user intents
+      let userEvents: typeof intentEvents.$inferSelect[] = [];
+      if (intentIds.length > 0) {
+        userEvents = await this.db
+          .select()
+          .from(intentEvents)
+          .where(inArray(intentEvents.intentId, intentIds))
+          .orderBy(desc(intentEvents.occurredAt));
+      }
+
+      // Fetch escalations for user intents
+      let userEscalations: typeof escalations.$inferSelect[] = [];
+      if (intentIds.length > 0) {
+        userEscalations = await this.db
+          .select()
+          .from(escalations)
+          .where(
+            and(
+              inArray(escalations.intentId, intentIds),
+              eq(escalations.tenantId, tenantId)
+            )
+          )
+          .orderBy(desc(escalations.createdAt));
+      }
+
+      // Fetch audit records where user is the actor or target
+      const userAuditRecords = await this.db
+        .select()
+        .from(auditRecords)
+        .where(
+          and(
+            eq(auditRecords.tenantId, tenantId),
+            eq(auditRecords.actorId, userId)
+          )
         )
-      )
-      .orderBy(desc(auditRecords.eventTime))
-      .limit(1000); // Limit audit records to prevent massive exports
+        .orderBy(desc(auditRecords.eventTime))
+        .limit(1000); // Limit audit records to prevent massive exports
 
-    // Transform data to GDPR export format
-    const exportData: GdprExportData = {
-      exportId,
-      userId,
-      tenantId,
-      exportTimestamp,
-      dataCategories: [
-        'intents',
-        'intent_events',
-        'escalations',
-        'audit_records',
-      ],
-      retentionPeriods: {
-        intents: config.intent.softDeleteRetentionDays
-          ? `${config.intent.softDeleteRetentionDays} days after deletion`
-          : '90 days after deletion',
-        intent_events: config.intent.eventRetentionDays
-          ? `${config.intent.eventRetentionDays} days`
-          : '365 days',
-        escalations: 'Retained with associated intent',
-        audit_records: config.audit?.retentionDays
-          ? `${config.audit.retentionDays} days`
-          : '2555 days (7 years)',
-      },
-      data: {
-        intents: userIntents.map((intent) => ({
-          id: intent.id,
-          goal: intent.goal,
-          intentType: intent.intentType,
-          status: intent.status,
-          context: (intent.context ?? {}) as Record<string, unknown>,
-          metadata: (intent.metadata ?? {}) as Record<string, unknown>,
-          createdAt: intent.createdAt.toISOString(),
-          updatedAt: intent.updatedAt.toISOString(),
-          deletedAt: intent.deletedAt?.toISOString() ?? null,
-        })),
-        events: userEvents.map((event) => ({
-          id: event.id,
-          intentId: event.intentId,
-          eventType: event.eventType,
-          payload: (event.payload ?? {}) as Record<string, unknown>,
-          occurredAt: event.occurredAt.toISOString(),
-        })),
-        escalations: userEscalations.map((esc) => ({
-          id: esc.id,
-          intentId: esc.intentId,
-          reason: esc.reason,
-          reasonCategory: esc.reasonCategory,
-          escalatedTo: esc.escalatedTo,
-          status: esc.status,
-          createdAt: esc.createdAt.toISOString(),
-          resolvedAt: esc.resolvedAt?.toISOString() ?? null,
-        })),
-        auditRecords: userAuditRecords.map((record) => ({
-          id: record.id,
-          eventType: record.eventType,
-          action: record.action,
-          outcome: record.outcome,
-          eventTime: record.eventTime.toISOString(),
-          metadata: (record.metadata ?? undefined) as Record<string, unknown> | undefined,
-        })),
-      },
-      metadata: {
-        totalRecords:
-          userIntents.length +
-          userEvents.length +
-          userEscalations.length +
-          userAuditRecords.length,
-        exportVersion: '1.0',
-        gdprArticle: 'Article 15 - Right of Access',
-      },
-    };
-
-    logger.info(
-      {
+      // Transform data to GDPR export format
+      const exportData: GdprExportData = {
+        exportId,
         userId,
         tenantId,
-        exportId,
-        intentsCount: userIntents.length,
-        eventsCount: userEvents.length,
-        escalationsCount: userEscalations.length,
-        auditCount: userAuditRecords.length,
-      },
-      'GDPR data export completed'
-    );
+        exportTimestamp,
+        dataCategories: [
+          'intents',
+          'intent_events',
+          'escalations',
+          'audit_records',
+        ],
+        retentionPeriods: {
+          intents: config.intent.softDeleteRetentionDays
+            ? `${config.intent.softDeleteRetentionDays} days after deletion`
+            : '90 days after deletion',
+          intent_events: config.intent.eventRetentionDays
+            ? `${config.intent.eventRetentionDays} days`
+            : '365 days',
+          escalations: 'Retained with associated intent',
+          audit_records: config.audit?.retentionDays
+            ? `${config.audit.retentionDays} days`
+            : '2555 days (7 years)',
+        },
+        data: {
+          intents: userIntents.map((intent) => ({
+            id: intent.id,
+            goal: intent.goal,
+            intentType: intent.intentType,
+            status: intent.status,
+            context: (intent.context ?? {}) as Record<string, unknown>,
+            metadata: (intent.metadata ?? {}) as Record<string, unknown>,
+            createdAt: intent.createdAt.toISOString(),
+            updatedAt: intent.updatedAt.toISOString(),
+            deletedAt: intent.deletedAt?.toISOString() ?? null,
+          })),
+          events: userEvents.map((event) => ({
+            id: event.id,
+            intentId: event.intentId,
+            eventType: event.eventType,
+            payload: (event.payload ?? {}) as Record<string, unknown>,
+            occurredAt: event.occurredAt.toISOString(),
+          })),
+          escalations: userEscalations.map((esc) => ({
+            id: esc.id,
+            intentId: esc.intentId,
+            reason: esc.reason,
+            reasonCategory: esc.reasonCategory,
+            escalatedTo: esc.escalatedTo,
+            status: esc.status,
+            createdAt: esc.createdAt.toISOString(),
+            resolvedAt: esc.resolvedAt?.toISOString() ?? null,
+          })),
+          auditRecords: userAuditRecords.map((record) => ({
+            id: record.id,
+            eventType: record.eventType,
+            action: record.action,
+            outcome: record.outcome,
+            eventTime: record.eventTime.toISOString(),
+            metadata: (record.metadata ?? undefined) as Record<string, unknown> | undefined,
+          })),
+        },
+        metadata: {
+          totalRecords:
+            userIntents.length +
+            userEvents.length +
+            userEscalations.length +
+            userAuditRecords.length,
+          exportVersion: '1.0',
+          gdprArticle: 'Article 15 - Right of Access',
+        },
+      };
 
-    return exportData;
+      logger.info(
+        {
+          userId,
+          tenantId,
+          exportId,
+          intentsCount: userIntents.length,
+          eventsCount: userEvents.length,
+          escalationsCount: userEscalations.length,
+          auditCount: userAuditRecords.length,
+        },
+        'GDPR data export completed'
+      );
+
+      return exportData;
+    }, 'exportUserData');
   }
 
   /**

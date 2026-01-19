@@ -134,10 +134,10 @@ describe('IntentService', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject goal exceeding 1024 characters', () => {
+    it('should reject goal exceeding 10000 characters', () => {
       const submission = {
         entityId: '123e4567-e89b-12d3-a456-426614174000',
-        goal: 'a'.repeat(1025),
+        goal: 'a'.repeat(10001),
         context: {},
       };
 
@@ -150,7 +150,7 @@ describe('IntentService', () => {
         entityId: '123e4567-e89b-12d3-a456-426614174000',
         goal: 'Test goal',
         context: {},
-        priority: 10,
+        priority: 11, // Max is now 10
       };
 
       const result = intentSubmissionSchema.safeParse(submission);
@@ -355,8 +355,19 @@ describe('IntentService', () => {
       ];
 
       mockRepository.findById.mockResolvedValue(mockIntent);
-      mockRepository.getRecentEvents.mockResolvedValue(mockEvents);
-      mockRepository.listEvaluations.mockResolvedValue(mockEvaluations);
+      // Return PaginatedResult format for getRecentEvents and listEvaluations
+      mockRepository.getRecentEvents.mockResolvedValue({
+        items: mockEvents,
+        limit: 50,
+        offset: 0,
+        hasMore: false,
+      });
+      mockRepository.listEvaluations.mockResolvedValue({
+        items: mockEvaluations,
+        limit: 50,
+        offset: 0,
+        hasMore: false,
+      });
 
       const result = await service.getWithEvents('intent-123', 'tenant-456');
 
@@ -503,15 +514,23 @@ describe('IntentService', () => {
         },
       ];
 
-      mockRepository.listIntents.mockResolvedValue(mockIntents);
+      // Return PaginatedResult format for listIntents
+      mockRepository.listIntents.mockResolvedValue({
+        items: mockIntents,
+        limit: 10,
+        offset: 0,
+        hasMore: false,
+      });
 
-      const intents = await service.list({
+      const result = await service.list({
         tenantId: 'tenant-456',
         status: 'pending',
         limit: 10,
       });
 
-      expect(intents).toEqual(mockIntents);
+      expect(result.items).toEqual(mockIntents);
+      expect(result.limit).toBe(10);
+      expect(result.hasMore).toBe(false);
       expect(mockRepository.listIntents).toHaveBeenCalledWith({
         tenantId: 'tenant-456',
         status: 'pending',

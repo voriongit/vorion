@@ -11,6 +11,9 @@
  * OPEN -> HALF_OPEN: After reset timeout expires
  * HALF_OPEN -> CLOSED: On successful call
  * HALF_OPEN -> OPEN: On failed call
+ *
+ * Per-service configurations allow tuning circuit breaker behavior
+ * based on service characteristics (e.g., database vs. webhook).
  */
 
 import type { Redis } from 'ioredis';
@@ -25,6 +28,64 @@ const logger = createLogger({ component: 'circuit-breaker' });
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 /**
+ * Per-service circuit breaker configuration
+ */
+export interface CircuitBreakerConfig {
+  /** Service name identifier */
+  name: string;
+  /** Number of failures before opening the circuit */
+  failureThreshold: number;
+  /** Time in ms before attempting to close the circuit */
+  resetTimeoutMs: number;
+  /** Maximum attempts in half-open state before reopening */
+  halfOpenMaxAttempts: number;
+  /** Time window in ms to monitor for failures */
+  monitorWindowMs: number;
+}
+
+/**
+ * Default configurations per service type.
+ * These can be overridden via environment variables in config.ts.
+ */
+export const CIRCUIT_BREAKER_CONFIGS: Record<string, CircuitBreakerConfig> = {
+  database: {
+    name: 'database',
+    failureThreshold: 5,
+    resetTimeoutMs: 30000,
+    halfOpenMaxAttempts: 3,
+    monitorWindowMs: 60000,
+  },
+  redis: {
+    name: 'redis',
+    failureThreshold: 10,
+    resetTimeoutMs: 10000,
+    halfOpenMaxAttempts: 5,
+    monitorWindowMs: 30000,
+  },
+  webhook: {
+    name: 'webhook',
+    failureThreshold: 3,
+    resetTimeoutMs: 60000,
+    halfOpenMaxAttempts: 2,
+    monitorWindowMs: 120000,
+  },
+  policyEngine: {
+    name: 'policy-engine',
+    failureThreshold: 5,
+    resetTimeoutMs: 15000,
+    halfOpenMaxAttempts: 3,
+    monitorWindowMs: 60000,
+  },
+  trustEngine: {
+    name: 'trust-engine',
+    failureThreshold: 5,
+    resetTimeoutMs: 15000,
+    halfOpenMaxAttempts: 3,
+    monitorWindowMs: 60000,
+  },
+};
+
+/**
  * Circuit breaker configuration options
  */
 export interface CircuitBreakerOptions {
@@ -34,6 +95,10 @@ export interface CircuitBreakerOptions {
   failureThreshold?: number;
   /** Time in ms before attempting to close the circuit (default: 30000) */
   resetTimeoutMs?: number;
+  /** Maximum attempts in half-open state before reopening (default: 3) */
+  halfOpenMaxAttempts?: number;
+  /** Time window in ms to monitor for failures (default: 60000) */
+  monitorWindowMs?: number;
   /** Optional Redis client (uses shared client if not provided) */
   redis?: Redis;
   /** Callback when circuit state changes */
@@ -48,6 +113,10 @@ interface CircuitBreakerState {
   failureCount: number;
   lastFailureTime: number | null;
   openedAt: number | null;
+  /** Number of attempts made in half-open state */
+  halfOpenAttempts: number;
+  /** Timestamp of first failure in current monitoring window */
+  windowStartTime: number | null;
 }
 
 /**
@@ -84,6 +153,8 @@ export class CircuitBreaker {
   private readonly name: string;
   private readonly failureThreshold: number;
   private readonly resetTimeoutMs: number;
+  private readonly halfOpenMaxAttempts: number;
+  private readonly monitorWindowMs: number;
   private readonly redis: Redis;
   private readonly onStateChange?: (from: CircuitState, to: CircuitState, breaker: CircuitBreaker) => void;
 
@@ -96,6 +167,8 @@ export class CircuitBreaker {
     this.name = options.name;
     this.failureThreshold = options.failureThreshold ?? 5;
     this.resetTimeoutMs = options.resetTimeoutMs ?? 30000;
+    this.halfOpenMaxAttempts = options.halfOpenMaxAttempts ?? 3;
+    this.monitorWindowMs = options.monitorWindowMs ?? 60000;
     this.redis = options.redis ?? getRedis();
     this.onStateChange = options.onStateChange;
   }
@@ -126,6 +199,8 @@ export class CircuitBreaker {
           failureCount: 0,
           lastFailureTime: null,
           openedAt: null,
+          halfOpenAttempts: 0,
+          windowStartTime: null,
         };
         // Update local cache
         this.localStateCache = initialState;
@@ -148,6 +223,8 @@ export class CircuitBreaker {
         failureCount: 0,
         lastFailureTime: null,
         openedAt: null,
+        halfOpenAttempts: 0,
+        windowStartTime: null,
       };
     }
   }
@@ -182,10 +259,11 @@ export class CircuitBreaker {
     if (state.state === 'OPEN' && state.openedAt) {
       const timeSinceOpen = now - state.openedAt;
       if (timeSinceOpen >= this.resetTimeoutMs) {
-        // Transition to HALF_OPEN
+        // Transition to HALF_OPEN, reset half-open attempts counter
         const newState: CircuitBreakerState = {
           ...state,
           state: 'HALF_OPEN',
+          halfOpenAttempts: 0,
         };
         await this.setState(newState);
         this.notifyStateChange(state.state, 'HALF_OPEN');
@@ -221,6 +299,8 @@ export class CircuitBreaker {
         failureCount: 0,
         lastFailureTime: null,
         openedAt: null,
+        halfOpenAttempts: 0,
+        windowStartTime: null,
       };
       await this.setState(newState);
       this.notifyStateChange('HALF_OPEN', 'CLOSED');
@@ -231,6 +311,7 @@ export class CircuitBreaker {
         ...state,
         failureCount: 0,
         lastFailureTime: null,
+        windowStartTime: null,
       };
       await this.setState(newState);
     }
@@ -244,21 +325,58 @@ export class CircuitBreaker {
     const now = Date.now();
 
     if (state.state === 'HALF_OPEN') {
-      // Failure in HALF_OPEN state - reopen the circuit
-      const newState: CircuitBreakerState = {
-        state: 'OPEN',
-        failureCount: state.failureCount + 1,
-        lastFailureTime: now,
-        openedAt: now,
-      };
-      await this.setState(newState);
-      this.notifyStateChange('HALF_OPEN', 'OPEN');
-      logger.warn(
-        { name: this.name },
-        'Circuit breaker reopened after failure in HALF_OPEN state'
-      );
+      // Increment half-open attempts
+      const newHalfOpenAttempts = (state.halfOpenAttempts || 0) + 1;
+
+      if (newHalfOpenAttempts >= this.halfOpenMaxAttempts) {
+        // Max half-open attempts reached - reopen the circuit
+        const newState: CircuitBreakerState = {
+          state: 'OPEN',
+          failureCount: state.failureCount + 1,
+          lastFailureTime: now,
+          openedAt: now,
+          halfOpenAttempts: 0,
+          windowStartTime: null,
+        };
+        await this.setState(newState);
+        this.notifyStateChange('HALF_OPEN', 'OPEN');
+        logger.warn(
+          { name: this.name, halfOpenAttempts: newHalfOpenAttempts, maxAttempts: this.halfOpenMaxAttempts },
+          'Circuit breaker reopened after max half-open attempts exceeded'
+        );
+      } else {
+        // Still in HALF_OPEN, increment attempt counter
+        const newState: CircuitBreakerState = {
+          ...state,
+          failureCount: state.failureCount + 1,
+          lastFailureTime: now,
+          halfOpenAttempts: newHalfOpenAttempts,
+        };
+        await this.setState(newState);
+        logger.debug(
+          { name: this.name, halfOpenAttempts: newHalfOpenAttempts, maxAttempts: this.halfOpenMaxAttempts },
+          'Circuit breaker recorded failure in HALF_OPEN state'
+        );
+      }
     } else if (state.state === 'CLOSED') {
-      const newFailureCount = state.failureCount + 1;
+      // Check if we need to start a new monitoring window
+      let windowStartTime = state.windowStartTime;
+      let failureCount = state.failureCount;
+
+      if (windowStartTime && now - windowStartTime > this.monitorWindowMs) {
+        // Window has expired, reset failure count and start new window
+        windowStartTime = now;
+        failureCount = 0;
+        logger.debug(
+          { name: this.name, windowMs: this.monitorWindowMs },
+          'Circuit breaker monitoring window expired, resetting failure count'
+        );
+      } else if (!windowStartTime) {
+        // Start new window
+        windowStartTime = now;
+      }
+
+      const newFailureCount = failureCount + 1;
 
       if (newFailureCount >= this.failureThreshold) {
         // Threshold exceeded - open the circuit
@@ -267,6 +385,8 @@ export class CircuitBreaker {
           failureCount: newFailureCount,
           lastFailureTime: now,
           openedAt: now,
+          halfOpenAttempts: 0,
+          windowStartTime: null,
         };
         await this.setState(newState);
         this.notifyStateChange('CLOSED', 'OPEN');
@@ -280,6 +400,7 @@ export class CircuitBreaker {
           ...state,
           failureCount: newFailureCount,
           lastFailureTime: now,
+          windowStartTime,
         };
         await this.setState(newState);
         logger.debug(
@@ -340,6 +461,8 @@ export class CircuitBreaker {
       failureCount: this.failureThreshold,
       lastFailureTime: Date.now(),
       openedAt: Date.now(),
+      halfOpenAttempts: 0,
+      windowStartTime: null,
     };
     await this.setState(newState);
 
@@ -363,6 +486,8 @@ export class CircuitBreaker {
       failureCount: 0,
       lastFailureTime: null,
       openedAt: null,
+      halfOpenAttempts: 0,
+      windowStartTime: null,
     };
     await this.setState(newState);
 
@@ -396,9 +521,13 @@ export class CircuitBreaker {
     failureCount: number;
     failureThreshold: number;
     resetTimeoutMs: number;
+    halfOpenMaxAttempts: number;
+    halfOpenAttempts: number;
+    monitorWindowMs: number;
     lastFailureTime: Date | null;
     openedAt: Date | null;
     timeUntilReset: number | null;
+    windowStartTime: Date | null;
   }> {
     const state = await this.getState();
     const now = Date.now();
@@ -415,9 +544,13 @@ export class CircuitBreaker {
       failureCount: state.failureCount,
       failureThreshold: this.failureThreshold,
       resetTimeoutMs: this.resetTimeoutMs,
+      halfOpenMaxAttempts: this.halfOpenMaxAttempts,
+      halfOpenAttempts: state.halfOpenAttempts || 0,
+      monitorWindowMs: this.monitorWindowMs,
       lastFailureTime: state.lastFailureTime ? new Date(state.lastFailureTime) : null,
       openedAt: state.openedAt ? new Date(state.openedAt) : null,
       timeUntilReset,
+      windowStartTime: state.windowStartTime ? new Date(state.windowStartTime) : null,
     };
   }
 
@@ -440,4 +573,148 @@ export class CircuitBreaker {
  */
 export function createCircuitBreaker(options: CircuitBreakerOptions): CircuitBreaker {
   return new CircuitBreaker(options);
+}
+
+// =============================================================================
+// Circuit Breaker Registry
+// =============================================================================
+
+/**
+ * Global circuit breaker registry for managing per-service circuit breakers.
+ * Uses lazy initialization to create circuit breakers on first access.
+ */
+const circuitBreakers = new Map<string, CircuitBreaker>();
+
+/**
+ * Configuration overrides that can be set at startup
+ */
+let configOverrides: Record<string, Partial<CircuitBreakerConfig>> = {};
+
+/**
+ * Set configuration overrides for circuit breakers.
+ * This should be called during application initialization before any circuit breakers are used.
+ *
+ * @example
+ * ```typescript
+ * setCircuitBreakerConfigOverrides({
+ *   database: { failureThreshold: 10, resetTimeoutMs: 60000 },
+ *   redis: { failureThreshold: 20 },
+ * });
+ * ```
+ */
+export function setCircuitBreakerConfigOverrides(
+  overrides: Record<string, Partial<CircuitBreakerConfig>>
+): void {
+  configOverrides = overrides;
+  logger.info({ services: Object.keys(overrides) }, 'Circuit breaker config overrides set');
+}
+
+/**
+ * Get or create a circuit breaker for a specific service.
+ * Uses the default configuration for the service type, with optional overrides.
+ *
+ * @param serviceName - The name of the service (e.g., 'database', 'redis', 'webhook')
+ * @param onStateChange - Optional callback for state changes
+ * @returns The circuit breaker instance for the service
+ *
+ * @example
+ * ```typescript
+ * const dbBreaker = getCircuitBreaker('database');
+ * const result = await dbBreaker.execute(async () => {
+ *   return await db.query('SELECT * FROM users');
+ * });
+ * ```
+ */
+export function getCircuitBreaker(
+  serviceName: string,
+  onStateChange?: (from: CircuitState, to: CircuitState, breaker: CircuitBreaker) => void
+): CircuitBreaker {
+  if (!circuitBreakers.has(serviceName)) {
+    // Get base config, fall back to database config for unknown services
+    const baseConfig = CIRCUIT_BREAKER_CONFIGS[serviceName] || {
+      ...CIRCUIT_BREAKER_CONFIGS.database,
+      name: serviceName,
+    };
+
+    // Apply any config overrides
+    const overrides = configOverrides[serviceName] || {};
+    const finalConfig: CircuitBreakerConfig = {
+      ...baseConfig,
+      ...overrides,
+      name: serviceName, // Always use the requested service name
+    };
+
+    const breaker = new CircuitBreaker({
+      name: finalConfig.name,
+      failureThreshold: finalConfig.failureThreshold,
+      resetTimeoutMs: finalConfig.resetTimeoutMs,
+      halfOpenMaxAttempts: finalConfig.halfOpenMaxAttempts,
+      monitorWindowMs: finalConfig.monitorWindowMs,
+      onStateChange,
+    });
+
+    circuitBreakers.set(serviceName, breaker);
+
+    logger.debug(
+      {
+        serviceName,
+        config: {
+          failureThreshold: finalConfig.failureThreshold,
+          resetTimeoutMs: finalConfig.resetTimeoutMs,
+          halfOpenMaxAttempts: finalConfig.halfOpenMaxAttempts,
+          monitorWindowMs: finalConfig.monitorWindowMs,
+        },
+      },
+      'Created circuit breaker for service'
+    );
+  }
+
+  return circuitBreakers.get(serviceName)!;
+}
+
+/**
+ * Get all registered circuit breakers with their current status.
+ * Useful for health checks and monitoring dashboards.
+ *
+ * @returns Map of service names to their circuit breaker status
+ */
+export async function getAllCircuitBreakerStatuses(): Promise<
+  Map<string, Awaited<ReturnType<CircuitBreaker['getStatus']>>>
+> {
+  const statuses = new Map<string, Awaited<ReturnType<CircuitBreaker['getStatus']>>>();
+  const entries = Array.from(circuitBreakers);
+
+  for (const [serviceName, breaker] of entries) {
+    statuses.set(serviceName, await breaker.getStatus());
+  }
+
+  return statuses;
+}
+
+/**
+ * Reset a specific circuit breaker by service name.
+ * Useful for manual recovery during incidents.
+ *
+ * @param serviceName - The service name to reset
+ * @returns True if the circuit breaker was found and reset
+ */
+export async function resetCircuitBreaker(serviceName: string): Promise<boolean> {
+  const breaker = circuitBreakers.get(serviceName);
+  if (!breaker) {
+    return false;
+  }
+
+  await breaker.reset();
+  logger.info({ serviceName }, 'Circuit breaker reset via registry');
+  return true;
+}
+
+/**
+ * Clear all circuit breakers from the registry.
+ * Primarily for testing purposes.
+ */
+export function clearCircuitBreakerRegistry(): void {
+  circuitBreakers.clear();
+  configOverrides = {};
+  logger.debug({}, 'Circuit breaker registry cleared');
 }
