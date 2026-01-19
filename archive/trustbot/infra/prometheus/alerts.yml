@@ -1,0 +1,316 @@
+# TrustBot Alerting Rules
+# Epic 13: Observability & Monitoring
+# Story 13.5: Alerting Rules
+
+groups:
+  # ===========================================================================
+  # API Health Alerts
+  # ===========================================================================
+  - name: trustbot_api_health
+    rules:
+      # High Error Rate - Critical
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(trustbot_http_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum(rate(trustbot_http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "High API error rate detected"
+          description: "API error rate is {{ $value | humanizePercentage }} (>5% threshold) for the last 5 minutes"
+          runbook_url: "https://docs.trustbot.io/runbooks/high-error-rate"
+
+      # Slow API - Warning
+      - alert: SlowAPIResponse
+        expr: |
+          histogram_quantile(0.99, sum(rate(trustbot_http_request_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "API response time degraded"
+          description: "P99 latency is {{ $value | humanizeDuration }} (>2s threshold) for the last 5 minutes"
+          runbook_url: "https://docs.trustbot.io/runbooks/slow-api"
+
+      # Very Slow API - Critical
+      - alert: CriticalAPILatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(trustbot_http_request_duration_seconds_bucket[5m])) by (le)) > 5
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Critical API latency detected"
+          description: "P95 latency is {{ $value | humanizeDuration }} (>5s threshold) for the last 5 minutes"
+          runbook_url: "https://docs.trustbot.io/runbooks/critical-latency"
+
+      # API Down
+      - alert: APIDown
+        expr: |
+          up{job="trustbot-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "TrustBot API is down"
+          description: "TrustBot API instance has been down for more than 1 minute"
+          runbook_url: "https://docs.trustbot.io/runbooks/api-down"
+
+      # High Request Rate (potential DDoS)
+      - alert: UnusuallyHighRequestRate
+        expr: |
+          sum(rate(trustbot_http_requests_total[5m])) > 10000
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "Unusually high request rate"
+          description: "Request rate is {{ $value | humanize }} req/s (>10k threshold)"
+          runbook_url: "https://docs.trustbot.io/runbooks/high-traffic"
+
+  # ===========================================================================
+  # Decision Pipeline Alerts
+  # ===========================================================================
+  - name: trustbot_decision_pipeline
+    rules:
+      # Queue Backup - Warning
+      - alert: DecisionQueueBackup
+        expr: |
+          sum(trustbot_decision_queue_depth) > 100
+        for: 30m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Decision queue backup detected"
+          description: "Decision queue has {{ $value }} pending items (>100 threshold) for 30+ minutes"
+          runbook_url: "https://docs.trustbot.io/runbooks/queue-backup"
+
+      # Critical Queue Backup
+      - alert: CriticalDecisionQueueBackup
+        expr: |
+          sum(trustbot_decision_queue_depth) > 500
+        for: 15m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Critical decision queue backup"
+          description: "Decision queue has {{ $value }} pending items (>500 threshold) for 15+ minutes"
+          runbook_url: "https://docs.trustbot.io/runbooks/critical-queue-backup"
+
+      # High Immediate Queue
+      - alert: HighUrgentDecisionQueue
+        expr: |
+          trustbot_decision_queue_depth{urgency="immediate"} > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Immediate priority decisions backing up"
+          description: "{{ $value }} immediate priority decisions pending for 5+ minutes"
+          runbook_url: "https://docs.trustbot.io/runbooks/urgent-queue"
+
+      # Slow Decision Processing
+      - alert: SlowDecisionProcessing
+        expr: |
+          histogram_quantile(0.95, sum(rate(trustbot_decision_duration_seconds_bucket[5m])) by (le)) > 300
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Decision processing is slow"
+          description: "P95 decision processing time is {{ $value | humanizeDuration }} (>5m threshold)"
+          runbook_url: "https://docs.trustbot.io/runbooks/slow-decisions"
+
+      # High Denial Rate
+      - alert: HighDecisionDenialRate
+        expr: |
+          (
+            sum(rate(trustbot_decisions_processed_total{outcome="denied"}[1h]))
+            /
+            sum(rate(trustbot_decisions_processed_total[1h]))
+          ) > 0.3
+        for: 1h
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "High decision denial rate"
+          description: "Decision denial rate is {{ $value | humanizePercentage }} (>30% threshold)"
+          runbook_url: "https://docs.trustbot.io/runbooks/high-denial-rate"
+
+  # ===========================================================================
+  # Agent Fleet Alerts
+  # ===========================================================================
+  - name: trustbot_agent_fleet
+    rules:
+      # Agent Disconnections - Critical
+      - alert: MassAgentDisconnections
+        expr: |
+          (
+            sum(trustbot_agents_connected{status="offline"})
+            /
+            (sum(trustbot_agents_connected{status="online"}) + sum(trustbot_agents_connected{status="offline"}))
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Mass agent disconnections detected"
+          description: "{{ $value | humanizePercentage }} of fleet is offline (>10% threshold)"
+          runbook_url: "https://docs.trustbot.io/runbooks/agent-disconnections"
+
+      # All Agents Offline
+      - alert: AllAgentsOffline
+        expr: |
+          sum(trustbot_agents_connected{status="online"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "All agents are offline"
+          description: "No agents are currently connected to Mission Control"
+          runbook_url: "https://docs.trustbot.io/runbooks/all-agents-offline"
+
+      # High Heartbeat Latency
+      - alert: HighAgentHeartbeatLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(trustbot_agent_heartbeat_latency_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Agent heartbeat latency is high"
+          description: "P95 heartbeat latency is {{ $value | humanizeDuration }} (>1s threshold)"
+          runbook_url: "https://docs.trustbot.io/runbooks/heartbeat-latency"
+
+      # WebSocket Connection Drop
+      - alert: WebSocketConnectionDrop
+        expr: |
+          (
+            trustbot_websocket_connections_current{type="agent"} - trustbot_websocket_connections_current{type="agent"} offset 5m
+          ) / (trustbot_websocket_connections_current{type="agent"} offset 5m) < -0.2
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "WebSocket connections dropping"
+          description: "WebSocket connections dropped by more than 20% in 5 minutes"
+          runbook_url: "https://docs.trustbot.io/runbooks/websocket-drops"
+
+  # ===========================================================================
+  # Trust System Alerts
+  # ===========================================================================
+  - name: trustbot_trust_system
+    rules:
+      # Mass Trust Score Drops
+      - alert: MassTrustScoreDrops
+        expr: |
+          sum(increase(trustbot_trust_score_changes_total{direction="decrease"}[1h])) > 100
+        for: 15m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "Mass trust score decreases detected"
+          description: "{{ $value }} trust score decreases in the last hour"
+          runbook_url: "https://docs.trustbot.io/runbooks/trust-drops"
+
+      # Multiple Demotions
+      - alert: MultipleTierDemotions
+        expr: |
+          sum(increase(trustbot_trust_tier_changes_total{to_tier="PROBATION"}[1h])) > 5
+        for: 15m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "Multiple agents demoted to PROBATION"
+          description: "{{ $value }} agents demoted to PROBATION tier in the last hour"
+          runbook_url: "https://docs.trustbot.io/runbooks/tier-demotions"
+
+      # Average Trust Score Low
+      - alert: LowAverageTrustScore
+        expr: |
+          avg(trustbot_trust_score_current) < 500
+        for: 1h
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "Fleet average trust score is low"
+          description: "Average trust score is {{ $value }} (below 500 threshold)"
+          runbook_url: "https://docs.trustbot.io/runbooks/low-trust"
+
+  # ===========================================================================
+  # Resource & Infrastructure Alerts
+  # ===========================================================================
+  - name: trustbot_infrastructure
+    rules:
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: |
+          (process_resident_memory_bytes / 1024 / 1024 / 1024) > 2
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High memory usage"
+          description: "Process memory usage is {{ $value | humanize }}GB (>2GB threshold)"
+          runbook_url: "https://docs.trustbot.io/runbooks/high-memory"
+
+      # CPU Usage High
+      - alert: HighCPUUsage
+        expr: |
+          rate(process_cpu_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanizePercentage }} (>80% threshold)"
+          runbook_url: "https://docs.trustbot.io/runbooks/high-cpu"
+
+      # Event Loop Lag
+      - alert: NodeJSEventLoopLag
+        expr: |
+          nodejs_eventloop_lag_seconds > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Node.js event loop lag detected"
+          description: "Event loop lag is {{ $value | humanizeDuration }} (>100ms threshold)"
+          runbook_url: "https://docs.trustbot.io/runbooks/event-loop-lag"
+
+      # Process Restart
+      - alert: ProcessRestarted
+        expr: |
+          trustbot_uptime_seconds < 300
+        for: 0m
+        labels:
+          severity: info
+          team: platform
+        annotations:
+          summary: "TrustBot API process restarted"
+          description: "Process uptime is {{ $value | humanizeDuration }}, indicating recent restart"
+          runbook_url: "https://docs.trustbot.io/runbooks/process-restart"

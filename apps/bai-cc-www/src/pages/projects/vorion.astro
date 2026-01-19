@@ -1,0 +1,182 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Vorion Platform" description="Enterprise AI governance platform - Trust, compliance, and oversight for autonomous AI">
+  <article class="py-16 sm:py-20">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="mb-12">
+        <a href="/projects" class="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white mb-6">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Projects
+        </a>
+
+        <div class="flex items-start gap-4 mb-6">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-vorion-500/20 to-accent-cyan/20 border border-vorion-500/20 flex items-center justify-center text-3xl">
+            🏛️
+          </div>
+          <div>
+            <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">Vorion Platform</h1>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-vorion-500/20 text-vorion-400 border border-vorion-500/30">
+                Active Development
+              </span>
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                README Available
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-xl text-slate-400 leading-relaxed">
+          The unified AI governance platform. Vorion brings together trust scoring, policy enforcement,
+          audit trails, and human oversight into a comprehensive solution for autonomous AI systems.
+        </p>
+      </div>
+
+      <!-- Notice -->
+      <div class="mb-12 p-6 rounded-xl bg-amber-500/10 border border-amber-500/30">
+        <div class="flex items-start gap-3">
+          <svg class="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <h3 class="font-semibold text-amber-400 mb-1">Platform Overview</h3>
+            <p class="text-sm text-amber-200/70">
+              Vorion is the umbrella platform encompassing all governance projects. While the platform
+              itself is proprietary, it's built entirely on open source foundations.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overview -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-4">Overview</h2>
+        <p class="text-slate-400 leading-relaxed mb-4">
+          Vorion is designed to solve the fundamental challenge of AI governance: how do you maintain
+          meaningful oversight of systems that operate faster than humans can review, while still
+          capturing the benefits of autonomous operation?
+        </p>
+        <p class="text-slate-400 leading-relaxed">
+          Our approach combines real-time behavioral scoring with progressive trust levels, enabling
+          organizations to grant autonomy proportional to demonstrated trustworthiness.
+        </p>
+      </section>
+
+      <!-- Platform Components -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-6">Platform Components</h2>
+        <div class="space-y-4">
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="px-2 py-1 text-xs font-medium rounded bg-emerald-500/20 text-emerald-400">Open Source</span>
+              <h3 class="font-semibold text-white">BASIS Standard</h3>
+            </div>
+            <p class="text-sm text-slate-400">
+              The foundational specification defining trust tiers, scoring algorithms, and governance protocols.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="px-2 py-1 text-xs font-medium rounded bg-emerald-500/20 text-emerald-400">Open Source</span>
+              <h3 class="font-semibold text-white">ATSF Runtime</h3>
+            </div>
+            <p class="text-sm text-slate-400">
+              Core libraries implementing trust calculation, decay, recovery, and event emission.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="px-2 py-1 text-xs font-medium rounded bg-emerald-500/20 text-emerald-400">Open Source</span>
+              <h3 class="font-semibold text-white">Cognigate API</h3>
+            </div>
+            <p class="text-sm text-slate-400">
+              REST/WebSocket API for policy evaluation and enforcement at the edge.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="px-2 py-1 text-xs font-medium rounded bg-amber-500/20 text-amber-400">Proprietary</span>
+              <h3 class="font-semibold text-white">AgentAnchor</h3>
+            </div>
+            <p class="text-sm text-slate-400">
+              Enterprise dashboard for visualization, management, and compliance reporting.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="px-2 py-1 text-xs font-medium rounded bg-amber-500/20 text-amber-400">Proprietary</span>
+              <h3 class="font-semibold text-white">Aurais</h3>
+            </div>
+            <p class="text-sm text-slate-400">
+              AI assistant with integrated governance for end-user interaction.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Architecture Diagram -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-6">Architecture</h2>
+        <div class="rounded-xl bg-slate-900 border border-slate-800 p-6 font-mono text-sm">
+          <pre class="text-slate-400 overflow-x-auto">
+┌─────────────────────────────────────────────────────────┐
+│                    VORION PLATFORM                       │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  ┌──────────────┐    ┌──────────────┐    ┌───────────┐  │
+│  │ AgentAnchor  │    │    Aurais    │    │  Learn    │  │
+│  │  Dashboard   │    │  Assistant   │    │  Vorion   │  │
+│  └──────┬───────┘    └──────┬───────┘    └─────┬─────┘  │
+│         │                   │                   │        │
+│  ═══════╪═══════════════════╪═══════════════════╪═════  │
+│         │            API Layer                  │        │
+│  ═══════╪═══════════════════╪═══════════════════╪═════  │
+│         │                   │                   │        │
+│  ┌──────▼───────────────────▼───────────────────▼────┐  │
+│  │              Cognigate Runtime API                 │  │
+│  │         Policy Evaluation & Enforcement            │  │
+│  └──────────────────────┬────────────────────────────┘  │
+│                         │                                │
+│  ┌──────────────────────▼────────────────────────────┐  │
+│  │                 ATSF Core Runtime                  │  │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐           │  │
+│  │  │  Trust  │  │  Intent │  │  Proof  │           │  │
+│  │  │ Engine  │  │ Service │  │  Plane  │           │  │
+│  │  └─────────┘  └─────────┘  └─────────┘           │  │
+│  └───────────────────────────────────────────────────┘  │
+│                                                          │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │                  BASIS Standard                    │  │
+│  │         6-Tier Trust Model Specification           │  │
+│  └───────────────────────────────────────────────────┘  │
+│                                                          │
+└─────────────────────────────────────────────────────────┘</pre>
+        </div>
+      </section>
+
+      <!-- Related -->
+      <section>
+        <h2 class="text-2xl font-bold text-white mb-4">Explore Components</h2>
+        <div class="flex flex-wrap gap-4">
+          <a href="/projects/basis" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            BASIS Standard
+          </a>
+          <a href="/projects/atsf" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            ATSF Framework
+          </a>
+          <a href="/projects/cognigate" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            Cognigate
+          </a>
+          <a href="/projects/agentanchor" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            AgentAnchor
+          </a>
+        </div>
+      </section>
+    </div>
+  </article>
+</BaseLayout>

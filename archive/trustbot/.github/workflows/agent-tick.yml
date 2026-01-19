@@ -1,0 +1,44 @@
+# Agent Tick Scheduler
+# Pings the /api/tick endpoint every 5 minutes to keep agents running
+# when the site is not open.
+
+name: Agent Tick Scheduler
+
+on:
+  schedule:
+    # Every 5 minutes (GitHub Actions minimum for free tier)
+    - cron: '*/5 * * * *'
+  
+  # Allow manual trigger for testing
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Ping Agent Tick Endpoint
+        env:
+          # Update this to your Vercel production URL
+          TICK_URL: ${{ secrets.TICK_URL || 'https://web-banquetai.vercel.app/api/tick' }}
+        run: |
+          echo "🤖 Triggering agent tick at $(date)"
+          
+          # Ping the tick endpoint
+          RESPONSE=$(curl -s -w "\n%{http_code}" "${TICK_URL}?manual=true")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "Response Code: $HTTP_CODE"
+          echo "Response Body: $BODY"
+          
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Agent tick successful"
+          else
+            echo "❌ Agent tick failed"
+            exit 1
+          fi
+      
+      - name: Log Activity
+        run: |
+          echo "📊 Tick completed at $(TZ='America/New_York' date '+%Y-%m-%d %H:%M:%S %Z')"

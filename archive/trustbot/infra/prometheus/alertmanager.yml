@@ -1,0 +1,170 @@
+# Alertmanager Configuration
+# Epic 13: Observability & Monitoring
+# Story 13.5: Alerting Rules
+
+global:
+  # ResolveTimeout is the time after which an alert is declared resolved
+  # if it has not been updated.
+  resolve_timeout: 5m
+
+  # Slack configuration
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+  # PagerDuty configuration
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# The route tree configuration
+route:
+  # Default receiver
+  receiver: 'slack-notifications'
+
+  # Group alerts by these labels
+  group_by: ['alertname', 'severity', 'team']
+
+  # Wait to group alerts
+  group_wait: 30s
+
+  # Interval between grouped alerts
+  group_interval: 5m
+
+  # Repeat interval for alerts
+  repeat_interval: 4h
+
+  # Child routes for severity-based routing
+  routes:
+    # Critical alerts go to PagerDuty and Slack
+    - match:
+        severity: critical
+      receiver: 'pagerduty-critical'
+      continue: true
+
+    - match:
+        severity: critical
+      receiver: 'slack-critical'
+
+    # Warning alerts go to Slack only
+    - match:
+        severity: warning
+      receiver: 'slack-warnings'
+
+    # Info alerts go to Slack with lower priority
+    - match:
+        severity: info
+      receiver: 'slack-info'
+      group_interval: 1h
+      repeat_interval: 24h
+
+    # Security team routing
+    - match:
+        team: security
+      receiver: 'slack-security'
+
+    # Operations team routing
+    - match:
+        team: operations
+      receiver: 'slack-operations'
+
+# Inhibition rules
+inhibit_rules:
+  # Inhibit warning alerts when critical alert is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname']
+
+  # Inhibit all alerts when API is down
+  - source_match:
+      alertname: 'APIDown'
+    target_match_re:
+      alertname: '.+'
+    equal: ['job']
+
+# Receivers
+receivers:
+  # Default Slack notifications
+  - name: 'slack-notifications'
+    slack_configs:
+      - channel: '#trustbot-alerts'
+        send_resolved: true
+        title: '{{ template "slack.default.title" . }}'
+        text: '{{ template "slack.default.text" . }}'
+        color: '{{ if eq .Status "firing" }}{{ if eq .CommonLabels.severity "critical" }}danger{{ else }}warning{{ end }}{{ else }}good{{ end }}'
+
+  # Critical alerts - Slack
+  - name: 'slack-critical'
+    slack_configs:
+      - channel: '#trustbot-critical'
+        send_resolved: true
+        title: ':rotating_light: CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          *Runbook:* {{ range .Alerts }}{{ .Annotations.runbook_url }}{{ end }}
+        color: 'danger'
+
+  # Warning alerts - Slack
+  - name: 'slack-warnings'
+    slack_configs:
+      - channel: '#trustbot-alerts'
+        send_resolved: true
+        title: ':warning: WARNING: {{ .GroupLabels.alertname }}'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          *Runbook:* {{ range .Alerts }}{{ .Annotations.runbook_url }}{{ end }}
+        color: 'warning'
+
+  # Info alerts - Slack
+  - name: 'slack-info'
+    slack_configs:
+      - channel: '#trustbot-alerts'
+        send_resolved: true
+        title: ':information_source: INFO: {{ .GroupLabels.alertname }}'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        color: '#439FE0'
+
+  # Security team alerts
+  - name: 'slack-security'
+    slack_configs:
+      - channel: '#security-alerts'
+        send_resolved: true
+        title: ':shield: SECURITY: {{ .GroupLabels.alertname }}'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        color: '{{ if eq .CommonLabels.severity "critical" }}danger{{ else }}warning{{ end }}'
+
+  # Operations team alerts
+  - name: 'slack-operations'
+    slack_configs:
+      - channel: '#ops-alerts'
+        send_resolved: true
+        title: ':gear: OPS: {{ .GroupLabels.alertname }}'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        color: '{{ if eq .CommonLabels.severity "critical" }}danger{{ else }}warning{{ end }}'
+
+  # PagerDuty for critical alerts
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      - routing_key: '${PAGERDUTY_ROUTING_KEY}'
+        send_resolved: true
+        severity: 'critical'
+        description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        details:
+          firing: '{{ template "pagerduty.default.instances" .Alerts.Firing }}'
+          resolved: '{{ template "pagerduty.default.instances" .Alerts.Resolved }}'
+          num_firing: '{{ .Alerts.Firing | len }}'
+          num_resolved: '{{ .Alerts.Resolved | len }}'
+
+# Templates for message formatting
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'

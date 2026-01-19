@@ -1,0 +1,219 @@
+# ============================================
+# Vorion AI Gateway - LiteLLM Configuration
+# Multi-Provider Router
+# ============================================
+#
+# This configuration implements the 4-tier routing strategy:
+# 1. Privacy Route: Sensitive data → Ollama (self-hosted)
+# 2. Task Route: Specialized tasks → Specific models
+# 3. Green Route: Sustainability-aware selection
+# 4. Cost Route: General tasks → Cost-optimized cascade
+#
+# ============================================
+
+model_list:
+  # ==========================================
+  # TIER 1: PRIVACY & SECURITY (Self-Hosted)
+  # ==========================================
+  # All PII, sensitive financial data, or proprietary IP
+  # NEVER leaves the VPC - routes to Ollama only
+
+  - model_name: privacy/general
+    litellm_params:
+      model: ollama/llama3.1:8b
+      api_base: http://ollama:11434
+    model_info:
+      tier: "privacy"
+      use_case: "General tasks with sensitive data"
+      priority: 1
+
+  - model_name: privacy/coding
+    litellm_params:
+      model: ollama/deepseek-r1:8b
+      api_base: http://ollama:11434
+    model_info:
+      tier: "privacy"
+      use_case: "Coding tasks with proprietary code"
+      priority: 1
+
+  # ==========================================
+  # TIER 2: SPECIALIZED TASKS (Task-Specific)
+  # ==========================================
+  # Optimized models for specific task types
+
+  - model_name: coding/expert
+    litellm_params:
+      model: anthropic/claude-sonnet-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      tier: "specialized"
+      use_case: "Complex coding, architecture, refactoring"
+      priority: 2
+
+  - model_name: coding/fast
+    litellm_params:
+      model: ollama/deepseek-r1:8b
+      api_base: http://ollama:11434
+    model_info:
+      tier: "specialized"
+      use_case: "Fast coding assistance, code completion"
+      priority: 3
+
+  - model_name: reasoning/complex
+    litellm_params:
+      model: anthropic/claude-opus-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      tier: "specialized"
+      use_case: "Deep reasoning, strategic planning, analysis"
+      priority: 2
+
+  - model_name: reasoning/fast
+    litellm_params:
+      model: gemini/gemini-2.0-flash-exp
+      api_key: os.environ/GOOGLE_API_KEY
+    model_info:
+      tier: "specialized"
+      use_case: "Quick reasoning, classification, extraction"
+      priority: 3
+
+  # ==========================================
+  # TIER 3: COST-OPTIMIZED CASCADE
+  # ==========================================
+  # General tasks - try cheap first, escalate if needed
+
+  - model_name: general/premium
+    litellm_params:
+      model: anthropic/claude-sonnet-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      tier: "premium"
+      cost_per_1m_input: 3.00
+      cost_per_1m_output: 15.00
+      use_case: "High-quality general tasks"
+      priority: 5
+
+  - model_name: general/balanced
+    litellm_params:
+      model: gemini/gemini-2.0-flash-exp
+      api_key: os.environ/GOOGLE_API_KEY
+    model_info:
+      tier: "balanced"
+      cost_per_1m_input: 0.15
+      cost_per_1m_output: 0.60
+      use_case: "Cost-effective general tasks"
+      priority: 4
+
+  - model_name: general/fast
+    litellm_params:
+      model: ollama/gemma2:9b
+      api_base: http://ollama:11434
+    model_info:
+      tier: "fast"
+      cost_per_1m_input: 0.00
+      cost_per_1m_output: 0.00
+      use_case: "Fastest, free general tasks"
+      priority: 3
+
+  # ==========================================
+  # ADVISOR MODELS (High-Quality)
+  # ==========================================
+
+  - model_name: advisor/council
+    litellm_params:
+      model: anthropic/claude-opus-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      tier: "advisor"
+      use_case: "Advisor council strategic decisions"
+      priority: 1
+
+  - model_name: advisor/consultation
+    litellm_params:
+      model: anthropic/claude-sonnet-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      tier: "advisor"
+      use_case: "1-on-1 advisor consultations"
+      priority: 2
+
+  # ==========================================
+  # FALLBACK MODELS
+  # ==========================================
+
+  - model_name: fallback/primary
+    litellm_params:
+      model: anthropic/claude-sonnet-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      tier: "fallback"
+      use_case: "Primary fallback for any failed request"
+
+# ============================================
+# ROUTER SETTINGS
+# ============================================
+
+router_settings:
+  # Routing strategy
+  routing_strategy: "usage-based-routing-v2"
+
+  # Enable fallbacks
+  enable_pre_call_checks: true
+  allowed_fails: 3
+
+  # Rate limiting (per model)
+  rpm: 50
+  tpm: 100000
+
+  # Retry settings
+  num_retries: 2
+  timeout: 300
+
+  # Model fallback order
+  fallbacks:
+    - ["coding/expert", "coding/fast", "fallback/primary"]
+    - ["reasoning/complex", "reasoning/fast", "fallback/primary"]
+    - ["general/premium", "general/balanced", "general/fast"]
+    - ["advisor/council", "advisor/consultation", "fallback/primary"]
+
+# ============================================
+# GENERAL SETTINGS
+# ============================================
+
+general_settings:
+  # Master key for API access
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+  # Database for logging and caching
+  database_url: os.environ/DATABASE_URL
+
+  # Redis for caching
+  redis_host: os.environ/REDIS_HOST
+  redis_port: os.environ/REDIS_PORT
+  cache: true
+  cache_responses: true
+
+  # Logging
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+
+  # Cost tracking
+  max_budget: 1000.0  # $1000 per month
+  budget_duration: "30d"
+
+# ============================================
+# LITELLM SETTINGS
+# ============================================
+
+litellm_settings:
+  # Drop request params not supported by model
+  drop_params: true
+
+  # Set default model if none specified
+  default_model: "general/balanced"
+
+  # Enable semantic caching (cache similar prompts)
+  enable_semantic_cache: true
+
+  # Prompt injection detection
+  enable_guardrails: true

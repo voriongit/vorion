@@ -1,0 +1,47 @@
+# Fly.io Configuration for Aurais API
+# https://fly.io/docs/reference/configuration/
+
+app = "aurais-api"
+primary_region = "iad"  # US East (Washington DC) - change as needed
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  DATA_DIR = "/data"  # Persistent storage directory
+
+[mounts]
+  source = "aurais_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true   # Stop when no traffic (cost saving)
+  auto_start_machines = true  # Start on incoming request
+  min_machines_running = 0    # Allow scaling to 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+# Only 1 machine when using volumes (volumes are per-machine)
+[deploy]
+  strategy = "immediate"
+
+[checks]
+  [checks.health]
+    port = 8080
+    type = "http"
+    interval = "30s"
+    timeout = "5s"
+    path = "/health"
+    method = "GET"

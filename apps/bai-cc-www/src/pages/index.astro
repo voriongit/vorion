@@ -1,0 +1,317 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ProjectCard from '../components/ProjectCard.astro';
+import PackageCard from '../components/PackageCard.astro';
+import LiveSiteCard from '../components/LiveSiteCard.astro';
+
+const projects = [
+  {
+    title: 'Vorion Platform',
+    description: 'Enterprise AI governance platform providing trust scoring, policy enforcement, audit trails, and human oversight for autonomous AI systems.',
+    href: '/projects/vorion',
+    status: 'active' as const,
+    icon: '🏛️',
+    tags: ['Enterprise', 'Governance', 'Trust'],
+  },
+  {
+    title: 'AgentAnchor',
+    description: 'B2B platform for AI agent trust and compliance. Manage agent permissions, monitor behavior, and ensure regulatory compliance.',
+    href: '/projects/agentanchor',
+    status: 'live' as const,
+    icon: '⚓',
+    liveUrl: 'https://app.agentanchorai.com',
+    tags: ['B2B', 'Compliance', 'Dashboard'],
+  },
+  {
+    title: 'BASIS Standard',
+    description: 'Open governance standard for AI agents. Defines 6-tier trust levels, behavioral scoring, and policy enforcement protocols.',
+    href: '/projects/basis',
+    status: 'shipped' as const,
+    icon: '📐',
+    tags: ['Standard', 'Open Source', 'v1.0.0'],
+  },
+  {
+    title: 'ATSF Framework',
+    description: 'Agentic Trust Scoring Framework - Core runtime for behavioral trust calculation, decay algorithms, and recovery mechanisms.',
+    href: '/projects/atsf',
+    status: 'active' as const,
+    icon: '🔬',
+    tags: ['SDK', 'Trust Engine', 'Runtime'],
+  },
+  {
+    title: 'Aurais',
+    description: 'AI assistant with integrated governance. Mission control for AI agents with real-time monitoring and human-in-the-loop approval workflows.',
+    href: '/projects/aurais',
+    status: 'live' as const,
+    icon: '🤖',
+    liveUrl: 'https://aurais.agentanchorai.com',
+    tags: ['AI Assistant', 'Mission Control'],
+  },
+  {
+    title: 'Cognigate',
+    description: 'BASIS Governance Runtime API. Real-time policy evaluation, intent processing, and enforcement for AI agent operations.',
+    href: '/projects/cognigate',
+    status: 'active' as const,
+    icon: '🚪',
+    tags: ['API', 'Runtime', 'Enforcement'],
+  },
+  {
+    title: 'Learn Vorion',
+    description: 'Educational platform for AI governance. Tutorials, documentation, and interactive courses on building trustworthy AI systems.',
+    href: '/projects/learn-vorion',
+    status: 'development' as const,
+    icon: '📚',
+    tags: ['Education', 'Documentation'],
+  },
+];
+
+const liveSites = [
+  {
+    title: 'AgentAnchor App',
+    description: 'Enterprise dashboard for AI agent governance',
+    url: 'https://app.agentanchorai.com',
+    status: 'online' as const,
+  },
+  {
+    title: 'Aurais Assistant',
+    description: 'AI assistant with mission control',
+    url: 'https://aurais.agentanchorai.com',
+    status: 'online' as const,
+  },
+  {
+    title: 'BASIS Standard',
+    description: 'Open governance specification',
+    url: 'https://basis.vorion.org',
+    status: 'online' as const,
+  },
+  {
+    title: 'Cognigate API',
+    description: 'Governance runtime endpoint',
+    url: 'https://cognigate.vorion.org',
+    status: 'beta' as const,
+  },
+  {
+    title: 'Learn Vorion',
+    description: 'AI governance education',
+    url: 'https://learn.vorion.org',
+    status: 'coming-soon' as const,
+  },
+];
+
+const packages = [
+  {
+    name: '@vorion/ai-gateway',
+    description: 'Multi-provider AI routing with intelligent model selection, PII detection, and cost optimization.',
+    features: [
+      '4-tier routing: Privacy → Task → Green → Cost',
+      'Automatic PII detection and redaction',
+      'Carbon-aware sustainable routing',
+      'Support for OpenAI, Anthropic, Gemini, Ollama',
+    ],
+  },
+  {
+    name: '@vorion/council',
+    description: '16-agent governance orchestration system for AI oversight, compliance, and quality assurance.',
+    features: [
+      'Master Planner for task decomposition',
+      '4 parallel compliance agents (PII, ethics, policy)',
+      'QA critique with revision loops',
+      'Human-gateway escalation workflow',
+    ],
+  },
+  {
+    name: '@vorionsys/atsf-core',
+    description: 'Core runtime for the Agentic Trust Scoring Framework with behavioral trust calculation.',
+    features: [
+      '6-tier trust levels per BASIS spec',
+      'Accelerated decay on failures',
+      'Recovery mechanisms for trust restoration',
+      'Event emission for observability',
+    ],
+  },
+  {
+    name: '@vorion/agent-sdk',
+    description: 'TypeScript SDK for connecting AI agents to Aurais Mission Control.',
+    features: [
+      'WebSocket connection with auto-reconnect',
+      'Task assignment and progress reporting',
+      'Human approval request workflow',
+      'Type-safe event handling',
+    ],
+  },
+];
+---
+
+<BaseLayout title="Home">
+  <!-- Hero Section -->
+  <section class="relative overflow-hidden">
+    <!-- Background gradient -->
+    <div class="absolute inset-0 bg-gradient-to-b from-vorion-500/10 via-transparent to-transparent"></div>
+    <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-vorion-500/20 via-transparent to-transparent"></div>
+
+    <!-- Grid pattern -->
+    <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23334155%22%20fill-opacity%3D%220.15%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-50"></div>
+
+    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 sm:py-32">
+      <div class="text-center max-w-4xl mx-auto">
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-vorion-500/10 border border-vorion-500/20 text-vorion-400 text-sm font-medium mb-8">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          3 Platforms Live
+        </div>
+
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
+          Building the Future of
+          <span class="bg-gradient-to-r from-vorion-400 to-accent-cyan bg-clip-text text-transparent">
+            AI Governance
+          </span>
+        </h1>
+
+        <p class="text-xl text-slate-400 leading-relaxed mb-10 max-w-2xl mx-auto">
+          Enterprise trust, compliance, and oversight for autonomous AI systems.
+          Open standards. Production-ready tooling. Human-in-the-loop workflows.
+        </p>
+
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a
+            href="/projects"
+            class="w-full sm:w-auto px-8 py-3 rounded-xl bg-vorion-500 hover:bg-vorion-600 text-white font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            View Projects
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </a>
+          <a
+            href="https://github.com/voriongit"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="w-full sm:w-auto px-8 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
+            </svg>
+            GitHub
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live Sites Section -->
+  <section class="py-16 sm:py-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">Live Platforms</h2>
+          <p class="text-slate-400">Production deployments and services</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {liveSites.map(site => (
+          <LiveSiteCard {...site} />
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Projects Section -->
+  <section class="py-16 sm:py-20 bg-slate-900/30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">Projects</h2>
+          <p class="text-slate-400">The Vorion AI Governance ecosystem</p>
+        </div>
+        <a
+          href="/projects"
+          class="hidden sm:flex items-center gap-1 text-vorion-400 hover:text-vorion-300 transition-colors"
+        >
+          View all
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </a>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {projects.map(project => (
+          <ProjectCard {...project} />
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Packages Section -->
+  <section class="py-16 sm:py-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">Open Source Packages</h2>
+          <p class="text-slate-400">Production-ready SDKs and libraries</p>
+        </div>
+        <a
+          href="/packages"
+          class="hidden sm:flex items-center gap-1 text-vorion-400 hover:text-vorion-300 transition-colors"
+        >
+          View all
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </a>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {packages.map(pkg => (
+          <PackageCard {...pkg} />
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture Preview -->
+  <section class="py-16 sm:py-20 bg-slate-900/30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <h2 class="text-2xl sm:text-3xl font-bold text-white mb-4">6-Tier Trust Architecture</h2>
+        <p class="text-slate-400 max-w-2xl mx-auto">
+          The BASIS standard defines six trust levels for AI agents, from sandboxed newcomers to fully autonomous systems.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {[
+          { level: 0, name: 'Sandbox', score: '0-99', color: 'from-slate-600 to-slate-700' },
+          { level: 1, name: 'Provisional', score: '100-299', color: 'from-slate-500 to-slate-600' },
+          { level: 2, name: 'Standard', score: '300-499', color: 'from-vorion-600 to-vorion-700' },
+          { level: 3, name: 'Trusted', score: '500-699', color: 'from-vorion-500 to-vorion-600' },
+          { level: 4, name: 'Certified', score: '700-899', color: 'from-emerald-600 to-emerald-700' },
+          { level: 5, name: 'Autonomous', score: '900-1000', color: 'from-emerald-500 to-emerald-600' },
+        ].map(tier => (
+          <div class="p-4 rounded-xl bg-slate-900/50 border border-slate-800 text-center">
+            <div class:list={[
+              'w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br',
+              tier.color
+            ]}>
+              L{tier.level}
+            </div>
+            <h3 class="font-semibold text-white text-sm mb-1">{tier.name}</h3>
+            <p class="text-xs text-slate-500">{tier.score}</p>
+          </div>
+        ))}
+      </div>
+
+      <div class="text-center mt-8">
+        <a
+          href="/architecture"
+          class="inline-flex items-center gap-2 text-vorion-400 hover:text-vorion-300 transition-colors"
+        >
+          Explore the full architecture
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

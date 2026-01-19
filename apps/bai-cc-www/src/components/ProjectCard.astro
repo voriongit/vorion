@@ -1,0 +1,78 @@
+---
+interface Props {
+  title: string;
+  description: string;
+  href: string;
+  status: 'live' | 'active' | 'shipped' | 'development';
+  icon?: string;
+  liveUrl?: string;
+  tags?: string[];
+}
+
+const { title, description, href, status, icon, liveUrl, tags = [] } = Astro.props;
+
+const statusColors = {
+  live: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  active: 'bg-vorion-500/20 text-vorion-400 border-vorion-500/30',
+  shipped: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  development: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+};
+
+const statusLabels = {
+  live: 'Live',
+  active: 'Active',
+  shipped: 'Shipped',
+  development: 'In Development',
+};
+---
+
+<a
+  href={href}
+  class="group block p-6 rounded-2xl bg-slate-900/50 border border-slate-800 hover:border-vorion-500/50 hover:bg-slate-900 transition-all duration-300"
+>
+  <div class="flex items-start justify-between mb-4">
+    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-vorion-500/20 to-accent-cyan/20 border border-vorion-500/20 flex items-center justify-center text-2xl">
+      {icon || '🚀'}
+    </div>
+    <span class:list={['px-2.5 py-1 text-xs font-medium rounded-full border', statusColors[status]]}>
+      {statusLabels[status]}
+    </span>
+  </div>
+
+  <h3 class="text-xl font-semibold text-white mb-2 group-hover:text-vorion-400 transition-colors">
+    {title}
+  </h3>
+
+  <p class="text-slate-400 text-sm leading-relaxed mb-4">
+    {description}
+  </p>
+
+  {tags.length > 0 && (
+    <div class="flex flex-wrap gap-2 mb-4">
+      {tags.map(tag => (
+        <span class="px-2 py-1 text-xs font-medium rounded-md bg-slate-800 text-slate-400">
+          {tag}
+        </span>
+      ))}
+    </div>
+  )}
+
+  <div class="flex items-center justify-between">
+    <span class="text-sm text-vorion-400 group-hover:text-vorion-300 transition-colors flex items-center gap-1">
+      Learn more
+      <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+      </svg>
+    </span>
+
+    {liveUrl && (
+      <span
+        class="text-xs text-slate-500 flex items-center gap-1"
+        onclick="event.preventDefault(); event.stopPropagation(); window.open('{liveUrl}', '_blank');"
+      >
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        Live
+      </span>
+    )}
+  </div>
+</a>

@@ -1,0 +1,212 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const trustLevels = [
+  { level: 0, name: 'Sandbox', score: '0-99', description: 'New agents with no track record. Heavily restricted capabilities.', capabilities: ['Read-only access', 'No external calls', 'Sandboxed execution'] },
+  { level: 1, name: 'Provisional', score: '100-299', description: 'Agents building trust. Limited capabilities with oversight.', capabilities: ['Basic operations', 'Supervised external calls', 'Logging required'] },
+  { level: 2, name: 'Standard', score: '300-499', description: 'Established agents with good track record.', capabilities: ['Standard operations', 'External API access', 'Self-reporting'] },
+  { level: 3, name: 'Trusted', score: '500-699', description: 'High-trust agents with proven compliance.', capabilities: ['Extended operations', 'Cross-agent communication', 'Reduced oversight'] },
+  { level: 4, name: 'Certified', score: '700-899', description: 'Certified agents with audit trails.', capabilities: ['Administrative tasks', 'Agent spawning', 'Policy modification'] },
+  { level: 5, name: 'Autonomous', score: '900-1000', description: 'Fully autonomous agents with human-equivalent trust.', capabilities: ['Full autonomy', 'Self-governance', 'Emergency powers'] },
+];
+---
+
+<BaseLayout title="BASIS Standard" description="Open governance standard for AI agents - 6-tier trust levels, behavioral scoring, and policy enforcement">
+  <article class="py-16 sm:py-20">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="mb-12">
+        <a href="/projects" class="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white mb-6">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Projects
+        </a>
+
+        <div class="flex items-start gap-4 mb-6">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-vorion-500/20 to-accent-cyan/20 border border-vorion-500/20 flex items-center justify-center text-3xl">
+            📐
+          </div>
+          <div>
+            <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">BASIS Standard</h1>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                v1.0.0 Shipped
+              </span>
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                Open Source
+              </span>
+              <span class="text-sm text-slate-500">MIT License</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-xl text-slate-400 leading-relaxed">
+          Behavioral AI Safety and Integrity Standard - An open specification for AI agent governance,
+          defining trust tiers, behavioral scoring, and policy enforcement protocols.
+        </p>
+      </div>
+
+      <!-- Links -->
+      <div class="flex flex-wrap gap-4 mb-12 p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+        <a
+          href="https://github.com/voriongit/basis"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+        >
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
+          </svg>
+          View on GitHub
+        </a>
+        <a
+          href="https://basis.vorion.org"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-vorion-500 hover:bg-vorion-600 text-white transition-colors"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          Visit basis.vorion.org
+        </a>
+      </div>
+
+      <!-- Overview -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-4">Overview</h2>
+        <div class="prose prose-invert prose-slate max-w-none">
+          <p class="text-slate-400 leading-relaxed mb-4">
+            BASIS (Behavioral AI Safety and Integrity Standard) is an open governance specification
+            designed to bring trust, accountability, and oversight to autonomous AI systems. It provides
+            a framework for evaluating, scoring, and managing AI agent behavior in production environments.
+          </p>
+          <p class="text-slate-400 leading-relaxed">
+            The standard defines a 6-tier trust system, behavioral signal processing, decay algorithms
+            for trust score maintenance, and recovery mechanisms for agents demonstrating improved behavior.
+          </p>
+        </div>
+      </section>
+
+      <!-- Trust Levels -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-6">6-Tier Trust System</h2>
+        <div class="space-y-4">
+          {trustLevels.map(tier => (
+            <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+              <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-vorion-500/30 to-accent-cyan/30 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+                  L{tier.level}
+                </div>
+                <div class="flex-grow">
+                  <div class="flex items-center gap-3 mb-2">
+                    <h3 class="text-lg font-semibold text-white">{tier.name}</h3>
+                    <span class="px-2 py-0.5 text-xs font-mono rounded bg-slate-800 text-slate-400">
+                      {tier.score} points
+                    </span>
+                  </div>
+                  <p class="text-slate-400 text-sm mb-3">{tier.description}</p>
+                  <div class="flex flex-wrap gap-2">
+                    {tier.capabilities.map(cap => (
+                      <span class="px-2 py-1 text-xs rounded bg-slate-800/50 text-slate-500">
+                        {cap}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <!-- Key Features -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-6">Key Features</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Behavioral Scoring</h3>
+            <p class="text-sm text-slate-400">
+              Four-component trust calculation: Behavioral (40%), Compliance (25%), Identity (20%), Context (15%).
+              Time-weighted signal processing with 7-day half-life.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Decay Algorithms</h3>
+            <p class="text-sm text-slate-400">
+              Trust scores decay over time without activity. Accelerated decay triggers after multiple failures.
+              Configurable decay rates and windows.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Recovery Mechanisms</h3>
+            <p class="text-sm text-slate-400">
+              Agents can recover trust through consistent positive behavior. Accelerated recovery after
+              consecutive successes. Milestone events for tier restoration.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Event Emission</h3>
+            <p class="text-sm text-slate-400">
+              Full observability through event emission. Track score changes, tier transitions, decay application,
+              and recovery milestones in real-time.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Implementation -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-4">Implementation</h2>
+        <p class="text-slate-400 mb-6">
+          The reference implementation is available in the <code class="px-2 py-1 rounded bg-slate-800 text-vorion-400 text-sm">@vorionsys/atsf-core</code> package.
+        </p>
+        <div class="rounded-xl bg-slate-900 border border-slate-800 overflow-hidden">
+          <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700 flex items-center gap-2">
+            <span class="text-sm text-slate-400">TypeScript</span>
+          </div>
+          <pre class="p-4 text-sm overflow-x-auto"><code class="text-slate-300">import {'{'} TrustEngine, TRUST_LEVEL_NAMES {'}'} from '@vorionsys/atsf-core/trust-engine';
+
+const engine = new TrustEngine({'{'}
+  decayRate: 0.01,
+  failureThreshold: 0.3,
+  recoveryRate: 0.02,
+{'}'});
+
+// Initialize an agent at L1 (Provisional)
+await engine.initializeEntity('agent_123', 1);
+
+// Record behavioral signals
+await engine.recordSignal({'{'}
+  entityId: 'agent_123',
+  type: 'behavioral.task_completed',
+  value: 0.9,
+  timestamp: new Date().toISOString(),
+{'}'});
+
+// Get current trust score
+const record = await engine.getScore('agent_123');
+console.log(`Trust Level: ${'{'}TRUST_LEVEL_NAMES[record.level]{'}'}`);
+console.log(`Score: ${'{'}record.score{'}'}/1000`);</code></pre>
+        </div>
+      </section>
+
+      <!-- Related -->
+      <section>
+        <h2 class="text-2xl font-bold text-white mb-4">Related Projects</h2>
+        <div class="flex flex-wrap gap-4">
+          <a href="/projects/atsf" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            ATSF Framework
+          </a>
+          <a href="/projects/cognigate" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            Cognigate Runtime
+          </a>
+          <a href="/packages#atsf-core" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            @vorionsys/atsf-core
+          </a>
+        </div>
+      </section>
+    </div>
+  </article>
+</BaseLayout>

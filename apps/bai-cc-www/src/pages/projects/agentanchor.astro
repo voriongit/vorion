@@ -1,0 +1,255 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="AgentAnchor" description="B2B platform for AI agent trust and compliance - Enterprise governance dashboard">
+  <article class="py-16 sm:py-20">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="mb-12">
+        <a href="/projects" class="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white mb-6">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Projects
+        </a>
+
+        <div class="flex items-start gap-4 mb-6">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-vorion-500/20 to-accent-cyan/20 border border-vorion-500/20 flex items-center justify-center text-3xl">
+            ⚓
+          </div>
+          <div>
+            <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">AgentAnchor</h1>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Live
+              </span>
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                README Available
+              </span>
+              <span class="text-sm text-slate-500">Proprietary</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-xl text-slate-400 leading-relaxed">
+          B2B enterprise platform for AI agent governance. Manage agent trust, monitor behavior,
+          enforce compliance policies, and maintain audit trails across your organization.
+        </p>
+      </div>
+
+      <!-- Links -->
+      <div class="flex flex-wrap gap-4 mb-12 p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+        <a
+          href="https://app.agentanchorai.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-vorion-500 hover:bg-vorion-600 text-white transition-colors"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          Open AgentAnchor
+        </a>
+        <a
+          href="https://agentanchorai.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+        >
+          Marketing Site
+        </a>
+      </div>
+
+      <!-- Notice -->
+      <div class="mb-12 p-6 rounded-xl bg-amber-500/10 border border-amber-500/30">
+        <div class="flex items-start gap-3">
+          <svg class="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <h3 class="font-semibold text-amber-400 mb-1">Proprietary Software</h3>
+            <p class="text-sm text-amber-200/70">
+              AgentAnchor is commercial software. This page provides detailed documentation
+              about functionality and architecture for transparency. The underlying SDK packages
+              used by AgentAnchor are open source.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overview -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-4">Overview</h2>
+        <div class="prose prose-invert prose-slate max-w-none">
+          <p class="text-slate-400 leading-relaxed mb-4">
+            AgentAnchor is the enterprise-facing platform of the Vorion ecosystem. It provides
+            organizations with a centralized dashboard to manage, monitor, and govern their
+            AI agent deployments. Built on the open BASIS standard and ATSF framework.
+          </p>
+          <p class="text-slate-400 leading-relaxed">
+            The platform enables compliance teams, security officers, and AI operations managers
+            to maintain oversight of autonomous systems without impeding their productivity.
+          </p>
+        </div>
+      </section>
+
+      <!-- Features -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-6">Key Features</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="w-10 h-10 rounded-lg bg-vorion-500/20 flex items-center justify-center text-xl mb-4">
+              📊
+            </div>
+            <h3 class="font-semibold text-white mb-2">Trust Dashboard</h3>
+            <p class="text-sm text-slate-400">
+              Real-time visualization of agent trust scores across your organization.
+              Filter by team, project, or trust tier. Identify at-risk agents before issues occur.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="w-10 h-10 rounded-lg bg-vorion-500/20 flex items-center justify-center text-xl mb-4">
+              🔒
+            </div>
+            <h3 class="font-semibold text-white mb-2">Policy Enforcement</h3>
+            <p class="text-sm text-slate-400">
+              Define and enforce governance policies at organization, team, and agent levels.
+              Automatic policy evaluation via Cognigate integration.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="w-10 h-10 rounded-lg bg-vorion-500/20 flex items-center justify-center text-xl mb-4">
+              👥
+            </div>
+            <h3 class="font-semibold text-white mb-2">Human-in-the-Loop</h3>
+            <p class="text-sm text-slate-400">
+              Review and approve high-risk agent actions. Escalation workflows route
+              decisions to appropriate stakeholders based on severity.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="w-10 h-10 rounded-lg bg-vorion-500/20 flex items-center justify-center text-xl mb-4">
+              📜
+            </div>
+            <h3 class="font-semibold text-white mb-2">Audit Trails</h3>
+            <p class="text-sm text-slate-400">
+              Complete audit trail of all agent actions, decisions, and trust changes.
+              Exportable reports for compliance and regulatory requirements.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="w-10 h-10 rounded-lg bg-vorion-500/20 flex items-center justify-center text-xl mb-4">
+              🔔
+            </div>
+            <h3 class="font-semibold text-white mb-2">Alerting</h3>
+            <p class="text-sm text-slate-400">
+              Configurable alerts for trust score drops, policy violations, and
+              escalation timeouts. Integrates with Slack, PagerDuty, and webhooks.
+            </p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="w-10 h-10 rounded-lg bg-vorion-500/20 flex items-center justify-center text-xl mb-4">
+              🏢
+            </div>
+            <h3 class="font-semibold text-white mb-2">Multi-Tenant</h3>
+            <p class="text-sm text-slate-400">
+              Enterprise multi-tenancy with team isolation, SSO integration, and
+              role-based access control. SOC 2 Type II compliant infrastructure.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Architecture -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-4">Architecture</h2>
+        <p class="text-slate-400 mb-6">
+          AgentAnchor is built on open source foundations:
+        </p>
+        <div class="rounded-xl bg-slate-900/50 border border-slate-800 p-6">
+          <div class="space-y-4">
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-sm font-bold flex-shrink-0">
+                OS
+              </div>
+              <div>
+                <h4 class="font-medium text-white">@vorionsys/atsf-core</h4>
+                <p class="text-sm text-slate-400">Trust engine, behavioral scoring, decay algorithms</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-sm font-bold flex-shrink-0">
+                OS
+              </div>
+              <div>
+                <h4 class="font-medium text-white">@vorion/agent-sdk</h4>
+                <p class="text-sm text-slate-400">Agent connection, task management, approval workflows</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-sm font-bold flex-shrink-0">
+                OS
+              </div>
+              <div>
+                <h4 class="font-medium text-white">@vorion/a3i</h4>
+                <p class="text-sm text-slate-400">Authorization hooks, execution tracking, orchestration</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded bg-amber-500/20 flex items-center justify-center text-amber-400 text-sm font-bold flex-shrink-0">
+                P
+              </div>
+              <div>
+                <h4 class="font-medium text-white">AgentAnchor Web</h4>
+                <p class="text-sm text-slate-400">Next.js dashboard, API layer, authentication (Proprietary)</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pricing -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-4">Pricing</h2>
+        <p class="text-slate-400 mb-6">
+          AgentAnchor offers flexible pricing for organizations of all sizes.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Starter</h3>
+            <p class="text-2xl font-bold text-white mb-2">Free</p>
+            <p class="text-sm text-slate-400">Up to 5 agents, basic dashboard</p>
+          </div>
+          <div class="p-6 rounded-xl bg-vorion-500/10 border border-vorion-500/30">
+            <h3 class="font-semibold text-vorion-400 mb-2">Team</h3>
+            <p class="text-2xl font-bold text-white mb-2">$99/mo</p>
+            <p class="text-sm text-slate-400">Up to 50 agents, full features</p>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Enterprise</h3>
+            <p class="text-2xl font-bold text-white mb-2">Custom</p>
+            <p class="text-sm text-slate-400">Unlimited agents, SSO, SLA</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Related -->
+      <section>
+        <h2 class="text-2xl font-bold text-white mb-4">Related Projects</h2>
+        <div class="flex flex-wrap gap-4">
+          <a href="/projects/aurais" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            Aurais Assistant
+          </a>
+          <a href="/projects/basis" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            BASIS Standard
+          </a>
+          <a href="/packages#agent-sdk" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            @vorion/agent-sdk
+          </a>
+        </div>
+      </section>
+    </div>
+  </article>
+</BaseLayout>

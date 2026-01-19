@@ -1,0 +1,202 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const projects = [
+  {
+    title: 'Vorion Platform',
+    description: 'Enterprise AI governance platform providing trust scoring, policy enforcement, audit trails, and human oversight for autonomous AI systems.',
+    href: '/projects/vorion',
+    status: 'active',
+    icon: '🏛️',
+    license: 'Proprietary',
+    openSource: false,
+    readmeAvailable: true,
+    tags: ['Enterprise', 'Governance', 'Trust'],
+  },
+  {
+    title: 'AgentAnchor',
+    description: 'B2B platform for AI agent trust and compliance. Manage agent permissions, monitor behavior, and ensure regulatory compliance.',
+    href: '/projects/agentanchor',
+    status: 'live',
+    icon: '⚓',
+    license: 'Proprietary',
+    openSource: false,
+    readmeAvailable: true,
+    liveUrl: 'https://app.agentanchorai.com',
+    tags: ['B2B', 'Compliance', 'Dashboard'],
+  },
+  {
+    title: 'BASIS Standard',
+    description: 'Open governance standard for AI agents. Defines 6-tier trust levels, behavioral scoring, and policy enforcement protocols.',
+    href: '/projects/basis',
+    status: 'shipped',
+    icon: '📐',
+    license: 'MIT',
+    openSource: true,
+    githubUrl: 'https://github.com/voriongit/basis',
+    tags: ['Standard', 'Open Source', 'v1.0.0'],
+  },
+  {
+    title: 'ATSF Framework',
+    description: 'Agentic Trust Scoring Framework - Core runtime for behavioral trust calculation, decay algorithms, and recovery mechanisms.',
+    href: '/projects/atsf',
+    status: 'active',
+    icon: '🔬',
+    license: 'MIT',
+    openSource: true,
+    githubUrl: 'https://github.com/voriongit/atsf-core',
+    tags: ['SDK', 'Trust Engine', 'Runtime'],
+  },
+  {
+    title: 'Aurais',
+    description: 'AI assistant with integrated governance. Mission control for AI agents with real-time monitoring and human-in-the-loop approval workflows.',
+    href: '/projects/aurais',
+    status: 'live',
+    icon: '🤖',
+    license: 'Proprietary',
+    openSource: false,
+    readmeAvailable: true,
+    liveUrl: 'https://aurais.agentanchorai.com',
+    tags: ['AI Assistant', 'Mission Control'],
+  },
+  {
+    title: 'Cognigate',
+    description: 'BASIS Governance Runtime API. Real-time policy evaluation, intent processing, and enforcement for AI agent operations.',
+    href: '/projects/cognigate',
+    status: 'active',
+    icon: '🚪',
+    license: 'MIT',
+    openSource: true,
+    githubUrl: 'https://github.com/voriongit/cognigate',
+    tags: ['API', 'Runtime', 'Enforcement'],
+  },
+  {
+    title: 'Learn Vorion',
+    description: 'Educational platform for AI governance. Tutorials, documentation, and interactive courses on building trustworthy AI systems.',
+    href: '/projects/learn-vorion',
+    status: 'development',
+    icon: '📚',
+    license: 'CC BY-SA 4.0',
+    openSource: true,
+    githubUrl: 'https://github.com/voriongit/learn-vorion',
+    tags: ['Education', 'Documentation'],
+  },
+];
+
+const statusColors: Record<string, string> = {
+  live: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  active: 'bg-vorion-500/20 text-vorion-400 border-vorion-500/30',
+  shipped: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  development: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+};
+
+const statusLabels: Record<string, string> = {
+  live: 'Live',
+  active: 'Active',
+  shipped: 'Shipped',
+  development: 'In Development',
+};
+---
+
+<BaseLayout title="Projects" description="The Vorion AI Governance ecosystem - platforms, standards, and tools for trustworthy AI">
+  <section class="py-16 sm:py-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="max-w-3xl mb-12">
+        <h1 class="text-3xl sm:text-4xl font-bold text-white mb-4">Projects</h1>
+        <p class="text-lg text-slate-400 leading-relaxed">
+          The Vorion ecosystem includes open standards, commercial platforms, and developer tools.
+          We believe in transparency - open source projects include full source code, and proprietary
+          projects include detailed READMEs explaining functionality.
+        </p>
+      </div>
+
+      <!-- Legend -->
+      <div class="flex flex-wrap gap-4 mb-8 p-4 rounded-xl bg-slate-900/50 border border-slate-800">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-medium">Open Source</span>
+          <span class="text-slate-400">Full source code on GitHub</span>
+        </div>
+        <div class="flex items-center gap-2 text-sm">
+          <span class="px-2 py-1 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-medium">README Available</span>
+          <span class="text-slate-400">Detailed documentation for proprietary projects</span>
+        </div>
+      </div>
+
+      <!-- Projects Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {projects.map(project => (
+          <a
+            href={project.href}
+            class="group block p-6 rounded-2xl bg-slate-900/50 border border-slate-800 hover:border-vorion-500/50 hover:bg-slate-900 transition-all duration-300"
+          >
+            <div class="flex items-start justify-between mb-4">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-vorion-500/20 to-accent-cyan/20 border border-vorion-500/20 flex items-center justify-center text-2xl">
+                  {project.icon}
+                </div>
+                <div>
+                  <h2 class="text-xl font-semibold text-white group-hover:text-vorion-400 transition-colors">
+                    {project.title}
+                  </h2>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span class:list={['px-2 py-0.5 text-xs font-medium rounded border', statusColors[project.status]]}>
+                      {statusLabels[project.status]}
+                    </span>
+                    <span class="text-xs text-slate-500">{project.license}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <p class="text-slate-400 text-sm leading-relaxed mb-4">
+              {project.description}
+            </p>
+
+            <div class="flex flex-wrap gap-2 mb-4">
+              {project.tags.map(tag => (
+                <span class="px-2 py-1 text-xs font-medium rounded-md bg-slate-800 text-slate-400">
+                  {tag}
+                </span>
+              ))}
+            </div>
+
+            <div class="flex items-center justify-between pt-4 border-t border-slate-800">
+              <div class="flex items-center gap-3">
+                {project.openSource && project.githubUrl && (
+                  <span class="flex items-center gap-1 text-xs text-emerald-400">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
+                    </svg>
+                    Open Source
+                  </span>
+                )}
+                {!project.openSource && project.readmeAvailable && (
+                  <span class="flex items-center gap-1 text-xs text-amber-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    README Available
+                  </span>
+                )}
+                {project.liveUrl && (
+                  <span class="flex items-center gap-1 text-xs text-slate-500">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Live
+                  </span>
+                )}
+              </div>
+
+              <span class="text-sm text-vorion-400 group-hover:text-vorion-300 transition-colors flex items-center gap-1">
+                Details
+                <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </span>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+</BaseLayout>

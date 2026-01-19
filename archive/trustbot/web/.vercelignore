@@ -1,0 +1,3 @@
+# Ignore the api folder - using Fly.io for backend
+api/
+api-backup/

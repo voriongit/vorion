@@ -1,0 +1,63 @@
+{
+  "name": "@vorion/agent-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for connecting AI agents to Aurais Mission Control",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "aurais",
+    "vorion",
+    "ai-agent",
+    "mission-control",
+    "websocket",
+    "sdk",
+    "governance"
+  ],
+  "author": "Vorion",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/voriongit/vorion.git",
+    "directory": "packages/agent-sdk"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "eventemitter3": "^5.0.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  }
+}

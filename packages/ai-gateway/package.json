@@ -1,0 +1,49 @@
+{
+  "name": "@vorion/ai-gateway",
+  "version": "0.1.0",
+  "description": "Multi-provider AI Gateway with intelligent routing, privacy protection, sustainability tracking, and cost optimization",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "nanoid": "^5.0.0",
+    "openai": "^4.73.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "peerDependencies": {
+    "@vorion/contracts": "*"
+  },
+  "peerDependenciesMeta": {
+    "@vorion/contracts": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "ai",
+    "gateway",
+    "multi-provider",
+    "routing",
+    "privacy",
+    "sustainability",
+    "carbon-tracking",
+    "pii-detection",
+    "vorion"
+  ],
+  "author": "Vorion",
+  "license": "MIT"
+}

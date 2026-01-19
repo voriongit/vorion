@@ -1,0 +1,48 @@
+# Dependencies
+node_modules
+web/node_modules
+
+# Build outputs (we build in Docker)
+dist
+web/dist
+
+# Development files
+.git
+.gitignore
+*.md
+README*
+LICENSE
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Test files
+coverage
+*.test.ts
+*.spec.ts
+vitest.config.ts
+
+# Local data
+trustbot-data
+trustbot-data.json
+.env.local
+
+# Temp files
+*.log
+.DS_Store
+Thumbs.db
+nul
+
+# BMAD files (not needed for API)
+.bmad*
+_bmad-output
+docs
+
+# Supabase local (not needed - uses cloud)
+supabase/.temp
+
+# Web frontend (separate deployment)
+web

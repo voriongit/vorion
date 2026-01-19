@@ -1,0 +1,50 @@
+{
+  "name": "@vorion/council",
+  "version": "0.1.0",
+  "description": "16-Agent Governance Council Orchestration System for AI oversight, compliance, and quality assurance",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "test": "vitest --passWithNoTests"
+  },
+  "dependencies": {
+    "@vorion/ai-gateway": "*",
+    "zod": "^3.24.1"
+  },
+  "peerDependencies": {
+    "@prisma/client": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@prisma/client": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.0.0"
+  },
+  "keywords": [
+    "ai",
+    "governance",
+    "council",
+    "orchestration",
+    "compliance",
+    "pii-detection",
+    "human-in-the-loop",
+    "vorion"
+  ],
+  "author": "Vorion",
+  "license": "MIT"
+}

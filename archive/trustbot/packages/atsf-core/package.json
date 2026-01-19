@@ -1,0 +1,100 @@
+{
+  "name": "@vorionsys/atsf-core",
+  "version": "0.1.0",
+  "description": "Agentic Trust Scoring Framework - Core runtime for AI agent governance",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./trust-engine": {
+      "types": "./dist/trust-engine/index.d.ts",
+      "import": "./dist/trust-engine/index.js"
+    },
+    "./basis": {
+      "types": "./dist/basis/index.d.ts",
+      "import": "./dist/basis/index.js"
+    },
+    "./intent": {
+      "types": "./dist/intent/index.d.ts",
+      "import": "./dist/intent/index.js"
+    },
+    "./enforce": {
+      "types": "./dist/enforce/index.d.ts",
+      "import": "./dist/enforce/index.js"
+    },
+    "./proof": {
+      "types": "./dist/proof/index.d.ts",
+      "import": "./dist/proof/index.js"
+    },
+    "./cognigate": {
+      "types": "./dist/cognigate/index.d.ts",
+      "import": "./dist/cognigate/index.js"
+    },
+    "./types": {
+      "types": "./dist/common/types.d.ts",
+      "import": "./dist/common/types.js"
+    },
+    "./persistence": {
+      "types": "./dist/persistence/index.d.ts",
+      "import": "./dist/persistence/index.js"
+    },
+    "./langchain": {
+      "types": "./dist/langchain/index.d.ts",
+      "import": "./dist/langchain/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "zod": "^3.24.1",
+    "fastify": "^5.0.0",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/helmet": "^12.0.0",
+    "@fastify/rate-limit": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0",
+    "@langchain/core": ">=0.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@langchain/core": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "trust",
+    "governance",
+    "atsf",
+    "vorion"
+  ],
+  "author": "Vorion",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/voriongit/vorion.git",
+    "directory": "packages/atsf-core"
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "user_registration_flow": {
+    "overview": "Complete user registration process from initial form submission to account activation",
+    "steps": [
+      {
+        "step": 1,
+        "name": "Registration Form Submission",
+        "description": "User submits registration form with required information",
+        "inputs": [
+          "email",
+          "password",
+          "confirm_password",
+          "first_name",
+          "last_name"
+        ],
+        "validation": "Client-side basic validation before submission"
+      },
+      {
+        "step": 2,
+        "name": "Input Validation",
+        "description": "Server-side validation of all submitted data",
+        "validations": {
+          "email": {
+            "format": "Valid email format using regex",
+            "length": "Maximum 254 characters",
+            "sanitization": "Trim whitespace, convert to lowercase"
+          },
+          "password": {
+            "length": "Minimum 8 characters, maximum 128 characters",
+            "complexity": "At least one uppercase, one lowercase, one number, one special character",
+            "forbidden": "No common passwords, no personal info"
+          },
+          "confirm_password": {
+            "match": "Must exactly match password field"
+          },
+          "names": {
+            "length": "2-50 characters each",
+            "format": "Letters, spaces, hyphens, apostrophes only",
+            "sanitization": "Trim whitespace, proper case formatting"
+          }
+        }
+      },
+      {
+        "step": 3,
+        "name": "Duplicate Checking",
+        "description": "Check if user already exists in the system",
+        "process": {
+          "email_check": "Query database for existing email (case-insensitive)",
+          "response": "Generic message for security (don't reveal if email exists)",
+          "action_if_duplicate": "Return error message, suggest password reset if needed"
+        }
+      },
+      {
+        "step": 4,
+        "name": "Account Creation",
+        "description": "Create new user account in database",
+        "process": {
+          "password_hashing": "Hash password using bcrypt with salt rounds 12",
+          "user_record": {
+            "fields": [
+              "id",
+              "email",
+              "password_hash",
+              "first_name",
+              "last_name",
+              "created_at",
+              "email_verified",
+              "verification_token"
+            ],
+            "initial_status": "email_verified: false"
+          },
+          "verification_token": "Generate secure random token for email verification"
+        }
+      },
+      {
+        "step": 5,
+        "name": "Email Verification",
+        "description": "Send confirmation email and handle verification",
+        "process": {
+          "email_content": {
+            "subject": "Verify your account",
+            "body": "Welcome message with verification link",
+            "link_format": "https://domain.com/verify-email?token={verification_token}&email={email}"
+          },
+          "token_expiry": "24 hours",
+          "verification_endpoint": "/api/verify-email",
+          "success_action": "Set email_verified: true, redirect to login page"
+        }
+      },
+      {
+        "step": 6,
+        "name": "Registration Response",
+        "description": "Provide feedback to user about registration status",
+        "responses": {
+          "success": "Account created successfully. Please check your email to verify your account.",
+          "validation_error": "Specific field errors with guidance",
+          "duplicate_error": "An account with this email already exists.",
+          "system_error": "Registration temporarily unavailable. Please try again later."
+        }
+      }
+    ],
+    "security_measures": {
+      "rate_limiting": "Maximum 5 registration attempts per IP per hour",
+      "csrf_protection": "CSRF tokens required for form submission",
+      "input_sanitization": "All inputs sanitized to prevent XSS",
+      "secure_tokens": "Cryptographically secure random tokens for verification",
+      "password_security": "Passwords never stored in plain text or logged"
+    },
+    "error_handling": {
+      "validation_errors": "Return specific field errors with HTTP 400",
+      "duplicate_email": "Return generic error with HTTP 409",
+      "server_errors": "Log error details, return generic message with HTTP 500",
+      "email_delivery_failure": "Log failure, allow user to resend verification"
+    },
+    "database_schema": {
+      "users_table": {
+        "id": "Primary key (UUID or auto-increment)",
+        "email": "Unique, indexed, varchar(254)",
+        "password_hash": "varchar(255)",
+        "first_name": "varchar(50)",
+        "last_name": "varchar(50)",
+        "email_verified": "boolean, default false",
+        "verification_token": "varchar(255), nullable",
+        "token_expires_at": "timestamp, nullable",
+        "created_at": "timestamp",
+        "updated_at": "timestamp"
+      }
+    }
+  }
+}

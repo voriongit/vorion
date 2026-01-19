@@ -1,0 +1,158 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Learn Vorion" description="Educational platform for AI governance - Tutorials and documentation">
+  <article class="py-16 sm:py-20">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="mb-12">
+        <a href="/projects" class="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white mb-6">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Projects
+        </a>
+
+        <div class="flex items-start gap-4 mb-6">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-vorion-500/20 to-accent-cyan/20 border border-vorion-500/20 flex items-center justify-center text-3xl">
+            📚
+          </div>
+          <div>
+            <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">Learn Vorion</h1>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-slate-500/20 text-slate-400 border border-slate-500/30">
+                In Development
+              </span>
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                Open Source
+              </span>
+              <span class="text-sm text-slate-500">CC BY-SA 4.0</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-xl text-slate-400 leading-relaxed">
+          Educational platform for AI governance. Tutorials, documentation, and interactive courses
+          on building trustworthy AI systems using the Vorion ecosystem.
+        </p>
+      </div>
+
+      <!-- Links -->
+      <div class="flex flex-wrap gap-4 mb-12 p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+        <a
+          href="https://github.com/voriongit/learn-vorion"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+        >
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
+          </svg>
+          View on GitHub
+        </a>
+        <span class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 text-slate-500">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Coming Soon
+        </span>
+      </div>
+
+      <!-- Coming Soon Notice -->
+      <div class="mb-12 p-8 rounded-xl bg-gradient-to-br from-vorion-500/10 to-accent-cyan/10 border border-vorion-500/20 text-center">
+        <div class="w-16 h-16 rounded-full bg-vorion-500/20 flex items-center justify-center text-3xl mx-auto mb-4">
+          🚧
+        </div>
+        <h3 class="text-xl font-semibold text-white mb-2">Under Construction</h3>
+        <p class="text-slate-400 max-w-md mx-auto">
+          We're building comprehensive learning resources for AI governance.
+          Star the repo to get notified when we launch!
+        </p>
+      </div>
+
+      <!-- Planned Content -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-6">Planned Content</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Getting Started</h3>
+            <ul class="text-sm text-slate-400 space-y-2">
+              <li>• Introduction to AI Governance</li>
+              <li>• Understanding Trust Levels</li>
+              <li>• Your First Governed Agent</li>
+              <li>• Policy Basics</li>
+            </ul>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Deep Dives</h3>
+            <ul class="text-sm text-slate-400 space-y-2">
+              <li>• Behavioral Scoring Algorithms</li>
+              <li>• Decay and Recovery Mechanics</li>
+              <li>• Policy Rule Authoring</li>
+              <li>• Audit Trail Analysis</li>
+            </ul>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Integration Guides</h3>
+            <ul class="text-sm text-slate-400 space-y-2">
+              <li>• LangChain Integration</li>
+              <li>• Custom Agent SDKs</li>
+              <li>• Enterprise Deployment</li>
+              <li>• Compliance Mapping</li>
+            </ul>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Reference</h3>
+            <ul class="text-sm text-slate-400 space-y-2">
+              <li>• API Documentation</li>
+              <li>• SDK Reference</li>
+              <li>• BASIS Specification</li>
+              <li>• Glossary</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Contribute -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-4">Contribute</h2>
+        <p class="text-slate-400 mb-6">
+          Learn Vorion is open source under CC BY-SA 4.0. We welcome contributions
+          from the community - whether it's fixing typos, improving explanations,
+          or creating new tutorials.
+        </p>
+        <a
+          href="https://github.com/voriongit/learn-vorion/blob/main/CONTRIBUTING.md"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 text-vorion-400 hover:text-vorion-300"
+        >
+          Read the contribution guide
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+      </section>
+
+      <!-- Related -->
+      <section>
+        <h2 class="text-2xl font-bold text-white mb-4">Start Learning Now</h2>
+        <p class="text-slate-400 mb-4">
+          While we build the learning platform, explore the existing documentation:
+        </p>
+        <div class="flex flex-wrap gap-4">
+          <a href="/projects/basis" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            BASIS Standard
+          </a>
+          <a href="/projects/atsf" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            ATSF Framework
+          </a>
+          <a href="/packages" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            Package Documentation
+          </a>
+        </div>
+      </section>
+    </div>
+  </article>
+</BaseLayout>

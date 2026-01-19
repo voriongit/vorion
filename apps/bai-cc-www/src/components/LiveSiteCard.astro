@@ -1,0 +1,50 @@
+---
+interface Props {
+  title: string;
+  description: string;
+  url: string;
+  status?: 'online' | 'beta' | 'coming-soon';
+}
+
+const { title, description, url, status = 'online' } = Astro.props;
+
+const statusConfig = {
+  online: { color: 'bg-emerald-500', label: 'Online', animate: true },
+  beta: { color: 'bg-amber-500', label: 'Beta', animate: true },
+  'coming-soon': { color: 'bg-slate-500', label: 'Coming Soon', animate: false },
+};
+
+const config = statusConfig[status];
+---
+
+<a
+  href={url}
+  target="_blank"
+  rel="noopener noreferrer"
+  class="group block p-5 rounded-xl bg-slate-900/50 border border-slate-800 hover:border-vorion-500/50 hover:bg-slate-900 transition-all duration-300"
+>
+  <div class="flex items-center justify-between mb-3">
+    <h3 class="font-semibold text-white group-hover:text-vorion-400 transition-colors">
+      {title}
+    </h3>
+    <div class="flex items-center gap-2">
+      <span class:list={[
+        'w-2 h-2 rounded-full',
+        config.color,
+        config.animate && 'animate-pulse'
+      ]}></span>
+      <span class="text-xs text-slate-500">{config.label}</span>
+    </div>
+  </div>
+
+  <p class="text-sm text-slate-400 mb-3">
+    {description}
+  </p>
+
+  <div class="flex items-center gap-1 text-sm text-vorion-400 group-hover:text-vorion-300">
+    <span class="truncate">{url.replace('https://', '')}</span>
+    <svg class="w-4 h-4 flex-shrink-0 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    </svg>
+  </div>
+</a>

@@ -1,0 +1,166 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="ATSF Framework" description="Agentic Trust Scoring Framework - Core runtime for behavioral trust calculation">
+  <article class="py-16 sm:py-20">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="mb-12">
+        <a href="/projects" class="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white mb-6">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Projects
+        </a>
+
+        <div class="flex items-start gap-4 mb-6">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-vorion-500/20 to-accent-cyan/20 border border-vorion-500/20 flex items-center justify-center text-3xl">
+            🔬
+          </div>
+          <div>
+            <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">ATSF Framework</h1>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-vorion-500/20 text-vorion-400 border border-vorion-500/30">
+                Active
+              </span>
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                Open Source
+              </span>
+              <span class="text-sm text-slate-500">MIT License</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-xl text-slate-400 leading-relaxed">
+          Agentic Trust Scoring Framework - The reference implementation of the BASIS standard.
+          Production-ready TypeScript runtime for trust calculation, behavioral scoring, and governance.
+        </p>
+      </div>
+
+      <!-- Links -->
+      <div class="flex flex-wrap gap-4 mb-12 p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+        <a
+          href="https://github.com/voriongit/atsf-core"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+        >
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
+          </svg>
+          View on GitHub
+        </a>
+        <a
+          href="https://www.npmjs.com/package/@vorionsys/atsf-core"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+        >
+          npm Package
+        </a>
+      </div>
+
+      <!-- Installation -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-4">Installation</h2>
+        <div class="rounded-xl bg-slate-900 border border-slate-800 overflow-hidden">
+          <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700">
+            <span class="text-sm text-slate-400">Terminal</span>
+          </div>
+          <pre class="p-4 text-sm overflow-x-auto"><code class="text-slate-300">npm install @vorionsys/atsf-core</code></pre>
+        </div>
+      </section>
+
+      <!-- Modules -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-6">Core Modules</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="p-5 rounded-xl bg-slate-900/50 border border-slate-800">
+            <code class="text-vorion-400 text-sm font-mono">/trust-engine</code>
+            <p class="text-sm text-slate-400 mt-2">Behavioral trust calculation with decay and recovery</p>
+          </div>
+          <div class="p-5 rounded-xl bg-slate-900/50 border border-slate-800">
+            <code class="text-vorion-400 text-sm font-mono">/intent</code>
+            <p class="text-sm text-slate-400 mt-2">Intent classification and processing</p>
+          </div>
+          <div class="p-5 rounded-xl bg-slate-900/50 border border-slate-800">
+            <code class="text-vorion-400 text-sm font-mono">/enforce</code>
+            <p class="text-sm text-slate-400 mt-2">Policy enforcement and decision gates</p>
+          </div>
+          <div class="p-5 rounded-xl bg-slate-900/50 border border-slate-800">
+            <code class="text-vorion-400 text-sm font-mono">/proof</code>
+            <p class="text-sm text-slate-400 mt-2">Audit trail and decision provenance</p>
+          </div>
+          <div class="p-5 rounded-xl bg-slate-900/50 border border-slate-800">
+            <code class="text-vorion-400 text-sm font-mono">/cognigate</code>
+            <p class="text-sm text-slate-400 mt-2">Fastify server for runtime API</p>
+          </div>
+          <div class="p-5 rounded-xl bg-slate-900/50 border border-slate-800">
+            <code class="text-vorion-400 text-sm font-mono">/basis</code>
+            <p class="text-sm text-slate-400 mt-2">Rule parser and evaluator</p>
+          </div>
+          <div class="p-5 rounded-xl bg-slate-900/50 border border-slate-800">
+            <code class="text-vorion-400 text-sm font-mono">/persistence</code>
+            <p class="text-sm text-slate-400 mt-2">Memory, file, and Supabase adapters</p>
+          </div>
+          <div class="p-5 rounded-xl bg-slate-900/50 border border-slate-800">
+            <code class="text-vorion-400 text-sm font-mono">/langchain</code>
+            <p class="text-sm text-slate-400 mt-2">LangChain integration tools</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Example -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-4">Quick Start</h2>
+        <div class="rounded-xl bg-slate-900 border border-slate-800 overflow-hidden">
+          <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700">
+            <span class="text-sm text-slate-400">TypeScript</span>
+          </div>
+          <pre class="p-4 text-sm overflow-x-auto"><code class="text-slate-300">import {'{'}
+  TrustEngine,
+  IntentService,
+  EnforcementService,
+  createServer
+{'}'} from '@vorionsys/atsf-core';
+
+// Create core services
+const trustEngine = new TrustEngine({'{'}
+  decayRate: 0.01,
+  recoveryRate: 0.02,
+{'}'});
+
+const intentService = new IntentService();
+const enforcement = new EnforcementService(trustEngine);
+
+// Start the Cognigate API server
+const server = await createServer({'{'}
+  trustEngine,
+  intentService,
+  enforcement,
+{'}'});
+
+await server.listen({'{'} port: 3000 {'}'});
+console.log('Cognigate running on http://localhost:3000');</code></pre>
+        </div>
+      </section>
+
+      <!-- Related -->
+      <section>
+        <h2 class="text-2xl font-bold text-white mb-4">Related</h2>
+        <div class="flex flex-wrap gap-4">
+          <a href="/projects/basis" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            BASIS Standard
+          </a>
+          <a href="/projects/cognigate" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            Cognigate
+          </a>
+          <a href="/packages#atsf-core" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            Package Details
+          </a>
+        </div>
+      </section>
+    </div>
+  </article>
+</BaseLayout>

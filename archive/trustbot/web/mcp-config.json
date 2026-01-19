@@ -1,0 +1,51 @@
+{
+  "mcpServers": {
+    "trustbot": {
+      "command": "curl",
+      "args": ["-s", "https://web-626.vercel.app/api/mcp"],
+      "description": "TrustBot Agent Orchestration System",
+      "tools": [
+        {
+          "name": "trustbot_get_state",
+          "description": "Get the current TrustBot world state including all agents, tasks, and blackboard entries"
+        },
+        {
+          "name": "trustbot_list_agents",
+          "description": "List all agents in the TrustBot system with optional filtering by status, trust score, or type"
+        },
+        {
+          "name": "trustbot_get_agent",
+          "description": "Get detailed information about a specific agent including trust tier and permissions"
+        },
+        {
+          "name": "trustbot_create_task",
+          "description": "Create a new task for agents to work on (research, analysis, validation, execution, monitoring, strategy)"
+        },
+        {
+          "name": "trustbot_list_tasks",
+          "description": "List tasks with optional filtering by status or assignee"
+        },
+        {
+          "name": "trustbot_delegate_task",
+          "description": "Delegate a task from one agent to another (requires VERIFIED+ tier, max 2 delegations per task)"
+        },
+        {
+          "name": "trustbot_spawn_agent",
+          "description": "Spawn a new agent (requires CERTIFIED+ parent agent)"
+        },
+        {
+          "name": "trustbot_send_message",
+          "description": "Send a message between agents or post to the blackboard"
+        },
+        {
+          "name": "trustbot_get_metrics",
+          "description": "Get system metrics including trust distribution and task statistics"
+        },
+        {
+          "name": "trustbot_run_tick",
+          "description": "Manually trigger a tick cycle to process pending tasks"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,71 @@
+# Prometheus Configuration
+# Epic 13: Observability & Monitoring
+# Story 13.5: Alerting Rules
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'trustbot'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Rule files
+rule_files:
+  - "alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # TrustBot API metrics
+  - job_name: 'trustbot-api'
+    static_configs:
+      - targets: ['api:3001']
+    metrics_path: '/metrics'
+    scheme: 'http'
+    scrape_interval: 10s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node exporter for host metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+# Recording rules for performance optimization
+recording_rules:
+  - name: trustbot_aggregations
+    rules:
+      # Pre-compute request rate
+      - record: trustbot:http_requests:rate5m
+        expr: sum(rate(trustbot_http_requests_total[5m])) by (method, path, status_code)
+
+      # Pre-compute error rate
+      - record: trustbot:http_errors:rate5m
+        expr: sum(rate(trustbot_http_requests_total{status_code=~"5.."}[5m]))
+
+      # Pre-compute latency percentiles
+      - record: trustbot:http_latency:p95
+        expr: histogram_quantile(0.95, sum(rate(trustbot_http_request_duration_seconds_bucket[5m])) by (le))
+
+      - record: trustbot:http_latency:p99
+        expr: histogram_quantile(0.99, sum(rate(trustbot_http_request_duration_seconds_bucket[5m])) by (le))
+
+      # Pre-compute decision metrics
+      - record: trustbot:decisions:rate5m
+        expr: sum(rate(trustbot_decisions_processed_total[5m])) by (outcome, source)
+
+      # Pre-compute agent fleet size
+      - record: trustbot:agents:total
+        expr: sum(trustbot_agents_connected) by (status)
+
+      # Pre-compute average trust score
+      - record: trustbot:trust:average
+        expr: avg(trustbot_trust_score_current)

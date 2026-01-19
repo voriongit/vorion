@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": false
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "web",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}

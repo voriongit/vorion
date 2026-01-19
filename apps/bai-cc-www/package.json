@@ -1,0 +1,22 @@
+{
+  "name": "bai-cc-www",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "BAI Command Center Portfolio - Showcasing the Vorion AI Governance Ecosystem",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^4.16.0",
+    "@astrojs/tailwind": "^5.1.0",
+    "@astrojs/mdx": "^3.1.0",
+    "tailwindcss": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  }
+}

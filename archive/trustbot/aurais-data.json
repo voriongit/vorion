@@ -1,0 +1,204 @@
+{
+  "agents": [
+    {
+      "id": "exec-1",
+      "name": "T5-EXECUTOR",
+      "type": "EXECUTOR",
+      "tier": 5,
+      "status": "IDLE",
+      "location": {
+        "floor": "EXECUTIVE",
+        "room": "EXECUTOR_OFFICE"
+      },
+      "trustScore": 1000,
+      "capabilities": [
+        "strategic_decision",
+        "emergency_control"
+      ],
+      "parentId": null,
+      "childIds": [],
+      "createdAt": "2026-01-16T15:28:50.188Z"
+    },
+    {
+      "id": "plan-1",
+      "name": "T5-PLANNER",
+      "type": "PLANNER",
+      "tier": 5,
+      "status": "WORKING",
+      "location": {
+        "floor": "EXECUTIVE",
+        "room": "PLANNER_OFFICE"
+      },
+      "trustScore": 980,
+      "capabilities": [
+        "goal_decomposition",
+        "hierarchy_design"
+      ],
+      "parentId": null,
+      "childIds": [],
+      "createdAt": "2026-01-16T15:28:50.188Z"
+    },
+    {
+      "id": "valid-1",
+      "name": "T5-VALIDATOR",
+      "type": "VALIDATOR",
+      "tier": 5,
+      "status": "IDLE",
+      "location": {
+        "floor": "EXECUTIVE",
+        "room": "VALIDATOR_OFFICE"
+      },
+      "trustScore": 990,
+      "capabilities": [
+        "spawn_validation",
+        "trust_monitoring"
+      ],
+      "parentId": null,
+      "childIds": [],
+      "createdAt": "2026-01-16T15:28:50.188Z"
+    },
+    {
+      "id": "evolve-1",
+      "name": "T5-EVOLVER",
+      "type": "EVOLVER",
+      "tier": 5,
+      "status": "WORKING",
+      "location": {
+        "floor": "EXECUTIVE",
+        "room": "EVOLVER_OFFICE"
+      },
+      "trustScore": 970,
+      "capabilities": [
+        "performance_analysis",
+        "capability_evolution"
+      ],
+      "parentId": null,
+      "childIds": [],
+      "createdAt": "2026-01-16T15:28:50.188Z"
+    },
+    {
+      "id": "spawn-1",
+      "name": "T5-SPAWNER",
+      "type": "SPAWNER",
+      "tier": 5,
+      "status": "IDLE",
+      "location": {
+        "floor": "EXECUTIVE",
+        "room": "SPAWNER_OFFICE"
+      },
+      "trustScore": 985,
+      "capabilities": [
+        "spawn_agents",
+        "lifecycle_management"
+      ],
+      "parentId": null,
+      "childIds": [
+        "listen-1",
+        "listen-2",
+        "asst-1"
+      ],
+      "createdAt": "2026-01-16T15:28:50.188Z"
+    },
+    {
+      "id": "listen-1",
+      "name": "DecisionListener",
+      "type": "LISTENER",
+      "tier": 0,
+      "status": "WORKING",
+      "location": {
+        "floor": "OPERATIONS",
+        "room": "LISTENER_STATION"
+      },
+      "trustScore": 40,
+      "capabilities": [
+        "observe",
+        "log"
+      ],
+      "parentId": "spawn-1",
+      "childIds": [],
+      "createdAt": "2026-01-16T15:28:50.188Z"
+    },
+    {
+      "id": "listen-2",
+      "name": "CommunicationListener",
+      "type": "LISTENER",
+      "tier": 0,
+      "status": "WORKING",
+      "location": {
+        "floor": "OPERATIONS",
+        "room": "LISTENER_STATION"
+      },
+      "trustScore": 40,
+      "capabilities": [
+        "observe",
+        "log"
+      ],
+      "parentId": "spawn-1",
+      "childIds": [],
+      "createdAt": "2026-01-16T15:28:50.188Z"
+    },
+    {
+      "id": "asst-1",
+      "name": "ResearchAssistant",
+      "type": "WORKER",
+      "tier": 1,
+      "status": "IDLE",
+      "location": {
+        "floor": "OPERATIONS",
+        "room": "ASSISTANT_DESK_A"
+      },
+      "trustScore": 80,
+      "capabilities": [
+        "assist",
+        "research"
+      ],
+      "parentId": "spawn-1",
+      "childIds": [],
+      "createdAt": "2026-01-16T15:28:50.188Z"
+    }
+  ],
+  "blackboard": [
+    {
+      "id": "bb-1",
+      "type": "OBSERVATION",
+      "title": "System Online",
+      "content": "All T5 orchestrators initialized",
+      "author": "exec-1",
+      "priority": "HIGH",
+      "status": "RESOLVED",
+      "createdAt": "2026-01-16T15:28:50.188Z"
+    },
+    {
+      "id": "bb-2",
+      "type": "TASK",
+      "title": "Daily Strategic Review",
+      "content": "Analyze yesterday's performance",
+      "author": "plan-1",
+      "priority": "HIGH",
+      "status": "IN_PROGRESS",
+      "createdAt": "2026-01-16T15:28:50.188Z"
+    },
+    {
+      "id": "bb-3",
+      "type": "DECISION",
+      "title": "Spawn 2 Assistants",
+      "content": "Approved by T5-Validator",
+      "author": "spawn-1",
+      "priority": "MEDIUM",
+      "status": "RESOLVED",
+      "createdAt": "2026-01-16T15:28:50.188Z"
+    }
+  ],
+  "hitlLevel": 100,
+  "avgTrust": 765,
+  "day": 1,
+  "events": [
+    "System initialized",
+    "T5 Orchestrators online",
+    "Initial agents spawned"
+  ],
+  "settings": {
+    "theme": "dark",
+    "integrations": {}
+  }
+}

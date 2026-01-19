@@ -1,0 +1,153 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PackageCard from '../../components/PackageCard.astro';
+
+const packages = [
+  {
+    name: '@vorion/ai-gateway',
+    description: 'Multi-provider AI routing with intelligent model selection, PII detection, cost optimization, and carbon-aware sustainable routing.',
+    features: [
+      '4-tier routing: Privacy → Task → Green → Cost',
+      'Automatic PII detection and redaction',
+      'Carbon-aware sustainable model selection',
+      'Support for OpenAI, Anthropic, Gemini, Ollama',
+      'LiteLLM-compatible configuration',
+      'Cost tracking and budget enforcement',
+    ],
+    githubUrl: 'https://github.com/voriongit/ai-gateway',
+  },
+  {
+    name: '@vorion/council',
+    description: '16-agent governance orchestration system for AI oversight, compliance checking, and quality assurance with human-in-the-loop escalation.',
+    features: [
+      'Master Planner for task decomposition',
+      '4 parallel compliance agents (PII, ethics, policy)',
+      'QA critique team with revision loops',
+      'Human-gateway escalation workflow',
+      'Sequential workflow orchestration',
+      'Cost and performance tracking',
+    ],
+    githubUrl: 'https://github.com/voriongit/council',
+  },
+  {
+    name: '@vorionsys/atsf-core',
+    description: 'Core runtime for the Agentic Trust Scoring Framework. Implements the BASIS standard with behavioral trust calculation, decay, and recovery.',
+    features: [
+      '6-tier trust levels per BASIS specification',
+      'Time-weighted behavioral signal processing',
+      'Accelerated decay on failure patterns',
+      'Recovery mechanisms with milestone tracking',
+      '8 event types for full observability',
+      'Pluggable persistence (Memory, File, Supabase)',
+    ],
+    githubUrl: 'https://github.com/voriongit/atsf-core',
+    npmUrl: 'https://www.npmjs.com/package/@vorionsys/atsf-core',
+  },
+  {
+    name: '@vorion/agent-sdk',
+    description: 'TypeScript SDK for connecting AI agents to Aurais Mission Control with WebSocket connectivity, auto-reconnection, and approval workflows.',
+    features: [
+      'WebSocket connection with auto-reconnect',
+      'Exponential backoff reconnection strategy',
+      'Task assignment and progress reporting',
+      'Human approval request workflow',
+      'Type-safe event handling',
+      'Heartbeat management',
+    ],
+    githubUrl: 'https://github.com/voriongit/agent-sdk',
+  },
+  {
+    name: '@vorion/a3i',
+    description: 'Agent Anchor AI Trust Engine. Authorization hooks, execution tracking, and orchestration for governed AI operations.',
+    features: [
+      'Trust-based authorization',
+      'Capability banding system',
+      'Execution hooks and callbacks',
+      'Orchestrator for multi-agent workflows',
+      'Integration with ATSF trust engine',
+    ],
+    githubUrl: 'https://github.com/voriongit/a3i',
+  },
+  {
+    name: '@vorion/proof-plane',
+    description: 'Immutable audit trail for AI agent operations. Decision provenance tracking with tamper-evident logging.',
+    features: [
+      'Immutable event logging',
+      'Decision provenance chains',
+      'Tamper-evident storage',
+      'Query interface for audit reports',
+      'Export for compliance reporting',
+    ],
+    githubUrl: 'https://github.com/voriongit/proof-plane',
+  },
+  {
+    name: '@vorion/contracts',
+    description: 'Shared schemas and validators for the Vorion platform. Zod-based type definitions ensuring consistency across all packages.',
+    features: [
+      'Zod schema definitions',
+      'Runtime validation',
+      'TypeScript type exports',
+      'V2 API schemas',
+      'Cross-package consistency',
+    ],
+    githubUrl: 'https://github.com/voriongit/contracts',
+  },
+];
+---
+
+<BaseLayout title="Packages" description="Open source packages for AI governance - SDKs, runtimes, and tools">
+  <section class="py-16 sm:py-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="max-w-3xl mb-12">
+        <h1 class="text-3xl sm:text-4xl font-bold text-white mb-4">Open Source Packages</h1>
+        <p class="text-lg text-slate-400 leading-relaxed">
+          Production-ready SDKs and libraries powering the Vorion ecosystem.
+          All packages are MIT licensed and available on GitHub and npm.
+        </p>
+      </div>
+
+      <!-- Installation -->
+      <div class="mb-12 p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+        <h2 class="text-lg font-semibold text-white mb-4">Quick Install</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <span class="text-xs text-slate-500 uppercase tracking-wide">Core Runtime</span>
+            <pre class="mt-2 p-3 rounded-lg bg-slate-900 text-sm overflow-x-auto"><code class="text-slate-300">npm install @vorionsys/atsf-core</code></pre>
+          </div>
+          <div>
+            <span class="text-xs text-slate-500 uppercase tracking-wide">Agent SDK</span>
+            <pre class="mt-2 p-3 rounded-lg bg-slate-900 text-sm overflow-x-auto"><code class="text-slate-300">npm install @vorion/agent-sdk</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Package Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {packages.map(pkg => (
+          <PackageCard {...pkg} />
+        ))}
+      </div>
+
+      <!-- Contributing -->
+      <div class="mt-12 p-8 rounded-xl bg-gradient-to-br from-vorion-500/10 to-accent-cyan/10 border border-vorion-500/20 text-center">
+        <h2 class="text-xl font-semibold text-white mb-2">Contribute</h2>
+        <p class="text-slate-400 max-w-2xl mx-auto mb-6">
+          All packages accept contributions. Whether it's bug fixes, new features, or documentation
+          improvements - we welcome your involvement.
+        </p>
+        <a
+          href="https://github.com/voriongit"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium transition-colors"
+        >
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
+          </svg>
+          View on GitHub
+        </a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
