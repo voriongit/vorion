@@ -91,6 +91,15 @@ export function loadConfig(): Config {
     );
   }
 
+  // Critical security check: Database password must be set in production
+  const dbPassword = process.env['VORION_DB_PASSWORD'];
+  if (isProduction && !dbPassword) {
+    throw new Error(
+      'CRITICAL: VORION_DB_PASSWORD environment variable must be set in production/staging. ' +
+      'Never use an empty database password in production.'
+    );
+  }
+
   return configSchema.parse({
     env,
     logLevel: process.env['VORION_LOG_LEVEL'],

@@ -248,19 +248,56 @@ export class RuleEvaluator {
 
   /**
    * Evaluate a condition expression string
+   *
+   * SECURITY: Unknown expressions default to FALSE (deny) to prevent bypass
    */
   private evaluateExpression(
     expression: string,
     context: EvaluationContext
   ): boolean {
-    // Simple implementation - expand as needed
-    // Supports: "true", "false", field comparisons
+    // Explicit boolean literals
     if (expression === 'true') return true;
     if (expression === 'false') return false;
 
-    // TODO: Implement full expression parser
-    // For now, return true to allow
-    return true;
+    // Parse simple field comparison expressions: "field.path == value"
+    const comparisonMatch = expression.match(
+      /^([\w.]+)\s*(==|!=|>|<|>=|<=)\s*(.+)$/
+    );
+
+    if (comparisonMatch) {
+      const [, fieldPath, operator, rawValue] = comparisonMatch;
+      const fieldValue = this.resolveField(fieldPath!, context);
+
+      // Parse the value (handle strings, numbers, booleans)
+      let targetValue: unknown = rawValue!.trim();
+      if (targetValue === 'true') targetValue = true;
+      else if (targetValue === 'false') targetValue = false;
+      else if (targetValue === 'null') targetValue = null;
+      else if (/^-?\d+(\.\d+)?$/.test(targetValue as string)) {
+        targetValue = parseFloat(targetValue as string);
+      } else if ((targetValue as string).startsWith('"') && (targetValue as string).endsWith('"')) {
+        targetValue = (targetValue as string).slice(1, -1);
+      } else if ((targetValue as string).startsWith("'") && (targetValue as string).endsWith("'")) {
+        targetValue = (targetValue as string).slice(1, -1);
+      }
+
+      switch (operator) {
+        case '==': return fieldValue === targetValue;
+        case '!=': return fieldValue !== targetValue;
+        case '>': return (fieldValue as number) > (targetValue as number);
+        case '<': return (fieldValue as number) < (targetValue as number);
+        case '>=': return (fieldValue as number) >= (targetValue as number);
+        case '<=': return (fieldValue as number) <= (targetValue as number);
+      }
+    }
+
+    // SECURITY FIX: Unknown/unimplemented expressions default to FALSE (deny)
+    // This prevents bypass by ensuring unrecognized expressions fail-safe
+    logger.warn(
+      { expression },
+      'Unknown expression format - defaulting to deny for security'
+    );
+    return false;
   }
 
   /**
