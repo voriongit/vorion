@@ -2,11 +2,13 @@
  * PROOF - Immutable Evidence System
  *
  * Creates and maintains cryptographically sealed records of all governance decisions.
+ * Uses Ed25519 (or ECDSA P-256 fallback) for cryptographic signatures.
  *
  * @packageDocumentation
  */
 
 import { createLogger } from '../common/logger.js';
+import { sign, verify, sha256, type SignatureResult } from '../common/crypto.js';
 import type { Proof, Decision, Intent, ID } from '../common/types.js';
 
 const logger = createLogger({ component: 'proof' });
@@ -45,18 +47,29 @@ export interface ProofQuery {
 }
 
 /**
+ * Extended proof with signature metadata
+ */
+export interface SignedProof extends Proof {
+  signatureData?: {
+    publicKey: string;
+    algorithm: string;
+    signedAt: string;
+  };
+}
+
+/**
  * PROOF service for evidence management
  */
 export class ProofService {
-  private proofs: Map<ID, Proof> = new Map();
-  private chain: Proof[] = [];
+  private proofs: Map<ID, SignedProof> = new Map();
+  private chain: SignedProof[] = [];
   private lastHash: string = '0'.repeat(64);
 
   /**
-   * Create a new proof record
+   * Create a new proof record with cryptographic signature
    */
-  async create(request: ProofRequest): Promise<Proof> {
-    const proof: Proof = {
+  async create(request: ProofRequest): Promise<SignedProof> {
+    const proof: SignedProof = {
       id: crypto.randomUUID(),
       chainPosition: this.chain.length,
       intentId: request.intent.id,
@@ -66,13 +79,22 @@ export class ProofService {
       outputs: request.outputs,
       hash: '', // Will be calculated
       previousHash: this.lastHash,
-      signature: '', // TODO: Implement signing
+      signature: '', // Will be signed
       createdAt: new Date().toISOString(),
     };
 
-    // Calculate hash
+    // Calculate hash of the proof content
     proof.hash = await this.calculateHash(proof);
     this.lastHash = proof.hash;
+
+    // Sign the hash with Ed25519/ECDSA
+    const signatureResult = await sign(proof.hash);
+    proof.signature = signatureResult.signature;
+    proof.signatureData = {
+      publicKey: signatureResult.publicKey,
+      algorithm: signatureResult.algorithm,
+      signedAt: signatureResult.signedAt,
+    };
 
     // Store
     this.proofs.set(proof.id, proof);
@@ -83,8 +105,9 @@ export class ProofService {
         proofId: proof.id,
         intentId: proof.intentId,
         chainPosition: proof.chainPosition,
+        signed: true,
       },
-      'Proof created'
+      'Proof created and signed'
     );
 
     return proof;
@@ -93,14 +116,14 @@ export class ProofService {
   /**
    * Get a proof by ID
    */
-  async get(id: ID): Promise<Proof | undefined> {
+  async get(id: ID): Promise<SignedProof | undefined> {
     return this.proofs.get(id);
   }
 
   /**
    * Query proofs
    */
-  async query(query: ProofQuery): Promise<Proof[]> {
+  async query(query: ProofQuery): Promise<SignedProof[]> {
     let results = Array.from(this.proofs.values());
 
     if (query.entityId) {
@@ -129,7 +152,7 @@ export class ProofService {
   }
 
   /**
-   * Verify a proof's integrity
+   * Verify a proof's integrity (hash, chain linkage, and signature)
    */
   async verify(id: ID): Promise<VerificationResult> {
     const proof = this.proofs.get(id);
@@ -149,18 +172,34 @@ export class ProofService {
     const expectedHash = await this.calculateHash({
       ...proof,
       hash: '',
+      signature: '',
+      signatureData: undefined,
     });
 
     if (proof.hash !== expectedHash) {
-      issues.push('Hash mismatch');
+      issues.push('Hash mismatch - proof content may have been tampered');
     }
 
     // Verify chain linkage
     if (proof.chainPosition > 0) {
       const previous = this.chain[proof.chainPosition - 1];
       if (previous && proof.previousHash !== previous.hash) {
-        issues.push('Chain linkage broken');
+        issues.push('Chain linkage broken - previous hash does not match');
       }
+    }
+
+    // Verify cryptographic signature
+    if (proof.signature && proof.signatureData?.publicKey) {
+      const sigResult = await verify(
+        proof.hash,
+        proof.signature,
+        proof.signatureData.publicKey
+      );
+      if (!sigResult.valid) {
+        issues.push(`Signature verification failed: ${sigResult.error || 'invalid signature'}`);
+      }
+    } else {
+      issues.push('Missing signature or public key');
     }
 
     logger.info(
@@ -168,6 +207,7 @@ export class ProofService {
         proofId: id,
         valid: issues.length === 0,
         issues,
+        signatureVerified: issues.length === 0,
       },
       'Proof verified'
     );

@@ -74,8 +74,25 @@ export type Config = z.infer<typeof configSchema>;
  * Load configuration from environment
  */
 export function loadConfig(): Config {
+  const env = process.env['VORION_ENV'] ?? 'development';
+  const isProduction = env === 'production' || env === 'staging';
+
+  // Critical security check: JWT secret must be set in production
+  const jwtSecret = process.env['VORION_JWT_SECRET'];
+  if (isProduction && !jwtSecret) {
+    throw new Error(
+      'CRITICAL: VORION_JWT_SECRET environment variable must be set in production/staging. ' +
+      'Generate a secure secret with: openssl rand -base64 64'
+    );
+  }
+  if (isProduction && jwtSecret && jwtSecret.length < 32) {
+    throw new Error(
+      'CRITICAL: VORION_JWT_SECRET must be at least 32 characters in production/staging.'
+    );
+  }
+
   return configSchema.parse({
-    env: process.env['VORION_ENV'],
+    env,
     logLevel: process.env['VORION_LOG_LEVEL'],
 
     api: {
@@ -104,7 +121,8 @@ export function loadConfig(): Config {
     },
 
     jwt: {
-      secret: process.env['VORION_JWT_SECRET'] ?? 'development-secret-change-in-production',
+      // Only use fallback in development - production requires explicit secret
+      secret: jwtSecret ?? (isProduction ? '' : 'dev-only-insecure-secret-do-not-use-in-prod'),
       expiration: process.env['VORION_JWT_EXPIRATION'],
       refreshExpiration: process.env['VORION_REFRESH_TOKEN_EXPIRATION'],
     },
