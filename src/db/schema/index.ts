@@ -9,3 +9,4 @@
 export * from './proofs.js';
 export * from './trust.js';
 export * from './escalations.js';
+export * from './intents.js';
