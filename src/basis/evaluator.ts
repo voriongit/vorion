@@ -251,7 +251,7 @@ export class RuleEvaluator {
    */
   private evaluateExpression(
     expression: string,
-    context: EvaluationContext
+    _context: EvaluationContext
   ): boolean {
     // Simple implementation - expand as needed
     // Supports: "true", "false", field comparisons

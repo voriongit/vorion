@@ -1,0 +1,18 @@
+{
+  "version": "1",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "tag": "0001_intents",
+      "when": 1768626308855,
+      "breakpoints": false
+    },
+    {
+      "idx": 1,
+      "tag": "0002_intent_evaluations",
+      "when": 1768626308856,
+      "breakpoints": false
+    }
+  ]
+}

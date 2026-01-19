@@ -11,11 +11,11 @@ import type {
   Intent,
   Decision,
   ControlAction,
-  EvaluationResult,
   TrustLevel,
   TrustScore,
   ID,
 } from '../common/types.js';
+import type { EvaluationResult, RuleResult } from '../basis/types.js';
 
 const logger = createLogger({ component: 'enforce' });
 
@@ -113,14 +113,14 @@ export class EnforcementService {
   private createDecision(
     intentId: ID,
     action: ControlAction,
-    constraintsEvaluated: EvaluationResult['rulesEvaluated'],
+    rulesEvaluated: RuleResult[],
     trustScore: TrustScore,
     trustLevel: TrustLevel
   ): Decision {
     return {
       intentId,
       action,
-      constraintsEvaluated: constraintsEvaluated.map((r) => ({
+      constraintsEvaluated: rulesEvaluated.map((r) => ({
         constraintId: r.ruleId,
         passed: r.matched,
         action: r.action,
