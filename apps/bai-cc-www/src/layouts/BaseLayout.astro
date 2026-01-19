@@ -5,9 +5,36 @@ import Footer from '../components/Footer.astro';
 interface Props {
   title: string;
   description?: string;
+  image?: string;
+  type?: 'website' | 'article';
 }
 
-const { title, description = 'BAI Command Center - Building the Future of AI Governance' } = Astro.props;
+const {
+  title,
+  description = 'BAI Command Center - Building the Future of AI Governance. Enterprise trust, compliance, and oversight for autonomous AI systems.',
+  image = '/og-image.png',
+  type = 'website'
+} = Astro.props;
+
+const canonicalURL = new URL(Astro.url.pathname, 'https://bai-cc.com');
+const fullTitle = title === 'Home' ? 'BAI Command Center - AI Governance Platform' : `${title} | BAI Command Center`;
+
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'BAI Command Center',
+  description: 'Enterprise AI governance platform providing trust scoring, policy enforcement, audit trails, and human oversight for autonomous AI systems.',
+  url: 'https://bai-cc.com',
+  logo: 'https://bai-cc.com/favicon.svg',
+  sameAs: [
+    'https://github.com/voriongit',
+    'https://vorion.org'
+  ],
+  founder: {
+    '@type': 'Organization',
+    name: 'Vorion Risk, LLC'
+  }
+};
 ---
 
 <!DOCTYPE html>
@@ -15,12 +42,43 @@ const { title, description = 'BAI Command Center - Building the Future of AI Gov
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Primary Meta Tags -->
+    <title>{fullTitle}</title>
+    <meta name="title" content={fullTitle} />
     <meta name="description" content={description} />
+    <meta name="keywords" content="AI governance, AI trust, AI compliance, autonomous agents, AI oversight, BASIS standard, trust scoring, AI safety, agentic AI, human-in-the-loop" />
+    <meta name="author" content="BAI Command Center" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href={canonicalURL} />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content={type} />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL(image, 'https://bai-cc.com')} />
+    <meta property="og:site_name" content="BAI Command Center" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content={canonicalURL} />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={new URL(image, 'https://bai-cc.com')} />
+
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <title>{title} | BAI Command Center</title>
+
+    <!-- Structured Data -->
+    <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased">
     <div class="flex flex-col min-h-screen">
