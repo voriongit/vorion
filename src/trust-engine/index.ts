@@ -63,7 +63,7 @@ export const SIGNAL_WEIGHTS: Record<keyof TrustComponents, number> = {
 /**
  * Decay milestone definition
  */
-interface DecayMilestone {
+export interface DecayMilestone {
   days: number;
   multiplier: number;
 }
@@ -660,4 +660,71 @@ export class TrustEngine {
  */
 export function createTrustEngine(): TrustEngine {
   return new TrustEngine();
+}
+
+// ============================================================================
+// Standalone decay functions (exported for unit testing)
+// ============================================================================
+
+/**
+ * Calculate decay multiplier based on days since last activity
+ *
+ * Uses stepped milestones with linear interpolation for smooth decay.
+ *
+ * @param daysSinceLastActivity - Number of days since last trust-positive activity
+ * @returns Decay multiplier between 0.5 and 1.0
+ */
+export function calculateDecayMultiplier(daysSinceLastActivity: number): number {
+  // Find the applicable milestone and next milestone
+  let applicableMilestone = DECAY_MILESTONES[0]!;
+  let nextMilestone: DecayMilestone | null = null;
+
+  for (let i = 0; i < DECAY_MILESTONES.length; i++) {
+    if (daysSinceLastActivity >= DECAY_MILESTONES[i]!.days) {
+      applicableMilestone = DECAY_MILESTONES[i]!;
+      nextMilestone = DECAY_MILESTONES[i + 1] ?? null;
+    }
+  }
+
+  // If beyond final milestone, use final multiplier
+  if (!nextMilestone) {
+    return applicableMilestone.multiplier;
+  }
+
+  // Interpolate between milestones for smooth decay
+  const daysIntoMilestone = daysSinceLastActivity - applicableMilestone.days;
+  const milestoneDuration = nextMilestone.days - applicableMilestone.days;
+  const progress = daysIntoMilestone / milestoneDuration;
+
+  const decayRange = applicableMilestone.multiplier - nextMilestone.multiplier;
+  return applicableMilestone.multiplier - decayRange * progress;
+}
+
+/**
+ * Apply decay multiplier to a base score
+ *
+ * @param baseScore - The undecayed trust score
+ * @param daysSinceLastActivity - Number of days since last activity
+ * @returns Decayed score (rounded to nearest integer)
+ */
+export function applyDecay(baseScore: number, daysSinceLastActivity: number): number {
+  const multiplier = calculateDecayMultiplier(daysSinceLastActivity);
+  return Math.round(baseScore * multiplier);
+}
+
+/**
+ * Get the next decay milestone for a given number of inactive days
+ *
+ * @param daysSinceLastActivity - Current days of inactivity
+ * @returns Next milestone or null if past final milestone
+ */
+export function getNextDecayMilestone(
+  daysSinceLastActivity: number
+): DecayMilestone | null {
+  for (const milestone of DECAY_MILESTONES) {
+    if (milestone.days > daysSinceLastActivity) {
+      return milestone;
+    }
+  }
+  return null;
 }
