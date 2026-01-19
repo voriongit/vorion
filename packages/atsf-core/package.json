@@ -1,5 +1,5 @@
 {
-  "name": "@vorion/atsf-core",
+  "name": "@vorionsys/atsf-core",
   "version": "0.1.0",
   "description": "Agentic Trust Scoring Framework - Core runtime for AI agent governance",
   "type": "module",
