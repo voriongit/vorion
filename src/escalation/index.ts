@@ -17,7 +17,7 @@ import {
   type NewEscalationAudit,
   type Escalation,
 } from '../db/schema/escalations.js';
-import type { ID, EscalationRequest } from '../common/types.js';
+import type { ID } from '../common/types.js';
 
 const logger = createLogger({ component: 'escalation' });
 
@@ -29,12 +29,12 @@ export interface CreateEscalationRequest {
   intentId: ID;
   entityId: ID;
   reason: string;
-  priority?: 'low' | 'medium' | 'high' | 'critical';
+  priority: 'low' | 'medium' | 'high' | 'critical';
   escalatedTo: string;
-  escalatedBy?: ID;
-  context?: Record<string, unknown>;
-  requestedAction?: string;
-  timeoutMinutes?: number;
+  escalatedBy: ID;
+  context: Record<string, unknown>;
+  requestedAction: string;
+  timeoutMinutes: number;
 }
 
 /**
@@ -44,7 +44,7 @@ export interface ResolveEscalationRequest {
   escalationId: ID;
   resolution: 'approved' | 'rejected';
   resolvedBy: ID;
-  notes?: string;
+  notes: string;
 }
 
 /**
@@ -118,18 +118,17 @@ export class EscalationService {
   async create(request: CreateEscalationRequest): Promise<EscalationResponse> {
     const db = await this.ensureInitialized();
 
-    const timeoutMinutes = request.timeoutMinutes ?? 60;
-    const timeoutAt = new Date(Date.now() + timeoutMinutes * 60 * 1000);
+    const timeoutAt = new Date(Date.now() + request.timeoutMinutes * 60 * 1000);
 
     const newEscalation: NewEscalation = {
       tenantId: request.tenantId,
       intentId: request.intentId,
       entityId: request.entityId,
       reason: request.reason,
-      priority: request.priority ?? 'medium',
+      priority: request.priority,
       escalatedTo: request.escalatedTo,
       escalatedBy: request.escalatedBy,
-      context: request.context ?? null,
+      context: request.context,
       requestedAction: request.requestedAction,
       timeoutAt,
     };
@@ -265,7 +264,7 @@ export class EscalationService {
         resolvedBy: request.resolvedBy,
         resolvedAt: now,
         resolution: request.resolution,
-        resolutionNotes: request.notes,
+        resolutionNotes: request.notes || null,
         updatedAt: now,
       })
       .where(eq(escalations.id, request.escalationId))
@@ -321,7 +320,7 @@ export class EscalationService {
         status: 'cancelled',
         resolvedBy: cancelledBy,
         resolvedAt: now,
-        resolutionNotes: reason,
+        resolutionNotes: reason ?? null,
         updatedAt: now,
       })
       .where(eq(escalations.id, id))

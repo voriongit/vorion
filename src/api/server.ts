@@ -6,13 +6,15 @@
  * @packageDocumentation
  */
 
-import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { createLogger, logger } from '../common/logger.js';
 import { getConfig } from '../common/config.js';
 import { authenticate, requireTenantAccess } from './auth.js';
+import { createRateLimitMiddleware } from './rate-limit.js';
+import { validateBody, validateQuery, validateParams, escalationSchemas } from './validation.js';
 import { createEscalationService } from '../escalation/index.js';
 
 const apiLogger = createLogger({ component: 'api' });
@@ -65,6 +67,20 @@ export async function createServer(): Promise<FastifyInstance> {
   // API routes
   server.register(
     async (api) => {
+      // Per-tenant rate limiting (applied after authentication)
+      const tenantRateLimiter = createRateLimitMiddleware({
+        // Skip rate limiting for health checks
+        skip: (req) => req.url === '/health' || req.url === '/ready',
+      });
+
+      // Apply tenant rate limiting to all authenticated routes
+      api.addHook('preHandler', async (request, reply) => {
+        // Only apply if authenticated
+        if (request.auth) {
+          await tenantRateLimiter(request, reply);
+        }
+      });
+
       // Intent routes
       api.post('/intents', async (_request, _reply) => {
         // TODO: Implement intent submission
@@ -116,7 +132,7 @@ export async function createServer(): Promise<FastifyInstance> {
         };
       }>(
         '/escalations',
-        { preHandler: [authenticate] },
+        { preHandler: [authenticate, validateBody(escalationSchemas.create)] },
         async (request, reply) => {
           if (!request.auth) {
             return reply.status(401).send({ error: { code: 'UNAUTHORIZED' } });
@@ -127,12 +143,12 @@ export async function createServer(): Promise<FastifyInstance> {
             intentId: request.body.intentId,
             entityId: request.body.entityId,
             reason: request.body.reason,
-            priority: request.body.priority,
+            priority: request.body.priority ?? 'medium',
             escalatedTo: request.body.escalatedTo,
             escalatedBy: request.auth.userId,
-            context: request.body.context,
-            requestedAction: request.body.requestedAction,
-            timeoutMinutes: request.body.timeoutMinutes,
+            context: request.body.context ?? {},
+            requestedAction: request.body.requestedAction ?? '',
+            timeoutMinutes: request.body.timeoutMinutes ?? 60,
           });
 
           return reply.status(201).send(escalation);
@@ -145,6 +161,7 @@ export async function createServer(): Promise<FastifyInstance> {
         {
           preHandler: [
             authenticate,
+            validateParams(escalationSchemas.idParam),
             requireTenantAccess((req) => req.auth?.tenantId),
           ],
         },
@@ -180,7 +197,7 @@ export async function createServer(): Promise<FastifyInstance> {
         };
       }>(
         '/escalations',
-        { preHandler: [authenticate] },
+        { preHandler: [authenticate, validateQuery(escalationSchemas.query)] },
         async (request, reply) => {
           if (!request.auth) {
             return reply.status(401).send({ error: { code: 'UNAUTHORIZED' } });
@@ -207,6 +224,8 @@ export async function createServer(): Promise<FastifyInstance> {
         {
           preHandler: [
             authenticate,
+            validateParams(escalationSchemas.idParam),
+            validateBody(escalationSchemas.resolve),
             requireTenantAccess((req) => req.auth?.tenantId),
           ],
         },
@@ -221,7 +240,7 @@ export async function createServer(): Promise<FastifyInstance> {
                 escalationId: request.params.id,
                 resolution: request.body.resolution,
                 resolvedBy: request.auth.userId,
-                notes: request.body.notes,
+                notes: request.body.notes ?? '',
               },
               request.auth.tenantId
             );
@@ -251,6 +270,8 @@ export async function createServer(): Promise<FastifyInstance> {
         {
           preHandler: [
             authenticate,
+            validateParams(escalationSchemas.idParam),
+            validateBody(escalationSchemas.cancel),
             requireTenantAccess((req) => req.auth?.tenantId),
           ],
         },
@@ -289,6 +310,7 @@ export async function createServer(): Promise<FastifyInstance> {
         {
           preHandler: [
             authenticate,
+            validateParams(escalationSchemas.idParam),
             requireTenantAccess((req) => req.auth?.tenantId),
           ],
         },

@@ -233,8 +233,173 @@ Vorion is built on **STPA (Systems-Theoretic Process Analysis)** principles:
 
 - Zero Trust Architecture
 - Defense in Depth
-- Cryptographic Integrity (SHA-3-256, Ed25519)
+- Cryptographic Integrity (SHA-256, Ed25519/ECDSA)
 - Immutable Audit Trail
+
+---
+
+## Security Configuration
+
+### Environment Variables
+
+Vorion requires the following security-related environment variables:
+
+#### Authentication & Authorization
+
+```bash
+# JWT Secret - REQUIRED in production
+# Must be at least 32 characters for HMAC-SHA256
+VORION_JWT_SECRET="your-secure-jwt-secret-at-least-32-characters"
+
+# JWT settings (optional)
+VORION_JWT_EXPIRES_IN="1h"       # Token expiration (default: 1h)
+VORION_JWT_ISSUER="vorion"       # JWT issuer claim
+```
+
+#### Cryptographic Signing
+
+```bash
+# Ed25519/ECDSA Signing Key - Recommended for production
+# Generate with: node -e "import('./src/common/crypto.js').then(c => c.generateKeyPair().then(kp => c.exportKeyPair(kp).then(e => console.log(JSON.stringify(e)))))"
+VORION_SIGNING_KEY='{"publicKey":"base64...","privateKey":"base64..."}'
+
+# If not set, an ephemeral key is generated (warning logged in production)
+```
+
+#### Database Security
+
+```bash
+# PostgreSQL connection - REQUIRED
+DATABASE_URL="postgresql://user:password@host:5432/vorion?sslmode=require"
+
+# Connection pool settings
+DATABASE_POOL_MIN=2
+DATABASE_POOL_MAX=10
+DATABASE_SSL_MODE="require"      # require, verify-full, or disable
+```
+
+#### Logging & Redaction
+
+```bash
+# Log level
+VORION_LOG_LEVEL="info"          # debug, info, warn, error
+
+# Production mode enables log redaction
+NODE_ENV="production"
+```
+
+### Security Best Practices
+
+#### 1. JWT Configuration
+
+**DO:**
+- Use a cryptographically secure random secret (32+ characters)
+- Rotate secrets periodically
+- Use short expiration times (15m-1h for access tokens)
+- Validate issuer and audience claims
+
+**DON'T:**
+- Use default or weak secrets
+- Store secrets in code or version control
+- Use long-lived tokens without refresh mechanism
+
+#### 2. Signing Key Management
+
+For production deployments:
+
+```bash
+# Generate a persistent signing key
+npx tsx -e "
+import { generateKeyPair, exportKeyPair } from './src/common/crypto.js';
+const kp = await generateKeyPair();
+const exported = await exportKeyPair(kp);
+console.log('VORION_SIGNING_KEY=' + JSON.stringify(JSON.stringify(exported)));
+"
+```
+
+Store the generated key securely (e.g., AWS Secrets Manager, HashiCorp Vault).
+
+#### 3. Database Security
+
+- Enable SSL/TLS for all database connections
+- Use least-privilege database users
+- Enable connection encryption in transit
+- Implement proper backup encryption
+
+#### 4. API Security
+
+Rate limiting is configured per-tenant tier:
+
+| Tier | Requests/Min | Requests/Hour | Burst |
+|------|--------------|---------------|-------|
+| Free | 60 | 1,000 | 10 |
+| Pro | 300 | 10,000 | 50 |
+| Enterprise | 1,000 | 50,000 | 100 |
+
+Custom rate limits can be configured:
+
+```typescript
+import { TenantRateLimiter } from '@vorion/api/rate-limit';
+
+const limiter = new TenantRateLimiter({
+  custom: {
+    requestsPerMinute: 500,
+    requestsPerHour: 20000,
+    burstLimit: 75,
+  },
+});
+```
+
+#### 5. Input Validation
+
+All API inputs are validated with:
+- Zod schema validation
+- Injection pattern detection (SQL, NoSQL, XSS, command injection)
+- Payload size limits (default 1MB)
+- String sanitization
+
+Configure validation:
+
+```typescript
+import { validateBody } from '@vorion/api/validation';
+
+app.post('/endpoint', {
+  preHandler: [
+    validateBody(schema, {
+      maxPayloadSize: 1048576,  // 1MB
+      checkInjection: true,
+      sanitize: true,
+    }),
+  ],
+});
+```
+
+#### 6. Sensitive Data Handling
+
+Vorion automatically redacts sensitive data in logs:
+
+- Passwords, secrets, tokens
+- API keys and credentials
+- Authorization headers
+- JWT tokens
+- Private keys
+
+Additional patterns can be configured in `src/common/redaction.ts`.
+
+### Security Checklist
+
+Before deploying to production:
+
+- [ ] Set `VORION_JWT_SECRET` to a cryptographically secure value
+- [ ] Generate and configure `VORION_SIGNING_KEY`
+- [ ] Enable SSL for database connections
+- [ ] Set `NODE_ENV=production`
+- [ ] Configure appropriate log level
+- [ ] Review rate limit settings
+- [ ] Ensure secrets are not in version control
+- [ ] Set up secret rotation procedures
+- [ ] Configure backup encryption
+- [ ] Enable audit logging
 
 ---
 
