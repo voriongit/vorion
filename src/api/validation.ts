@@ -326,3 +326,39 @@ export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(1000).default(100),
   offset: z.coerce.number().int().min(0).default(0),
 });
+
+// ============================================================
+// ATSF-Core Consolidation Schemas
+// ============================================================
+
+/**
+ * Intent submission schema (from atsf-core)
+ */
+export const intentSubmissionSchema = z.object({
+  entityId: z.string().uuid(),
+  goal: z.string().min(1).max(10000).transform(s => s.trim()),
+  context: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+/**
+ * Trust signal schema (from atsf-core)
+ */
+export const trustSignalSchema = z.object({
+  signalType: z.enum(['success', 'failure', 'compliance', 'violation', 'verification']),
+  impact: z.number().min(-100).max(100),
+  context: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+/**
+ * Constraint validation schema (from atsf-core)
+ */
+export const constraintValidationSchema = z.object({
+  constraints: z.array(z.object({
+    field: z.string(),
+    operator: z.enum(['equals', 'not_equals', 'greater_than', 'less_than', 'in', 'not_in', 'contains', 'matches']),
+    value: z.unknown(),
+  })),
+  context: z.record(z.unknown()),
+});

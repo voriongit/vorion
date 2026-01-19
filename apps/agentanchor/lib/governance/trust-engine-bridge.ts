@@ -18,6 +18,7 @@ import {
 import type { TrustRecord } from '@vorionsys/atsf-core/trust-engine'
 import type { TrustLevel } from '@vorionsys/atsf-core/types'
 import { TrustContext, TrustTier, RiskLevel, GovernanceDecision } from './types'
+import type { RoutingPath } from './matrix-router'
 
 // =============================================================================
 // Trust Engine to Governance Bridge
@@ -266,7 +267,7 @@ export async function checkTrustThreshold(
 /**
  * Determine routing path based on trust engine data
  */
-export type RoutingPath = 'green' | 'yellow' | 'red'
+// RoutingPath imported from ./matrix-router to avoid duplicate export
 
 export interface TrustBasedRouting {
   path: RoutingPath

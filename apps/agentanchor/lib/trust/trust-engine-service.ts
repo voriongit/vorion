@@ -66,7 +66,7 @@ class DrizzlePersistenceProvider implements PersistenceProvider {
       entityId: record.entityId,
       score: record.score,
       level: record.level,
-      components: record.components as Record<string, unknown>,
+      components: record.components as unknown as Record<string, unknown>,
       signals: record.signals as unknown[],
       lastCalculatedAt: new Date(record.lastCalculatedAt),
       history: record.history as unknown[],

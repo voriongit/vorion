@@ -26,9 +26,6 @@ export * from './crypto-audit-log'
 // Observer (Event Log)
 export * from './observer'
 
-// Marketplace & Acquisitions
-export * from './marketplace'
-
 // Academy (Training)
 export * from './academy'
 
