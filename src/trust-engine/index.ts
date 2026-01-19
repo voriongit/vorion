@@ -425,7 +425,7 @@ export class TrustEngine {
         level: calculation.level.toString() as '0' | '1' | '2' | '3' | '4',
         previousLevel: previousLevel.toString() as '0' | '1' | '2' | '3' | '4',
         reason: `Signal: ${signal.type}`,
-        signalId: insertedSignal?.id,
+        signalId: insertedSignal?.id ?? null,
         timestamp: new Date(),
       };
 

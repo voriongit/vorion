@@ -6,16 +6,20 @@
  * @packageDocumentation
  */
 
+import { webcrypto } from 'node:crypto';
 import { createLogger } from './logger.js';
 
 const logger = createLogger({ component: 'crypto' });
+
+// Use webcrypto for SubtleCrypto API
+const crypto = webcrypto;
 
 /**
  * Key pair for Ed25519 signing
  */
 export interface KeyPair {
-  publicKey: CryptoKey;
-  privateKey: CryptoKey;
+  publicKey: webcrypto.CryptoKey;
+  privateKey: webcrypto.CryptoKey;
 }
 
 /**
@@ -224,7 +228,7 @@ export async function verify(
     const publicKeyBuffer = base64ToBuffer(publicKey);
 
     // Try Ed25519 first
-    let cryptoKey: CryptoKey;
+    let cryptoKey: webcrypto.CryptoKey;
     let algorithm: string;
     try {
       cryptoKey = await crypto.subtle.importKey(

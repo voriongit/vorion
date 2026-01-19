@@ -16,7 +16,7 @@ import {
   type NewIntent,
   type NewIntentProcessingLog,
 } from '../db/schema/intents.js';
-import { getIntentQueue, type IntentProcessor } from './queue.js';
+import { getIntentQueue } from './queue.js';
 import type { Intent, ID, IntentStatus } from '../common/types.js';
 
 const logger = createLogger({ component: 'intent' });
@@ -238,8 +238,8 @@ export class IntentService {
       phase: status === 'failed' ? 'failed' : 'status_changed',
       previousStatus,
       newStatus: status,
-      error: details?.error,
-      details,
+      error: details?.error ?? null,
+      details: details ?? null,
     });
 
     logger.info({ intentId: id, previousStatus, newStatus: status }, 'Intent status updated');
@@ -307,16 +307,28 @@ export class IntentService {
       )
       .orderBy(desc(intentProcessingLog.timestamp));
 
-    return logs.map((l) => ({
-      phase: l.phase,
-      previousStatus: l.previousStatus ?? undefined,
-      newStatus: l.newStatus ?? undefined,
-      durationMs: l.durationMs ?? undefined,
-      attempt: l.attempt ?? undefined,
-      details: (l.details as Record<string, unknown>) ?? undefined,
-      error: l.error ?? undefined,
-      timestamp: l.timestamp.toISOString(),
-    }));
+    return logs.map((l) => {
+      const entry: {
+        phase: string;
+        previousStatus?: string;
+        newStatus?: string;
+        durationMs?: number;
+        attempt?: number;
+        details?: Record<string, unknown>;
+        error?: string;
+        timestamp: string;
+      } = {
+        phase: l.phase,
+        timestamp: l.timestamp.toISOString(),
+      };
+      if (l.previousStatus !== null) entry.previousStatus = l.previousStatus;
+      if (l.newStatus !== null) entry.newStatus = l.newStatus;
+      if (l.durationMs !== null) entry.durationMs = l.durationMs;
+      if (l.attempt !== null) entry.attempt = l.attempt;
+      if (l.details !== null) entry.details = l.details as Record<string, unknown>;
+      if (l.error !== null) entry.error = l.error;
+      return entry;
+    });
   }
 
   /**
@@ -349,26 +361,27 @@ export class IntentService {
    * Convert database row to response
    */
   private toResponse(row: typeof intents.$inferSelect): IntentResponse {
-    return {
+    const response: IntentResponse = {
       id: row.id,
       tenantId: row.tenantId,
       entityId: row.entityId,
       goal: row.goal,
       context: row.context,
-      metadata: (row.metadata as Record<string, unknown>) ?? undefined,
       status: row.status,
       priority: row.priority,
-      queuedAt: row.queuedAt?.toISOString(),
-      processingStartedAt: row.processingStartedAt?.toISOString(),
-      processingCompletedAt: row.processingCompletedAt?.toISOString(),
       processAttempts: row.processAttempts,
-      lastError: row.lastError ?? undefined,
-      decisionId: row.decisionId ?? undefined,
-      proofId: row.proofId ?? undefined,
-      escalationId: row.escalationId ?? undefined,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+    if (row.metadata !== null) response.metadata = row.metadata as Record<string, unknown>;
+    if (row.queuedAt !== null) response.queuedAt = row.queuedAt.toISOString();
+    if (row.processingStartedAt !== null) response.processingStartedAt = row.processingStartedAt.toISOString();
+    if (row.processingCompletedAt !== null) response.processingCompletedAt = row.processingCompletedAt.toISOString();
+    if (row.lastError !== null) response.lastError = row.lastError;
+    if (row.decisionId !== null) response.decisionId = row.decisionId;
+    if (row.proofId !== null) response.proofId = row.proofId;
+    if (row.escalationId !== null) response.escalationId = row.escalationId;
+    return response;
   }
 }
 

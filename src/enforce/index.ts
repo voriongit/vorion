@@ -11,11 +11,11 @@ import type {
   Intent,
   Decision,
   ControlAction,
-  EvaluationResult,
   TrustLevel,
   TrustScore,
   ID,
 } from '../common/types.js';
+import type { EvaluationResult } from '../basis/types.js';
 
 const logger = createLogger({ component: 'enforce' });
 

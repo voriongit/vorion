@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import Fastify, { FastifyInstance } from 'fastify';
+import Fastify, { FastifyInstance, FastifyBaseLogger } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -26,7 +26,7 @@ export async function createServer(): Promise<FastifyInstance> {
   const config = getConfig();
 
   const server = Fastify({
-    logger: logger,
+    logger: logger as unknown as FastifyBaseLogger,
     requestIdHeader: 'x-request-id',
     requestIdLogLabel: 'requestId',
   });

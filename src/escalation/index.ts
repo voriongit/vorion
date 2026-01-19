@@ -410,15 +410,26 @@ export class EscalationService {
       )
       .orderBy(desc(escalationAudit.timestamp));
 
-    return audit.map((a) => ({
-      action: a.action,
-      actorId: a.actorId ?? undefined,
-      actorType: a.actorType,
-      previousStatus: a.previousStatus ?? undefined,
-      newStatus: a.newStatus ?? undefined,
-      details: (a.details as Record<string, unknown>) ?? undefined,
-      timestamp: a.timestamp.toISOString(),
-    }));
+    return audit.map((a) => {
+      const entry: {
+        action: string;
+        actorId?: string;
+        actorType: string;
+        previousStatus?: string;
+        newStatus?: string;
+        details?: Record<string, unknown>;
+        timestamp: string;
+      } = {
+        action: a.action,
+        actorType: a.actorType,
+        timestamp: a.timestamp.toISOString(),
+      };
+      if (a.actorId !== null) entry.actorId = a.actorId;
+      if (a.previousStatus !== null) entry.previousStatus = a.previousStatus;
+      if (a.newStatus !== null) entry.newStatus = a.newStatus;
+      if (a.details !== null) entry.details = a.details as Record<string, unknown>;
+      return entry;
+    });
   }
 
   /**
@@ -451,7 +462,7 @@ export class EscalationService {
    * Convert database row to response
    */
   private toResponse(row: Escalation): EscalationResponse {
-    return {
+    const response: EscalationResponse = {
       id: row.id,
       tenantId: row.tenantId,
       intentId: row.intentId,
@@ -460,17 +471,18 @@ export class EscalationService {
       priority: row.priority,
       status: row.status,
       escalatedTo: row.escalatedTo,
-      escalatedBy: row.escalatedBy ?? undefined,
-      context: (row.context as Record<string, unknown>) ?? undefined,
-      requestedAction: row.requestedAction ?? undefined,
-      resolvedBy: row.resolvedBy ?? undefined,
-      resolvedAt: row.resolvedAt?.toISOString(),
-      resolution: row.resolution ?? undefined,
-      resolutionNotes: row.resolutionNotes ?? undefined,
       timeoutAt: row.timeoutAt.toISOString(),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+    if (row.escalatedBy !== null) response.escalatedBy = row.escalatedBy;
+    if (row.context !== null) response.context = row.context as Record<string, unknown>;
+    if (row.requestedAction !== null) response.requestedAction = row.requestedAction;
+    if (row.resolvedBy !== null) response.resolvedBy = row.resolvedBy;
+    if (row.resolvedAt !== null) response.resolvedAt = row.resolvedAt.toISOString();
+    if (row.resolution !== null) response.resolution = row.resolution;
+    if (row.resolutionNotes !== null) response.resolutionNotes = row.resolutionNotes;
+    return response;
   }
 }
 

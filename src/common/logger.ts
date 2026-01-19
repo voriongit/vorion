@@ -52,16 +52,23 @@ function redactObject(obj: unknown): unknown {
 }
 
 /**
- * Custom serializers for common log properties
+ * Serialize error objects for logging
  */
-const serializers: pino.LoggerOptions['serializers'] = {
-  // Redact error stack traces in production (may contain sensitive data)
-  err: (err: Error) => ({
+function serializeError(err: Error): Record<string, unknown> {
+  return {
     type: err.constructor.name,
     message: isProduction ? redactString(err.message) : err.message,
     stack: isProduction ? '[REDACTED]' : err.stack,
-    ...(err.cause ? { cause: serializers.err?.(err.cause as Error) } : {}),
-  }),
+    ...(err.cause ? { cause: serializeError(err.cause as Error) } : {}),
+  };
+}
+
+/**
+ * Custom serializers for common log properties
+ */
+const serializers: { [key: string]: pino.SerializerFn } = {
+  // Redact error stack traces in production (may contain sensitive data)
+  err: serializeError,
 
   // Redact request headers
   req: (req: { headers?: Record<string, unknown>; url?: string; method?: string }) => ({

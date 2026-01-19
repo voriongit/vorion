@@ -96,24 +96,44 @@ export function parseNamespace(definition: unknown): RuleNamespace {
   const parsed = namespaceSchema.parse(definition);
   const timestamp = new Date().toISOString();
 
-  const rules: Rule[] = parsed.rules.map((r) => ({
-    ...r,
-    when: {
-      intentType: r.when.intentType,
-      entityType: r.when.entityType,
-      conditions: r.when.conditions?.map((c) => ({
+  const rules: Rule[] = parsed.rules.map((r) => {
+    const when: Rule['when'] = {};
+    if (r.when.intentType !== undefined) when.intentType = r.when.intentType;
+    if (r.when.entityType !== undefined) when.entityType = r.when.entityType;
+    if (r.when.conditions !== undefined) {
+      when.conditions = r.when.conditions.map((c) => ({
         field: c.field,
         operator: c.operator,
         value: c.value,
-      })),
-    },
-    evaluate: r.evaluate.map((e) => ({
-      condition: e.condition,
-      result: e.result,
-      reason: e.reason,
-      escalation: e.escalation,
-    })),
-  }));
+      }));
+    }
+
+    return {
+      ...r,
+      when,
+      evaluate: r.evaluate.map((e) => {
+        const evaluation: Rule['evaluate'][number] = {
+          condition: e.condition,
+          result: e.result,
+        };
+        if (e.reason !== undefined) evaluation.reason = e.reason;
+        if (e.escalation !== undefined) {
+          const escalation: Rule['evaluate'][number]['escalation'] = {
+            to: e.escalation.to,
+            timeout: e.escalation.timeout,
+          };
+          if (e.escalation.requireJustification !== undefined) {
+            escalation.requireJustification = e.escalation.requireJustification;
+          }
+          if (e.escalation.autoDenyOnTimeout !== undefined) {
+            escalation.autoDenyOnTimeout = e.escalation.autoDenyOnTimeout;
+          }
+          evaluation.escalation = escalation;
+        }
+        return evaluation;
+      }),
+    };
+  });
 
   logger.info(
     { namespace: parsed.namespace, ruleCount: rules.length },

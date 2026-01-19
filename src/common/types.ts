@@ -123,9 +123,9 @@ export interface ConstraintEvaluation {
 }
 
 /**
- * Evaluation result from BASIS
+ * Single constraint evaluation result from BASIS
  */
-export interface EvaluationResult {
+export interface ConstraintEvaluationResult {
   constraintId: ID;
   passed: boolean;
   action: ControlAction;
@@ -141,7 +141,7 @@ export interface EvaluationResult {
 export interface Decision {
   intentId: ID;
   action: ControlAction;
-  constraintsEvaluated: EvaluationResult[];
+  constraintsEvaluated: ConstraintEvaluationResult[];
   trustScore: TrustScore;
   trustLevel: TrustLevel;
   escalation?: EscalationRequest;

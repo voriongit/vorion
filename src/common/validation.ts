@@ -199,7 +199,7 @@ export class ValidationError extends Error {
     super(message);
     this.name = 'ValidationError';
     this.code = code;
-    this.field = field;
+    if (field !== undefined) this.field = field;
   }
 }
 

@@ -212,26 +212,6 @@ export function redactString(
 ): string {
   const replacement = config.replacement ?? DEFAULT_CONFIG.replacement;
 
-  // Common patterns in strings
-  const stringPatterns = [
-    // Bearer tokens
-    /Bearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+/gi,
-    // API keys (common formats)
-    /(?:api[_-]?key|apikey|key)[=:]\s*["']?([A-Za-z0-9\-_]{16,})["']?/gi,
-    // JWT tokens
-    /eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+/g,
-    // Basic auth
-    /Basic\s+[A-Za-z0-9+/=]+/gi,
-    // Passwords in URLs
-    /(:\/\/[^:]+:)[^@]+(@)/gi,
-    // Email addresses (partial)
-    /([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g,
-    // Credit card numbers (simple pattern)
-    /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g,
-    // SSN
-    /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/g,
-  ];
-
   let result = text;
 
   // Replace Bearer/Basic auth tokens

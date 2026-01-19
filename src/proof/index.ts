@@ -452,7 +452,7 @@ export class ProofService {
    * Convert database row to SignedProof
    */
   private toSignedProof(row: typeof proofs.$inferSelect): SignedProof {
-    return {
+    const proof: SignedProof = {
       id: row.id,
       chainPosition: row.chainPosition,
       intentId: row.intentId,
@@ -464,14 +464,15 @@ export class ProofService {
       previousHash: row.previousHash,
       signature: row.signature,
       createdAt: row.createdAt.toISOString(),
-      signatureData: row.signaturePublicKey
-        ? {
-            publicKey: row.signaturePublicKey,
-            algorithm: row.signatureAlgorithm ?? 'unknown',
-            signedAt: row.signedAt?.toISOString() ?? row.createdAt.toISOString(),
-          }
-        : undefined,
     };
+    if (row.signaturePublicKey !== null) {
+      proof.signatureData = {
+        publicKey: row.signaturePublicKey,
+        algorithm: row.signatureAlgorithm ?? 'unknown',
+        signedAt: row.signedAt?.toISOString() ?? row.createdAt.toISOString(),
+      };
+    }
+    return proof;
   }
 
   /**
