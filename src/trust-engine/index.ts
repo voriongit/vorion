@@ -253,7 +253,7 @@ export class TrustEngine {
     return {
       entityId: record.entityId,
       score: record.score,
-      level: parseInt(record.level) as TrustLevel,
+      level: parseInt(record.level, 10) as TrustLevel,
       components: {
         behavioral: record.behavioralScore,
         compliance: record.complianceScore,
@@ -273,7 +273,7 @@ export class TrustEngine {
       lastCalculatedAt: record.lastCalculatedAt.toISOString(),
       history: history.map((h) => ({
         score: h.score,
-        level: parseInt(h.level) as TrustLevel,
+        level: parseInt(h.level, 10) as TrustLevel,
         reason: h.reason,
         timestamp: h.timestamp.toISOString(),
       })),
@@ -329,7 +329,7 @@ export class TrustEngine {
 
     const currentRecord = record[0]!;
     const previousScore = currentRecord.score;
-    const previousLevel = parseInt(currentRecord.level) as TrustLevel;
+    const previousLevel = parseInt(currentRecord.level, 10) as TrustLevel;
 
     // Recalculate
     const calculation = await this.calculate(signal.entityId);
@@ -444,7 +444,7 @@ export class TrustEngine {
   private scoreToLevel(score: TrustScore): TrustLevel {
     for (const [level, { min, max }] of Object.entries(TRUST_THRESHOLDS)) {
       if (score >= min && score <= max) {
-        return parseInt(level) as TrustLevel;
+        return parseInt(level, 10) as TrustLevel;
       }
     }
     return 0;

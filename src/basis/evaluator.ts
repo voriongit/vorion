@@ -57,7 +57,9 @@ export class RuleEvaluator {
       const result = await this.evaluateRule(rule, context);
       rulesEvaluated.push(result);
 
-      if (!result.matched || result.action === 'deny') {
+      // Track rules that resulted in restrictive actions (deny, escalate, limit, etc.)
+      // Note: result.matched === (action !== 'deny'), so we check action directly
+      if (result.action !== 'allow' && result.action !== 'monitor') {
         violatedRules.push(result);
       }
 
@@ -151,6 +153,18 @@ export class RuleEvaluator {
   }
 
   /**
+   * Safely convert a value to number for comparison
+   */
+  private toNumber(value: unknown): number | null {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value);
+      return isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  }
+
+  /**
    * Evaluate a single condition expression
    */
   private evaluateCondition(
@@ -165,18 +179,54 @@ export class RuleEvaluator {
         return fieldValue === targetValue;
       case 'not_equals':
         return fieldValue !== targetValue;
-      case 'greater_than':
-        return (fieldValue as number) > (targetValue as number);
-      case 'less_than':
-        return (fieldValue as number) < (targetValue as number);
-      case 'greater_than_or_equal':
-        return (fieldValue as number) >= (targetValue as number);
-      case 'less_than_or_equal':
-        return (fieldValue as number) <= (targetValue as number);
+      case 'greater_than': {
+        const a = this.toNumber(fieldValue);
+        const b = this.toNumber(targetValue);
+        if (a === null || b === null) {
+          logger.warn({ field: condition.field, fieldValue, targetValue }, 'Non-numeric comparison attempted');
+          return false;
+        }
+        return a > b;
+      }
+      case 'less_than': {
+        const a = this.toNumber(fieldValue);
+        const b = this.toNumber(targetValue);
+        if (a === null || b === null) {
+          logger.warn({ field: condition.field, fieldValue, targetValue }, 'Non-numeric comparison attempted');
+          return false;
+        }
+        return a < b;
+      }
+      case 'greater_than_or_equal': {
+        const a = this.toNumber(fieldValue);
+        const b = this.toNumber(targetValue);
+        if (a === null || b === null) {
+          logger.warn({ field: condition.field, fieldValue, targetValue }, 'Non-numeric comparison attempted');
+          return false;
+        }
+        return a >= b;
+      }
+      case 'less_than_or_equal': {
+        const a = this.toNumber(fieldValue);
+        const b = this.toNumber(targetValue);
+        if (a === null || b === null) {
+          logger.warn({ field: condition.field, fieldValue, targetValue }, 'Non-numeric comparison attempted');
+          return false;
+        }
+        return a <= b;
+      }
       case 'in':
-        return (targetValue as unknown[]).includes(fieldValue);
+        if (!Array.isArray(targetValue)) {
+          logger.warn({ field: condition.field, targetValue }, 'Non-array target for "in" operator');
+          return false;
+        }
+        return targetValue.includes(fieldValue);
       case 'not_in':
-        return !(targetValue as unknown[]).includes(fieldValue);
+        if (!Array.isArray(targetValue)) {
+          logger.warn({ field: condition.field, targetValue }, 'Non-array target for "not_in" operator');
+          return false;
+        }
+        return !targetValue.includes(fieldValue);
       case 'contains':
         return String(fieldValue).includes(String(targetValue));
       case 'exists':
