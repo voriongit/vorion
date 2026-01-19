@@ -24,6 +24,8 @@ import {
   escalationResolutions,
   escalationPendingDuration,
   escalationsPending,
+  updateSlaBreachRate,
+  updateEscalationApprovalRate,
 } from './metrics.js';
 
 const logger = createLogger({ component: 'escalation' });
@@ -481,12 +483,40 @@ export class EscalationService {
     );
     escalationsPending.dec({ tenant_id: tenantId });
 
+    // Update SLA breach rate and approval rate gauges
+    // Fire and forget to not block the resolution
+    this.updateRateGauges(tenantId).catch((error) => {
+      logger.warn({ error, tenantId }, 'Failed to update rate gauges');
+    });
+
     logger.info(
       { escalationId: id, status, resolvedBy: options.resolvedBy, pendingDuration, slaBreached },
       'Escalation resolved'
     );
 
     return updated;
+  }
+
+  /**
+   * Update SLA breach rate and approval rate gauges for a tenant
+   */
+  private async updateRateGauges(tenantId: ID): Promise<void> {
+    const stats = await this.getSlaStats(tenantId);
+    updateSlaBreachRate(tenantId, stats.breachRate);
+
+    // Calculate approval rate from resolved escalations
+    const [approvalStats] = await this.db
+      .select({
+        total: sql<number>`count(*) filter (where ${escalations.status} in ('approved', 'rejected'))`,
+        approved: sql<number>`count(*) filter (where ${escalations.status} = 'approved')`,
+      })
+      .from(escalations)
+      .where(eq(escalations.tenantId, tenantId));
+
+    const approvalTotal = Number(approvalStats?.total ?? 0);
+    const approvedCount = Number(approvalStats?.approved ?? 0);
+    const approvalRate = approvalTotal > 0 ? approvedCount / approvalTotal : 0;
+    updateEscalationApprovalRate(tenantId, approvalRate);
   }
 
   /**

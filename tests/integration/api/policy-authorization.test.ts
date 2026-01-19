@@ -246,6 +246,16 @@ vi.mock('../../../src/policy/loader.js', () => ({
   })),
 }));
 
+// Mock tenant verification to allow all test users
+// In production, this verifies user actually belongs to tenant
+vi.mock('../../../src/common/tenant-verification.js', () => ({
+  verifyTenantMembership: vi.fn().mockResolvedValue({ isMember: true, role: 'member', cached: false }),
+  requireTenantMembership: vi.fn().mockResolvedValue(undefined),
+  invalidateMembershipCache: vi.fn().mockResolvedValue(undefined),
+  invalidateUserMembershipCache: vi.fn().mockResolvedValue(undefined),
+  invalidateTenantMembershipCache: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { createServer } from '../../../src/api/server.js';
 
 const JWT_SECRET = 'test-secret-key-for-testing-12345';

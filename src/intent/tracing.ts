@@ -416,3 +416,428 @@ export function injectTraceContext(_carrier: Record<string, string>): Context {
   // In production, use W3C TraceContext propagator
   return context.active();
 }
+
+/**
+ * Span attribute names for additional tracing operations
+ */
+export const AdditionalAttributes = {
+  // Deduplication
+  DEDUPE_HASH: 'dedupe.hash',
+  DEDUPE_FOUND: 'dedupe.found',
+
+  // Lock
+  LOCK_KEY: 'lock.key',
+  LOCK_ACQUIRED: 'lock.acquired',
+  LOCK_TIMEOUT_MS: 'lock.timeout_ms',
+
+  // Encryption
+  CRYPTO_OPERATION: 'crypto.operation',
+  CRYPTO_SIZE_BYTES: 'crypto.size_bytes',
+  CRYPTO_SUCCESS: 'crypto.success',
+
+  // Policy
+  POLICY_COUNT: 'policy.count',
+  POLICY_MATCHED_COUNT: 'policy.matched_count',
+  POLICY_NAMESPACE: 'policy.namespace',
+  POLICY_FINAL_ACTION: 'policy.final_action',
+
+  // Webhook
+  WEBHOOK_ID: 'webhook.id',
+  WEBHOOK_URL_REDACTED: 'webhook.url_redacted',
+  WEBHOOK_STATUS_CODE: 'webhook.status_code',
+  WEBHOOK_SUCCESS: 'webhook.success',
+  WEBHOOK_EVENT_TYPE: 'webhook.event_type',
+} as const;
+
+/**
+ * Create a span for deduplication check
+ */
+export function traceDedupeCheck<T>(
+  tenantId: string,
+  entityId: string,
+  hash: string,
+  fn: (span: Span) => Promise<T>
+): Promise<T> {
+  const tracer = getTracer();
+
+  return tracer.startActiveSpan(
+    'intent.dedupe.check',
+    {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        [IntentAttributes.TENANT_ID]: tenantId,
+        [IntentAttributes.ENTITY_ID]: entityId,
+        [AdditionalAttributes.DEDUPE_HASH]: hash,
+      },
+    },
+    async (span) => {
+      try {
+        const result = await fn(span);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (error) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        if (error instanceof Error) {
+          span.recordException(error);
+        }
+        throw error;
+      } finally {
+        span.end();
+      }
+    }
+  );
+}
+
+/**
+ * Create a span for lock acquisition
+ */
+export function traceLockAcquire<T>(
+  tenantId: string,
+  lockKey: string,
+  fn: (span: Span) => Promise<T>
+): Promise<T> {
+  const tracer = getTracer();
+
+  return tracer.startActiveSpan(
+    'intent.lock.acquire',
+    {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        [IntentAttributes.TENANT_ID]: tenantId,
+        [AdditionalAttributes.LOCK_KEY]: lockKey,
+      },
+    },
+    async (span) => {
+      try {
+        const result = await fn(span);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (error) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        if (error instanceof Error) {
+          span.recordException(error);
+        }
+        throw error;
+      } finally {
+        span.end();
+      }
+    }
+  );
+}
+
+/**
+ * Create a span for encryption operation (async)
+ */
+export function traceEncrypt<T>(
+  sizeBytes: number,
+  fn: (span: Span) => Promise<T>
+): Promise<T> {
+  const tracer = getTracer();
+
+  return tracer.startActiveSpan(
+    'intent.encrypt',
+    {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        [AdditionalAttributes.CRYPTO_OPERATION]: 'encrypt',
+        [AdditionalAttributes.CRYPTO_SIZE_BYTES]: sizeBytes,
+      },
+    },
+    async (span) => {
+      try {
+        const result = await fn(span);
+        span.setAttribute(AdditionalAttributes.CRYPTO_SUCCESS, true);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (error) {
+        span.setAttribute(AdditionalAttributes.CRYPTO_SUCCESS, false);
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        if (error instanceof Error) {
+          span.recordException(error);
+        }
+        throw error;
+      } finally {
+        span.end();
+      }
+    }
+  );
+}
+
+/**
+ * Create a span for encryption operation (sync)
+ */
+export function traceEncryptSync<T>(
+  sizeBytes: number,
+  fn: (span: Span) => T
+): T {
+  const tracer = getTracer();
+
+  return tracer.startActiveSpan(
+    'intent.encrypt',
+    {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        [AdditionalAttributes.CRYPTO_OPERATION]: 'encrypt',
+        [AdditionalAttributes.CRYPTO_SIZE_BYTES]: sizeBytes,
+      },
+    },
+    (span) => {
+      try {
+        const result = fn(span);
+        span.setAttribute(AdditionalAttributes.CRYPTO_SUCCESS, true);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (error) {
+        span.setAttribute(AdditionalAttributes.CRYPTO_SUCCESS, false);
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        if (error instanceof Error) {
+          span.recordException(error);
+        }
+        throw error;
+      } finally {
+        span.end();
+      }
+    }
+  );
+}
+
+/**
+ * Create a span for decryption operation (async)
+ */
+export function traceDecrypt<T>(
+  sizeBytes: number,
+  fn: (span: Span) => Promise<T>
+): Promise<T> {
+  const tracer = getTracer();
+
+  return tracer.startActiveSpan(
+    'intent.decrypt',
+    {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        [AdditionalAttributes.CRYPTO_OPERATION]: 'decrypt',
+        [AdditionalAttributes.CRYPTO_SIZE_BYTES]: sizeBytes,
+      },
+    },
+    async (span) => {
+      try {
+        const result = await fn(span);
+        span.setAttribute(AdditionalAttributes.CRYPTO_SUCCESS, true);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (error) {
+        span.setAttribute(AdditionalAttributes.CRYPTO_SUCCESS, false);
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        if (error instanceof Error) {
+          span.recordException(error);
+        }
+        throw error;
+      } finally {
+        span.end();
+      }
+    }
+  );
+}
+
+/**
+ * Create a span for decryption operation (sync)
+ */
+export function traceDecryptSync<T>(
+  sizeBytes: number,
+  fn: (span: Span) => T
+): T {
+  const tracer = getTracer();
+
+  return tracer.startActiveSpan(
+    'intent.decrypt',
+    {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        [AdditionalAttributes.CRYPTO_OPERATION]: 'decrypt',
+        [AdditionalAttributes.CRYPTO_SIZE_BYTES]: sizeBytes,
+      },
+    },
+    (span) => {
+      try {
+        const result = fn(span);
+        span.setAttribute(AdditionalAttributes.CRYPTO_SUCCESS, true);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (error) {
+        span.setAttribute(AdditionalAttributes.CRYPTO_SUCCESS, false);
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        if (error instanceof Error) {
+          span.recordException(error);
+        }
+        throw error;
+      } finally {
+        span.end();
+      }
+    }
+  );
+}
+
+/**
+ * Create a span for policy evaluation
+ */
+export function tracePolicyEvaluate<T>(
+  intentId: string,
+  tenantId: string,
+  namespace: string,
+  fn: (span: Span) => Promise<T>
+): Promise<T> {
+  const tracer = getTracer();
+
+  return tracer.startActiveSpan(
+    'policy.evaluate',
+    {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        [IntentAttributes.INTENT_ID]: intentId,
+        [IntentAttributes.TENANT_ID]: tenantId,
+        [AdditionalAttributes.POLICY_NAMESPACE]: namespace,
+      },
+    },
+    async (span) => {
+      try {
+        const result = await fn(span);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (error) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        if (error instanceof Error) {
+          span.recordException(error);
+        }
+        throw error;
+      } finally {
+        span.end();
+      }
+    }
+  );
+}
+
+/**
+ * Create a span for webhook delivery
+ */
+export function traceWebhookDeliver<T>(
+  webhookId: string,
+  url: string,
+  eventType: string,
+  fn: (span: Span) => Promise<T>
+): Promise<T> {
+  const tracer = getTracer();
+
+  // Redact URL to show only host (hide path/query which may contain sensitive data)
+  let redactedUrl: string;
+  try {
+    const parsedUrl = new URL(url);
+    redactedUrl = `${parsedUrl.protocol}//${parsedUrl.host}/***`;
+  } catch {
+    redactedUrl = '[invalid-url]';
+  }
+
+  return tracer.startActiveSpan(
+    'webhook.deliver',
+    {
+      kind: SpanKind.CLIENT,
+      attributes: {
+        [AdditionalAttributes.WEBHOOK_ID]: webhookId,
+        [AdditionalAttributes.WEBHOOK_URL_REDACTED]: redactedUrl,
+        [AdditionalAttributes.WEBHOOK_EVENT_TYPE]: eventType,
+      },
+    },
+    async (span) => {
+      try {
+        const result = await fn(span);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (error) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        if (error instanceof Error) {
+          span.recordException(error);
+        }
+        throw error;
+      } finally {
+        span.end();
+      }
+    }
+  );
+}
+
+/**
+ * Record policy evaluation result on span
+ */
+export function recordPolicyEvaluationResult(
+  span: Span,
+  policyCount: number,
+  matchedCount: number,
+  finalAction: string
+): void {
+  span.setAttributes({
+    [AdditionalAttributes.POLICY_COUNT]: policyCount,
+    [AdditionalAttributes.POLICY_MATCHED_COUNT]: matchedCount,
+    [AdditionalAttributes.POLICY_FINAL_ACTION]: finalAction,
+  });
+}
+
+/**
+ * Record webhook delivery result on span
+ */
+export function recordWebhookResult(
+  span: Span,
+  success: boolean,
+  statusCode?: number
+): void {
+  span.setAttribute(AdditionalAttributes.WEBHOOK_SUCCESS, success);
+  if (statusCode !== undefined) {
+    span.setAttribute(AdditionalAttributes.WEBHOOK_STATUS_CODE, statusCode);
+  }
+}
+
+/**
+ * Record lock acquisition result on span
+ */
+export function recordLockResult(
+  span: Span,
+  acquired: boolean,
+  timeoutMs?: number
+): void {
+  span.setAttribute(AdditionalAttributes.LOCK_ACQUIRED, acquired);
+  if (timeoutMs !== undefined) {
+    span.setAttribute(AdditionalAttributes.LOCK_TIMEOUT_MS, timeoutMs);
+  }
+}
+
+/**
+ * Record deduplication check result on span
+ */
+export function recordDedupeResult(
+  span: Span,
+  found: boolean
+): void {
+  span.setAttribute(AdditionalAttributes.DEDUPE_FOUND, found);
+}

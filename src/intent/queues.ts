@@ -24,7 +24,14 @@ import {
   dlqSize,
   recordPolicyEvaluation,
   recordPolicyOverride,
+  recordCircuitBreakerStateChange,
+  recordCircuitBreakerExecution,
+  updateCircuitBreakerFailures,
 } from './metrics.js';
+import {
+  CircuitBreaker,
+  type CircuitState,
+} from '../common/circuit-breaker.js';
 import {
   getPolicyLoader,
   createPolicyEvaluator,
@@ -37,6 +44,14 @@ import {
   type AuditService,
 } from '../audit/index.js';
 import { createWebhookService } from './webhooks.js';
+import {
+  getCachedTrustScore,
+  cacheTrustScore,
+} from '../common/trust-cache.js';
+import {
+  tracePolicyEvaluate,
+  recordPolicyEvaluationResult,
+} from './tracing.js';
 
 const logger = createLogger({ component: 'intent-queue' });
 
@@ -80,6 +95,20 @@ const enforcementService = createEnforcementService({ defaultAction: 'deny' });
 const auditService = createAuditService();
 const auditHelper = createAuditHelper(auditService);
 const webhookService = createWebhookService();
+
+// Policy evaluation circuit breaker - prevents cascading failures when policy engine is unhealthy
+const policyCircuitBreaker = new CircuitBreaker({
+  name: 'policy-evaluator',
+  failureThreshold: getConfig().intent.policyCircuitBreaker.failureThreshold,
+  resetTimeoutMs: getConfig().intent.policyCircuitBreaker.resetTimeoutMs,
+  onStateChange: (from: CircuitState, to: CircuitState) => {
+    recordCircuitBreakerStateChange('policy-evaluator', from, to);
+    logger.info(
+      { circuitBreaker: 'policy-evaluator', from, to },
+      'Policy circuit breaker state changed'
+    );
+  },
+});
 
 /**
  * Action priority map - lower number = more restrictive
@@ -301,7 +330,16 @@ export function registerIntentWorkers(service: IntentService): void {
             return;
           }
 
-          const trustRecord = await trustEngine.getScore(intent.entityId);
+          // Check cache first, then fall back to trust engine
+          let trustRecord = await getCachedTrustScore(intent.entityId, tenantId);
+          if (!trustRecord) {
+            // Cache miss - fetch from trust engine
+            trustRecord = await trustEngine.getScore(intent.entityId) ?? null;
+            // Cache the result for future lookups
+            if (trustRecord) {
+              await cacheTrustScore(intent.entityId, tenantId, trustRecord);
+            }
+          }
           const trustSnapshot = trustRecord
             ? {
                 score: trustRecord.score,
@@ -443,72 +481,162 @@ export function registerIntentWorkers(service: IntentService): void {
           },
         };
 
-        // Rule-based evaluation (existing system)
-        const evaluation = await ruleEvaluator.evaluate(evaluationContext);
-
-        // Policy-based evaluation (new policy engine)
-        let policyEvaluation: MultiPolicyEvaluationResult | null = null;
+        // PARALLEL EVALUATION: Run rule and policy evaluation concurrently
+        // This roughly halves evaluation latency by running both evaluations at the same time
         const policyNamespace = namespace ?? config.intent.defaultNamespace;
+        const ruleEvalStartTime = Date.now();
         const policyEvalStartTime = Date.now();
-        try {
-          const policies = await policyLoader.getPolicies(
-            intent.tenantId,
-            policyNamespace
-          );
 
-          if (policies.length > 0) {
-            // Build policy evaluation context (slightly different structure)
-            const policyContext: PolicyEvaluationContext = {
-              intent: {
-                ...intent,
-                intentType: intent.intentType ?? 'generic',
-              },
-              entity: {
-                id: intent.entityId,
-                type: (intent.metadata['entityType'] as string) ?? 'agent',
-                trustScore: intent.trustScore ?? 0,
-                trustLevel: (intent.trustLevel ?? 0) as TrustLevel,
-                attributes: intent.metadata as Record<string, unknown>,
-              },
-              environment: {
-                timestamp: new Date().toISOString(),
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                requestId: randomUUID(),
-              },
-            };
+        // Build policy evaluation context (slightly different structure than rule context)
+        const policyContext: PolicyEvaluationContext = {
+          intent: {
+            ...intent,
+            intentType: intent.intentType ?? 'generic',
+          },
+          entity: {
+            id: intent.entityId,
+            type: (intent.metadata['entityType'] as string) ?? 'agent',
+            trustScore: intent.trustScore ?? 0,
+            trustLevel: (intent.trustLevel ?? 0) as TrustLevel,
+            attributes: intent.metadata as Record<string, unknown>,
+          },
+          environment: {
+            timestamp: new Date().toISOString(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            requestId: randomUUID(),
+          },
+        };
 
-            policyEvaluation = await policyEvaluator.evaluateMultiple(policies, policyContext);
-
-            // Record policy evaluation metrics
-            const policyEvalDuration = (Date.now() - policyEvalStartTime) / 1000;
-            const matchedCount = policyEvaluation.policiesEvaluated.filter(
-              (p) => p.matchedRules.length > 0
-            ).length;
-            const policyResult = policyEvaluation.finalAction === 'allow'
-              ? 'allow'
-              : policyEvaluation.finalAction === 'deny'
-                ? 'deny'
-                : 'escalate';
-            recordPolicyEvaluation(
-              intent.tenantId,
-              policyNamespace,
-              policyResult,
-              policyEvalDuration,
-              matchedCount
-            );
-
+        // Run rule evaluation and policy loading/evaluation in parallel
+        const [evaluation, policyResult] = await Promise.all([
+          // Rule-based evaluation (existing system)
+          ruleEvaluator.evaluate(evaluationContext).then((result) => {
+            const ruleEvalDuration = Date.now() - ruleEvalStartTime;
             logger.debug(
               {
                 intentId: intent.id,
-                policiesEvaluated: policyEvaluation.policiesEvaluated.length,
-                finalAction: policyEvaluation.finalAction,
+                rulesEvaluated: result.rulesEvaluated.length,
+                passed: result.passed,
+                finalAction: result.finalAction,
+                durationMs: ruleEvalDuration,
               },
-              'Policy evaluation completed'
+              'Rule evaluation completed'
             );
-          }
-        } catch (policyError) {
-          logger.warn({ intentId: intent.id, error: policyError }, 'Policy evaluation failed, continuing with rules only');
-        }
+            return result;
+          }),
+
+          // Policy-based evaluation (new policy engine) with circuit breaker and tracing
+          // Circuit breaker prevents cascading failures when policy engine is unhealthy
+          (async (): Promise<{ evaluation: MultiPolicyEvaluationResult | null; error?: Error; circuitOpen?: boolean }> => {
+            // Check if circuit is open - if so, skip policy evaluation immediately
+            const isCircuitOpen = await policyCircuitBreaker.isOpen();
+            if (isCircuitOpen) {
+              recordCircuitBreakerExecution('policy-evaluator', 'rejected');
+              logger.warn(
+                { intentId: intent.id, circuitState: 'OPEN' },
+                'Policy circuit breaker is OPEN, skipping policy evaluation and using rules only'
+              );
+              return { evaluation: null, circuitOpen: true };
+            }
+
+            return tracePolicyEvaluate(
+              intent.id,
+              intent.tenantId,
+              policyNamespace,
+              async (span): Promise<{ evaluation: MultiPolicyEvaluationResult | null; error?: Error; circuitOpen?: boolean }> => {
+                // Execute policy evaluation through circuit breaker
+                const circuitResult = await policyCircuitBreaker.execute(async () => {
+                  const policies = await policyLoader.getPolicies(
+                    intent.tenantId,
+                    policyNamespace
+                  );
+
+                  if (policies.length === 0) {
+                    recordPolicyEvaluationResult(span, 0, 0, 'none');
+                    return null;
+                  }
+
+                  const policyEvaluation = await policyEvaluator.evaluateMultiple(policies, policyContext);
+
+                  // Record policy evaluation metrics
+                  const policyEvalDuration = (Date.now() - policyEvalStartTime) / 1000;
+                  const matchedCount = policyEvaluation.policiesEvaluated.filter(
+                    (p) => p.matchedRules.length > 0
+                  ).length;
+                  const policyResultType = policyEvaluation.finalAction === 'allow'
+                    ? 'allow'
+                    : policyEvaluation.finalAction === 'deny'
+                      ? 'deny'
+                      : 'escalate';
+
+                  // Record span attributes for policy evaluation
+                  recordPolicyEvaluationResult(
+                    span,
+                    policyEvaluation.policiesEvaluated.length,
+                    matchedCount,
+                    policyResultType
+                  );
+
+                  recordPolicyEvaluation(
+                    intent.tenantId,
+                    policyNamespace,
+                    policyResultType,
+                    policyEvalDuration,
+                    matchedCount
+                  );
+
+                  logger.debug(
+                    {
+                      intentId: intent.id,
+                      policiesEvaluated: policyEvaluation.policiesEvaluated.length,
+                      finalAction: policyEvaluation.finalAction,
+                      durationMs: Date.now() - policyEvalStartTime,
+                    },
+                    'Policy evaluation completed'
+                  );
+
+                  return policyEvaluation;
+                });
+
+                // Handle circuit breaker result
+                if (circuitResult.success) {
+                  recordCircuitBreakerExecution('policy-evaluator', 'success');
+                  return { evaluation: circuitResult.result ?? null };
+                } else if (circuitResult.circuitOpen) {
+                  // Circuit opened during execution (shouldn't happen as we check above)
+                  recordCircuitBreakerExecution('policy-evaluator', 'rejected');
+                  logger.warn(
+                    { intentId: intent.id },
+                    'Policy circuit breaker opened during evaluation, continuing with rules only'
+                  );
+                  return { evaluation: null, circuitOpen: true };
+                } else {
+                  // Execution failed - circuit breaker already recorded the failure
+                  recordCircuitBreakerExecution('policy-evaluator', 'failure');
+                  logger.warn(
+                    { intentId: intent.id, error: circuitResult.error },
+                    'Policy evaluation failed (circuit breaker tracked), continuing with rules only'
+                  );
+                  return { evaluation: null, error: circuitResult.error };
+                }
+              }
+            );
+          })(),
+        ]);
+
+        // Extract policy evaluation result (may be null if no policies or error)
+        const policyEvaluation = policyResult.evaluation;
+
+        // Log parallel evaluation timing metrics
+        const totalEvalDuration = Date.now() - ruleEvalStartTime;
+        logger.debug(
+          {
+            intentId: intent.id,
+            totalDurationMs: totalEvalDuration,
+            parallelExecution: true,
+          },
+          'Parallel evaluation completed'
+        );
 
         await intentService.recordEvaluation(intent.id, intent.tenantId, {
           stage: 'basis',
@@ -905,4 +1033,48 @@ export async function retryDeadLetterJob(jobId: string): Promise<boolean> {
 
   logger.info({ jobId, originalQueue }, 'Dead letter job retried');
   return true;
+}
+
+/**
+ * Get the policy evaluation circuit breaker status
+ * Useful for health checks and monitoring
+ */
+export async function getPolicyCircuitBreakerStatus(): Promise<{
+  name: string;
+  state: CircuitState;
+  failureCount: number;
+  failureThreshold: number;
+  resetTimeoutMs: number;
+  lastFailureTime: Date | null;
+  openedAt: Date | null;
+  timeUntilReset: number | null;
+}> {
+  return policyCircuitBreaker.getStatus();
+}
+
+/**
+ * Force the policy circuit breaker to open state
+ * Useful for manual intervention during incidents
+ */
+export async function forcePolicyCircuitBreakerOpen(): Promise<void> {
+  await policyCircuitBreaker.forceOpen();
+  logger.warn({}, 'Policy circuit breaker forcibly opened');
+}
+
+/**
+ * Force the policy circuit breaker to closed state
+ * Useful for recovery after manual intervention
+ */
+export async function forcePolicyCircuitBreakerClose(): Promise<void> {
+  await policyCircuitBreaker.forceClose();
+  logger.info({}, 'Policy circuit breaker forcibly closed');
+}
+
+/**
+ * Reset the policy circuit breaker state
+ * Clears all failure counts and state
+ */
+export async function resetPolicyCircuitBreaker(): Promise<void> {
+  await policyCircuitBreaker.reset();
+  logger.info({}, 'Policy circuit breaker reset');
 }

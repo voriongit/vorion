@@ -4,7 +4,7 @@
  * Production-grade intent intake with validation, persistence, and audit events.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { z } from 'zod';
 import { createLogger } from '../common/logger.js';
 import { getConfig } from '../common/config.js';
@@ -35,11 +35,27 @@ import {
 } from './repository.js';
 import { enqueueIntentSubmission } from './queues.js';
 import {
+  ConsentService,
+  ConsentRequiredError,
+  type ConsentType,
+  type ConsentValidationResult,
+} from './consent.js';
+import {
   recordIntentSubmission,
   recordTrustGateEvaluation,
   recordStatusTransition,
   recordError,
+  recordLockContention,
+  recordTrustGateBypass,
+  recordDeduplication,
+  recordIntentContextSize,
 } from './metrics.js';
+import {
+  traceDedupeCheck,
+  traceLockAcquire,
+  recordDedupeResult,
+  recordLockResult,
+} from './tracing.js';
 
 const logger = createLogger({ component: 'intent' });
 
@@ -79,6 +95,10 @@ export interface SubmitOptions {
   trustLevel?: TrustLevel;
   /** Skip trust gate validation (use with caution) */
   bypassTrustGate?: boolean;
+  /** User ID for consent validation (required when consent checking is enabled) */
+  userId?: ID;
+  /** Skip consent validation (use with caution - only for system intents) */
+  bypassConsentCheck?: boolean;
 }
 
 export interface ListOptions {
@@ -108,13 +128,54 @@ export interface IntentWithEvents {
 export class IntentService {
   private config = getConfig();
   private redis = getRedis();
+  private consentService: ConsentService;
 
-  constructor(private repository = new IntentRepository()) {}
+  constructor(
+    private repository = new IntentRepository(),
+    consentService?: ConsentService
+  ) {
+    this.consentService = consentService ?? new ConsentService();
+  }
 
   /**
    * Submit a new intent with trust gate validation and transaction support
    */
   async submit(payload: IntentSubmission, options: SubmitOptions): Promise<Intent> {
+    // Record context size for observability
+    const contextBytes = Buffer.byteLength(
+      JSON.stringify(payload.context ?? {}),
+      'utf8'
+    );
+    recordIntentContextSize(options.tenantId, payload.intentType, contextBytes);
+
+    // Consent validation (GDPR/SOC2 compliance)
+    // Check data_processing consent before processing any intent
+    if (!options.bypassConsentCheck && options.userId) {
+      const consentValidation = await this.validateDataProcessingConsent(
+        options.userId,
+        options.tenantId
+      );
+
+      if (!consentValidation.valid) {
+        logger.warn(
+          { userId: options.userId, tenantId: options.tenantId, reason: consentValidation.reason },
+          'Intent submission rejected: data processing consent not granted'
+        );
+        recordIntentSubmission(options.tenantId, payload.intentType, 'consent_denied', options.trustLevel);
+        throw new ConsentRequiredError(
+          options.userId,
+          options.tenantId,
+          'data_processing',
+          consentValidation.reason
+        );
+      }
+
+      logger.debug(
+        { userId: options.userId, tenantId: options.tenantId, consentVersion: consentValidation.version },
+        'Data processing consent validated'
+      );
+    }
+
     // Trust gate validation with metrics
     if (!options.bypassTrustGate) {
       try {
@@ -127,16 +188,28 @@ export class IntentService {
       }
     } else {
       recordTrustGateEvaluation(options.tenantId, payload.intentType, 'bypassed');
+      // Record trust gate bypass for observability
+      recordTrustGateBypass(options.tenantId, payload.intentType);
     }
 
     const dedupeHash = this.computeDedupeHash(options.tenantId, payload);
-    const existing = await this.repository.findByDedupeHash(
+    const existing = await traceDedupeCheck(
+      options.tenantId,
+      payload.entityId,
       dedupeHash,
-      options.tenantId
+      async (span) => {
+        const result = await this.repository.findByDedupeHash(
+          dedupeHash,
+          options.tenantId
+        );
+        recordDedupeResult(span, result !== null);
+        return result;
+      }
     );
     if (existing) {
       logger.info({ intentId: existing.id }, 'Returning existing intent (dedupe)');
       recordIntentSubmission(options.tenantId, payload.intentType, 'duplicate', options.trustLevel);
+      recordDeduplication(options.tenantId, 'duplicate');
       return existing;
     }
 
@@ -146,8 +219,12 @@ export class IntentService {
     const raceResolved = await this.reserveDedupeKey(options.tenantId, dedupeHash);
     if (raceResolved) {
       recordIntentSubmission(options.tenantId, payload.intentType, 'duplicate', options.trustLevel);
+      recordDeduplication(options.tenantId, 'race_resolved');
       return raceResolved; // Another request completed the insert
     }
+
+    // Record successful new intent deduplication
+    recordDeduplication(options.tenantId, 'new');
 
     // Use transaction to create intent and initial event atomically
     const intent = await this.repository.createIntentWithEvent(
@@ -390,6 +467,24 @@ export class IntentService {
     }
   }
 
+  /**
+   * Validate data processing consent for a user
+   * Required for GDPR/SOC2 compliance before processing any intent
+   */
+  private async validateDataProcessingConsent(
+    userId: ID,
+    tenantId: ID
+  ): Promise<ConsentValidationResult> {
+    return this.consentService.validateConsent(userId, tenantId, 'data_processing');
+  }
+
+  /**
+   * Get the consent service instance for direct consent management
+   */
+  getConsentService(): ConsentService {
+    return this.consentService;
+  }
+
   private async enforceTenantLimits(tenantId: ID): Promise<void> {
     const maxInFlight =
       this.config.intent.tenantMaxInFlight[tenantId] ??
@@ -416,19 +511,32 @@ export class IntentService {
     const lockService = getLockService();
     const lockKey = `intent:dedupe:${tenantId}:${dedupeHash}`;
 
-    // Try to acquire a distributed lock
-    const lockResult = await lockService.acquire(lockKey, {
-      lockTimeoutMs: 30000, // Hold lock for max 30 seconds
-      acquireTimeoutMs: 5000, // Wait up to 5 seconds to acquire
-      retryDelayMs: 50, // Start with 50ms retry delay
-      maxRetryDelayMs: 500, // Max 500ms between retries
-      jitterFactor: 0.25, // 25% jitter
-    });
+    // Try to acquire a distributed lock with tracing
+    const lockResult = await traceLockAcquire(
+      tenantId,
+      lockKey,
+      async (span) => {
+        const result = await lockService.acquire(lockKey, {
+          lockTimeoutMs: 30000, // Hold lock for max 30 seconds
+          acquireTimeoutMs: 5000, // Wait up to 5 seconds to acquire
+          retryDelayMs: 50, // Start with 50ms retry delay
+          maxRetryDelayMs: 500, // Max 500ms between retries
+          jitterFactor: 0.25, // 25% jitter
+        });
+        recordLockResult(span, result.acquired, 5000);
+        return result;
+      }
+    );
 
     if (!lockResult.acquired || !lockResult.lock) {
+      // Record lock contention - timeout scenario
+      recordLockContention(tenantId, 'timeout');
+
       // Could not acquire lock - check if intent was created by another request
       const existing = await this.repository.findByDedupeHash(dedupeHash, tenantId);
       if (existing) {
+        // Record lock contention - conflict scenario (another request won)
+        recordLockContention(tenantId, 'conflict');
         logger.info({ intentId: existing.id }, 'Race resolved: returning existing intent');
         return existing;
       }
@@ -439,6 +547,9 @@ export class IntentService {
         'INTENT_LOCKED'
       );
     }
+
+    // Record successful lock acquisition
+    recordLockContention(tenantId, 'acquired');
 
     try {
       // Double-check database while holding lock
@@ -517,20 +628,60 @@ export class IntentService {
     }
   }
 
+  /**
+   * Compute a secure deduplication hash using HMAC-SHA256.
+   *
+   * Security features:
+   * - Uses HMAC with a secret key to prevent hash prediction attacks
+   * - Includes a timestamp bucket to limit replay window
+   * - Falls back to plain SHA-256 only in development (with warning)
+   *
+   * @param tenantId - The tenant identifier
+   * @param payload - The intent submission payload
+   * @returns A hex-encoded HMAC digest for deduplication
+   */
   private computeDedupeHash(tenantId: ID, payload: IntentSubmission): string {
+    const secret = this.config.intent.dedupeSecret;
+    const windowSeconds = this.config.intent.dedupeTimestampWindowSeconds;
+
+    // Compute timestamp bucket for replay protection
+    // Requests within the same bucket will have the same hash component
+    const timestampBucket = Math.floor(Date.now() / 1000 / windowSeconds);
+
+    // Build the data to hash
+    const dataComponents = [
+      tenantId,
+      payload.entityId,
+      payload.goal,
+      JSON.stringify(payload.context ?? {}),
+      payload.intentType ?? '',
+      payload.idempotencyKey ?? '',
+      timestampBucket.toString(),
+    ];
+    const data = dataComponents.join('|');
+
+    if (secret) {
+      // Production: Use HMAC-SHA256 with secret
+      const hmac = createHmac('sha256', secret);
+      hmac.update(data);
+      return hmac.digest('hex');
+    }
+
+    // Development fallback: Use plain SHA-256 (with warning logged once)
+    if (!this.warnedAboutMissingDedupeSecret) {
+      logger.warn(
+        'VORION_DEDUPE_SECRET not set - using insecure SHA-256 for deduplication. ' +
+        'This is acceptable for development but MUST be configured in production.'
+      );
+      this.warnedAboutMissingDedupeSecret = true;
+    }
+
     const hash = createHash('sha256');
-    hash.update(tenantId);
-    hash.update(payload.entityId);
-    hash.update(payload.goal);
-    hash.update(JSON.stringify(payload.context ?? {}));
-    if (payload.intentType) {
-      hash.update(payload.intentType);
-    }
-    if (payload.idempotencyKey) {
-      hash.update(payload.idempotencyKey);
-    }
+    hash.update(data);
     return hash.digest('hex');
   }
+
+  private warnedAboutMissingDedupeSecret = false;
 }
 
 /**
@@ -539,3 +690,28 @@ export class IntentService {
 export function createIntentService(): IntentService {
   return new IntentService();
 }
+
+// Re-export consent management types and functions
+export {
+  ConsentService,
+  ConsentRequiredError,
+  ConsentPolicyNotFoundError,
+  createConsentService,
+  type ConsentType,
+  type ConsentMetadata,
+  type UserConsent,
+  type ConsentPolicy,
+  type ConsentHistoryEntry,
+  type ConsentValidationResult,
+} from './consent.js';
+
+// Re-export OpenAPI specification and routes
+export {
+  intentOpenApiSpec,
+  getOpenApiSpec,
+  getOpenApiSpecJson,
+} from './openapi.js';
+
+export {
+  registerIntentRoutes,
+} from './routes.js';

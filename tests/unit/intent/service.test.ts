@@ -46,6 +46,32 @@ vi.mock('../../../src/intent/queues.js', () => ({
   enqueueIntentSubmission: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Mock database for ConsentService
+vi.mock('../../../src/common/db.js', () => ({
+  getDatabase: vi.fn(() => ({
+    select: vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    }),
+    insert: vi.fn().mockReturnValue({
+      values: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([]),
+      }),
+    }),
+    update: vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    }),
+  })),
+  checkDatabaseHealth: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
 // Mock repository
 const mockRepository = {
   createIntent: vi.fn(),

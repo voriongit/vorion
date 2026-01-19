@@ -92,6 +92,8 @@ vi.mock('../../../src/intent/metrics.js', () => ({
   escalationResolutions: { inc: vi.fn() },
   escalationPendingDuration: { observe: vi.fn() },
   escalationsPending: { inc: vi.fn(), dec: vi.fn() },
+  updateSlaBreachRate: vi.fn(),
+  updateEscalationApprovalRate: vi.fn(),
 }));
 
 describe('EscalationService', () => {

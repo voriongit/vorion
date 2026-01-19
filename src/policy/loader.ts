@@ -11,6 +11,7 @@ import { getRedis } from '../common/redis.js';
 import { PolicyService, createPolicyService } from './service.js';
 import type { Policy, PolicyDefinition } from './types.js';
 import type { ID } from '../common/types.js';
+import { recordPolicyCacheHit, recordPolicyCacheMiss } from '../intent/metrics.js';
 
 const logger = createLogger({ component: 'policy-loader' });
 
@@ -37,11 +38,13 @@ export class PolicyLoader {
    */
   async getPolicies(tenantId: ID, namespace?: string): Promise<Policy[]> {
     const cacheKey = this.getCacheKey(tenantId, namespace);
+    const effectiveNamespace = namespace ?? 'default';
 
     // Check local memory cache first (fastest)
     const localCached = this.localCache.get(cacheKey);
     if (localCached && localCached.expires > Date.now()) {
       logger.debug({ tenantId, namespace, source: 'local' }, 'Policy cache hit');
+      recordPolicyCacheHit(tenantId, effectiveNamespace);
       return localCached.policies;
     }
 
@@ -58,13 +61,15 @@ export class PolicyLoader {
           expires: Date.now() + this.cacheTtl * 1000,
         });
         logger.debug({ tenantId, namespace, source: 'redis' }, 'Policy cache hit');
+        recordPolicyCacheHit(tenantId, effectiveNamespace);
         return policies;
       }
     } catch (error) {
       logger.warn({ error }, 'Failed to check Redis policy cache');
     }
 
-    // Fetch from database
+    // Cache miss - fetch from database
+    recordPolicyCacheMiss(tenantId, effectiveNamespace);
     const policies = await this.policyService.getPublishedPolicies(tenantId, namespace);
 
     // Update caches

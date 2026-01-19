@@ -56,6 +56,8 @@ export const intents = pgTable('intents', {
   ),
   // Soft delete index for cleanup job
   deletedAtIdx: index('intents_deleted_at_idx').on(table.deletedAt),
+  // Performance index for countActiveIntents() queries
+  tenantStatusIdx: index('intents_tenant_status_idx').on(table.tenantId, table.status),
 }));
 
 export const intentEvents = pgTable('intent_events', {
@@ -161,6 +163,8 @@ export const escalations = pgTable('escalations', {
   ),
   intentIdx: index('escalations_intent_idx').on(table.intentId),
   timeoutIdx: index('escalations_timeout_idx').on(table.timeoutAt),
+  // Performance index for processTimeouts() queries
+  timeoutStatusIdx: index('escalations_timeout_status_idx').on(table.status, table.timeoutAt),
 }));
 
 export const escalationRelations = relations(escalations, ({ one }) => ({
@@ -236,6 +240,8 @@ export const auditRecords = pgTable('audit_records', {
   requestIdx: index('audit_request_idx').on(table.requestId),
   // Index for efficient archive/cleanup queries
   archivedIdx: index('audit_archived_idx').on(table.archived, table.eventTime),
+  // Performance index for distributed tracing queries
+  traceIdx: index('audit_records_trace_idx').on(table.traceId),
 }));
 
 // =============================================================================
@@ -301,9 +307,182 @@ export const policyVersionRelations = relations(policyVersions, ({ one }) => ({
 }));
 
 // =============================================================================
+// TENANT MEMBERSHIPS (Security: Multi-tenant isolation)
+// =============================================================================
+
+export const tenantMembershipRoleEnum = pgEnum('tenant_membership_role', [
+  'owner',
+  'admin',
+  'member',
+  'readonly',
+]);
+
+export const tenantMemberships = pgTable('tenant_memberships', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  tenantId: text('tenant_id').notNull(),
+  role: tenantMembershipRoleEnum('role').notNull().default('member'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  // Unique constraint: user can only have one membership per tenant
+  uniqueUserTenant: uniqueIndex('tenant_memberships_user_tenant_unique').on(
+    table.userId,
+    table.tenantId
+  ),
+  // Index for efficient user lookup (primary access pattern)
+  userIdx: index('tenant_memberships_user_idx').on(table.userId),
+  // Index for listing all members of a tenant
+  tenantIdx: index('tenant_memberships_tenant_idx').on(table.tenantId),
+}));
+
+// =============================================================================
+// GROUP MEMBERSHIPS - Authoritative source for user group membership
+// SECURITY: This table is the source of truth for group membership verification.
+//           JWT group claims MUST NOT be trusted - verify against this table.
+// =============================================================================
+
+export const groupMemberships = pgTable('group_memberships', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: text('tenant_id').notNull(),
+  userId: text('user_id').notNull(),
+  groupName: text('group_name').notNull(),
+  active: boolean('active').notNull().default(true),
+
+  // Audit fields
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+}, (table) => ({
+  tenantUserIdx: index('group_memberships_tenant_user_idx').on(table.tenantId, table.userId),
+  tenantGroupIdx: index('group_memberships_tenant_group_idx').on(table.tenantId, table.groupName),
+  uniqueMembership: uniqueIndex('group_memberships_unique').on(
+    table.tenantId,
+    table.userId,
+    table.groupName
+  ),
+}));
+
+// =============================================================================
+// ESCALATION APPROVERS - Explicit approver assignments for escalations
+// SECURITY: Provides fine-grained authorization for who can approve escalations.
+//           This supplements group-based authorization with explicit assignments.
+// =============================================================================
+
+export const escalationApprovers = pgTable('escalation_approvers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  escalationId: uuid('escalation_id')
+    .notNull()
+    .references(() => escalations.id, { onDelete: 'cascade' }),
+  tenantId: text('tenant_id').notNull(),
+  userId: text('user_id').notNull(),
+  assignedBy: text('assigned_by').notNull(),
+  assignedAt: timestamp('assigned_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  escalationIdx: index('escalation_approvers_escalation_idx').on(table.escalationId),
+  tenantUserIdx: index('escalation_approvers_tenant_user_idx').on(table.tenantId, table.userId),
+  uniqueApprover: uniqueIndex('escalation_approvers_unique').on(
+    table.escalationId,
+    table.userId
+  ),
+}));
+
+export const escalationApproverRelations = relations(escalationApprovers, ({ one }) => ({
+  escalation: one(escalations, {
+    fields: [escalationApprovers.escalationId],
+    references: [escalations.id],
+  }),
+}));
+
+// =============================================================================
+// CONSENT MANAGEMENT (GDPR/SOC2 Compliance)
+// =============================================================================
+
+/**
+ * Consent types for data processing under GDPR/SOC2
+ */
+export const consentTypeEnum = pgEnum('consent_type', [
+  'data_processing',
+  'analytics',
+  'marketing',
+]);
+
+/**
+ * User consent records - tracks user consent for data processing
+ * Required for GDPR Article 7 compliance (Conditions for consent)
+ */
+export const userConsents = pgTable('user_consents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull(),
+  tenantId: text('tenant_id').notNull(),
+  consentType: text('consent_type').notNull(), // 'data_processing', 'analytics', 'marketing'
+  granted: boolean('granted').notNull(),
+  grantedAt: timestamp('granted_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  version: text('version').notNull(), // consent policy version
+  ipAddress: text('ip_address'), // IPv4 or IPv6 (max 45 chars)
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  // Efficient lookup by user and tenant
+  userTenantIdx: index('user_consents_user_tenant_idx').on(table.userId, table.tenantId),
+  // Efficient lookup for consent validation
+  userTenantTypeIdx: index('user_consents_user_tenant_type_idx').on(
+    table.userId,
+    table.tenantId,
+    table.consentType
+  ),
+  // Audit trail queries by tenant
+  tenantCreatedIdx: index('user_consents_tenant_created_idx').on(table.tenantId, table.createdAt),
+  // Find active consents
+  grantedIdx: index('user_consents_granted_idx').on(table.granted, table.revokedAt),
+}));
+
+/**
+ * Consent policy versions - tracks policy documents and their versions
+ * Required for demonstrating what users agreed to at time of consent
+ */
+export const consentPolicies = pgTable('consent_policies', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: text('tenant_id').notNull(),
+  consentType: text('consent_type').notNull(),
+  version: text('version').notNull(),
+  content: text('content').notNull(), // policy text
+  effectiveFrom: timestamp('effective_from', { withTimezone: true }).notNull(),
+  effectiveTo: timestamp('effective_to', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  // Lookup current policy for a tenant and consent type
+  tenantTypeVersionIdx: uniqueIndex('consent_policies_tenant_type_version_idx').on(
+    table.tenantId,
+    table.consentType,
+    table.version
+  ),
+  // Find effective policies
+  effectiveIdx: index('consent_policies_effective_idx').on(
+    table.tenantId,
+    table.consentType,
+    table.effectiveFrom,
+    table.effectiveTo
+  ),
+}));
+
+// =============================================================================
 // TYPE EXPORTS
 // =============================================================================
 
+export type UserConsentRow = typeof userConsents.$inferSelect;
+export type NewUserConsentRow = typeof userConsents.$inferInsert;
+export type ConsentPolicyRow = typeof consentPolicies.$inferSelect;
+export type NewConsentPolicyRow = typeof consentPolicies.$inferInsert;
+export type TenantMembershipRow = typeof tenantMemberships.$inferSelect;
+export type NewTenantMembershipRow = typeof tenantMemberships.$inferInsert;
+export type GroupMembershipRow = typeof groupMemberships.$inferSelect;
+export type NewGroupMembershipRow = typeof groupMemberships.$inferInsert;
+export type EscalationApproverRow = typeof escalationApprovers.$inferSelect;
+export type NewEscalationApproverRow = typeof escalationApprovers.$inferInsert;
 export type IntentRow = typeof intents.$inferSelect;
 export type NewIntentRow = typeof intents.$inferInsert;
 export type IntentEventRow = typeof intentEvents.$inferSelect;

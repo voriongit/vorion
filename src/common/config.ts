@@ -109,6 +109,19 @@ const configSchema = z.object({
     defaultNamespace: z.string().default('default'),
     namespaceRouting: z.record(z.string(), z.string()).default({}),
     dedupeTtlSeconds: z.coerce.number().default(600),
+    /**
+     * HMAC secret for secure deduplication hash computation.
+     * REQUIRED in production/staging to prevent hash prediction attacks.
+     * Generate with: openssl rand -base64 32
+     */
+    dedupeSecret: z.string().min(32).optional(),
+    /**
+     * Timestamp window for deduplication in seconds.
+     * Hashes are computed with a time bucket to prevent replay attacks
+     * while allowing legitimate retries within the window.
+     * Default: 300 seconds (5 minutes)
+     */
+    dedupeTimestampWindowSeconds: z.coerce.number().min(60).max(3600).default(300),
     sensitivePaths: z.array(z.string()).default([
       'password',
       'secret',
@@ -173,6 +186,13 @@ const configSchema = z.object({
         windowSeconds: z.coerce.number().min(1).default(60),
       }),
     }).default({}),
+    // Policy evaluation circuit breaker configuration
+    policyCircuitBreaker: z.object({
+      /** Number of consecutive failures before opening the circuit (default: 5) */
+      failureThreshold: z.coerce.number().min(1).max(100).default(5),
+      /** Time in milliseconds before attempting to close the circuit (default: 30000) */
+      resetTimeoutMs: z.coerce.number().min(1000).max(300000).default(30000),
+    }).default({}),
   }),
 
   webhook: z.object({
@@ -182,6 +202,13 @@ const configSchema = z.object({
     retryAttempts: z.coerce.number().min(0).max(10).default(3),
     // Base delay between retries in milliseconds (exponential backoff applied)
     retryDelayMs: z.coerce.number().min(100).max(30000).default(1000),
+    // Allow DNS changes between registration and delivery (default: false for security)
+    // When false, webhooks are blocked if the resolved IP changes (DNS rebinding protection)
+    allowDnsChange: z.coerce.boolean().default(false),
+    // Circuit breaker: number of consecutive failures before opening circuit (default: 5)
+    circuitFailureThreshold: z.coerce.number().min(1).max(100).default(5),
+    // Circuit breaker: time in ms to wait before trying again when circuit is open (default: 5 min)
+    circuitResetTimeoutMs: z.coerce.number().min(1000).max(3600000).default(300000),
   }),
 
   audit: z.object({
@@ -281,6 +308,15 @@ const configSchema = z.object({
       path: ['audit', 'archiveAfterDays'],
     });
   }
+
+  // Validate dedupe secret is set in production/staging (security requirement)
+  if (isProductionOrStaging && !config.intent.dedupeSecret) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'VORION_DEDUPE_SECRET must be set in production/staging to prevent hash prediction attacks',
+      path: ['intent', 'dedupeSecret'],
+    });
+  }
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -377,6 +413,8 @@ export function loadConfig(): Config {
       defaultNamespace: process.env['VORION_INTENT_DEFAULT_NAMESPACE'],
       namespaceRouting: parseJsonRecord(process.env['VORION_INTENT_NAMESPACE_ROUTING']),
       dedupeTtlSeconds: process.env['VORION_INTENT_DEDUPE_TTL'],
+      dedupeSecret: process.env['VORION_DEDUPE_SECRET'],
+      dedupeTimestampWindowSeconds: process.env['VORION_DEDUPE_TIMESTAMP_WINDOW_SECONDS'],
       sensitivePaths: parseList(process.env['VORION_INTENT_SENSITIVE_PATHS']),
       defaultMaxInFlight: process.env['VORION_INTENT_DEFAULT_MAX_IN_FLIGHT'],
       tenantMaxInFlight: parseNumberRecord(
@@ -414,12 +452,19 @@ export function loadConfig(): Config {
           windowSeconds: process.env['VORION_RATELIMIT_ADMIN_ACTION_WINDOW'],
         },
       },
+      policyCircuitBreaker: {
+        failureThreshold: process.env['VORION_POLICY_CIRCUIT_FAILURE_THRESHOLD'],
+        resetTimeoutMs: process.env['VORION_POLICY_CIRCUIT_RESET_TIMEOUT_MS'],
+      },
     },
 
     webhook: {
       timeoutMs: process.env['VORION_WEBHOOK_TIMEOUT_MS'],
       retryAttempts: process.env['VORION_WEBHOOK_RETRY_ATTEMPTS'],
       retryDelayMs: process.env['VORION_WEBHOOK_RETRY_DELAY_MS'],
+      allowDnsChange: process.env['VORION_WEBHOOK_ALLOW_DNS_CHANGE'],
+      circuitFailureThreshold: process.env['VORION_WEBHOOK_CIRCUIT_FAILURE_THRESHOLD'],
+      circuitResetTimeoutMs: process.env['VORION_WEBHOOK_CIRCUIT_RESET_TIMEOUT_MS'],
     },
 
     audit: {

@@ -225,6 +225,16 @@ vi.mock('../../../src/intent/repository.js', () => ({
   })),
 }));
 
+// Mock tenant verification to allow all test users
+// In production, this verifies user actually belongs to tenant
+vi.mock('../../../src/common/tenant-verification.js', () => ({
+  verifyTenantMembership: vi.fn().mockResolvedValue({ isMember: true, role: 'member', cached: false }),
+  requireTenantMembership: vi.fn().mockResolvedValue(undefined),
+  invalidateMembershipCache: vi.fn().mockResolvedValue(undefined),
+  invalidateUserMembershipCache: vi.fn().mockResolvedValue(undefined),
+  invalidateTenantMembershipCache: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { createServer } from '../../../src/api/server.js';
 
 const JWT_SECRET = 'test-secret-key-for-testing-12345';
@@ -235,6 +245,13 @@ function createExpiredToken(payload: Record<string, unknown>): string {
   const now = Math.floor(Date.now() / 1000);
   const signer = createSigner({ key: JWT_SECRET });
   return signer({ ...payload, iat: now - 7200, exp: now - 3600 }); // Expired 1 hour ago
+}
+
+// Helper to extract data from API responses that may use the standard envelope
+function extractData<T>(response: { payload: string }): T {
+  const parsed = JSON.parse(response.payload);
+  // Handle both wrapped (envelope) and unwrapped formats
+  return parsed.success !== undefined && parsed.data !== undefined ? parsed.data : parsed;
 }
 
 describe('Intent API Integration Tests', () => {
@@ -311,7 +328,7 @@ describe('Intent API Integration Tests', () => {
       });
 
       expect(response.statusCode).toBe(202);
-      const body = JSON.parse(response.payload);
+      const body = extractData<{ id: string; entityId: string; goal: string; status: string; tenantId: string }>(response);
       expect(body).toHaveProperty('id');
       expect(body.entityId).toBe(testEntityId);
       expect(body.goal).toBe('Test intent goal');
@@ -373,7 +390,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      expect(response.statusCode).toBe(500); // Zod validation error
+      expect(response.statusCode).toBe(400); // Validation error should return 400 Bad Request
     });
 
     it('should return 400 for empty goal', async () => {
@@ -393,7 +410,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      expect(response.statusCode).toBe(500); // Zod validation error
+      expect(response.statusCode).toBe(400); // Validation error should return 400 Bad Request
     });
 
     it('should accept optional intentType', async () => {
@@ -415,7 +432,7 @@ describe('Intent API Integration Tests', () => {
       });
 
       expect(response.statusCode).toBe(202);
-      const body = JSON.parse(response.payload);
+      const body = extractData<{ intentType: string }>(response);
       expect(body.intentType).toBe('data-access');
     });
 
@@ -458,7 +475,7 @@ describe('Intent API Integration Tests', () => {
       });
 
       expect(response.statusCode).toBe(202);
-      const body = JSON.parse(response.payload);
+      const body = extractData<{ priority: number }>(response);
       expect(body.priority).toBe(0);
     });
   });
@@ -482,7 +499,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      const createdIntent = JSON.parse(createResponse.payload);
+      const createdIntent = extractData<{ id: string }>(createResponse);
 
       // Then retrieve it
       const getResponse = await server.inject({
@@ -494,7 +511,7 @@ describe('Intent API Integration Tests', () => {
       });
 
       expect(getResponse.statusCode).toBe(200);
-      const body = JSON.parse(getResponse.payload);
+      const body = extractData<{ id: string; goal: string; events: unknown[]; evaluations: unknown[] }>(getResponse);
       expect(body.id).toBe(createdIntent.id);
       expect(body.goal).toBe('Intent to retrieve');
       expect(body).toHaveProperty('events');
@@ -537,7 +554,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      const createdIntent = JSON.parse(createResponse.payload);
+      const createdIntent = extractData<{ id: string }>(createResponse);
 
       // Try to retrieve as tenant-2
       const getResponse = await server.inject({
@@ -562,7 +579,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      expect(response.statusCode).toBe(500); // Zod validation error
+      expect(response.statusCode).toBe(400); // Validation error should return 400 Bad Request
     });
   });
 
@@ -753,7 +770,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      expect(response.statusCode).toBe(500); // Zod validation error
+      expect(response.statusCode).toBe(400); // Validation error should return 400 Bad Request
     });
   });
 
@@ -808,7 +825,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      const createdIntent = JSON.parse(createResponse.payload);
+      const createdIntent = extractData<{ id: string }>(createResponse);
 
       // Cancel the intent
       const cancelResponse = await server.inject({
@@ -824,7 +841,7 @@ describe('Intent API Integration Tests', () => {
       });
 
       expect(cancelResponse.statusCode).toBe(200);
-      const body = JSON.parse(cancelResponse.payload);
+      const body = extractData<{ status: string; cancellationReason: string }>(cancelResponse);
       expect(body.status).toBe('cancelled');
       expect(body.cancellationReason).toBe('User requested cancellation');
     });
@@ -863,7 +880,7 @@ describe('Intent API Integration Tests', () => {
         payload: {},
       });
 
-      expect(response.statusCode).toBe(500); // Zod validation error
+      expect(response.statusCode).toBe(400); // Validation error should return 400 Bad Request
     });
 
     it('should not cancel intent from different tenant', async () => {
@@ -885,7 +902,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      const createdIntent = JSON.parse(createResponse.payload);
+      const createdIntent = extractData<{ id: string }>(createResponse);
 
       // Try to cancel as tenant-2
       const cancelResponse = await server.inject({
@@ -923,7 +940,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      const createdIntent = JSON.parse(createResponse.payload);
+      const createdIntent = extractData<{ id: string }>(createResponse);
 
       // Delete the intent
       const deleteResponse = await server.inject({
@@ -984,7 +1001,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      const createdIntent = JSON.parse(createResponse.payload);
+      const createdIntent = extractData<{ id: string }>(createResponse);
 
       // Try to delete as tenant-2
       const deleteResponse = await server.inject({
@@ -1018,7 +1035,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      const createdIntent = JSON.parse(createResponse.payload);
+      const createdIntent = extractData<{ id: string }>(createResponse);
 
       // Verify the event chain
       const verifyResponse = await server.inject({
@@ -1071,7 +1088,7 @@ describe('Intent API Integration Tests', () => {
         },
       });
 
-      const createdIntent = JSON.parse(createResponse.payload);
+      const createdIntent = extractData<{ id: string }>(createResponse);
 
       // Try to verify as tenant-2
       const verifyResponse = await server.inject({

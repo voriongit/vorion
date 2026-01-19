@@ -18,6 +18,10 @@ import {
   computeChainedHash,
 } from '../common/encryption.js';
 import {
+  traceEncryptSync,
+  traceDecryptSync,
+} from './tracing.js';
+import {
   intentEvents,
   intentEvaluations,
   intents,
@@ -54,7 +58,14 @@ export interface IntentEventRecord {
  */
 function decryptIfNeeded(data: unknown): Record<string, unknown> {
   if (isEncryptedField(data)) {
-    return decryptObject(data);
+    // Calculate size of encrypted data for tracing
+    const sizeBytes = typeof data === 'object' && data !== null
+      ? JSON.stringify(data).length
+      : 0;
+
+    return traceDecryptSync(sizeBytes, () => {
+      return decryptObject(data);
+    });
   }
   return (data ?? {}) as Record<string, unknown>;
 }
@@ -65,7 +76,12 @@ function decryptIfNeeded(data: unknown): Record<string, unknown> {
 function encryptIfEnabled(data: Record<string, unknown>): unknown {
   const config = getConfig();
   if (config.intent.encryptContext) {
-    return encryptObject(data);
+    // Calculate size of data to encrypt for tracing
+    const sizeBytes = JSON.stringify(data).length;
+
+    return traceEncryptSync(sizeBytes, () => {
+      return encryptObject(data);
+    });
   }
   return data;
 }

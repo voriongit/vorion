@@ -46,6 +46,12 @@ import { createEscalationService } from '../intent/escalation.js';
 import { createWebhookService, type WebhookEventType } from '../intent/webhooks.js';
 import { getMetrics, getMetricsContentType, tokenRevocationChecks } from '../intent/metrics.js';
 import { startScheduler, stopScheduler, getSchedulerStatus, runCleanupNow } from '../intent/scheduler.js';
+import {
+  createGdprService,
+  enqueueGdprExport,
+  registerGdprWorker,
+  shutdownGdprWorker,
+} from '../intent/gdpr.js';
 import type { IntentStatus } from '../common/types.js';
 import { INTENT_STATUSES } from '../common/types.js';
 import {
@@ -58,9 +64,24 @@ import {
   checkAuthorization,
 } from '../common/authorization.js';
 import {
-  isVorionError,
-  RateLimitError,
+  ForbiddenError,
 } from '../common/errors.js';
+import { requireTenantMembership } from '../common/tenant-verification.js';
+import {
+  verifyGroupMembership,
+  isAssignedApprover,
+  assignApprover,
+  removeApprover,
+  listApprovers,
+} from '../common/group-membership.js';
+import {
+  createStandardErrorHandler,
+  sendSuccess,
+  sendError,
+  sendNotFound,
+  sendCursorPaginated,
+} from '../intent/response-middleware.js';
+import { HttpStatus } from '../intent/response.js';
 
 const apiLogger = createLogger({ component: 'api' });
 const intentService = createIntentService();
@@ -70,6 +91,7 @@ const policyService = createPolicyService();
 const policyLoader = getPolicyLoader();
 const webhookService = createWebhookService();
 const tokenRevocationService = createTokenRevocationService();
+const gdprService = createGdprService();
 
 const intentIdParamsSchema = z.object({
   id: z.string().uuid(),
@@ -100,55 +122,118 @@ const escalationResolveBodySchema = z.object({
 });
 
 /**
- * Authorization helper: Check if user can resolve an escalation
- * User must be in the escalatedTo group/role OR have admin role
+ * SECURE Authorization helper: Check if user can resolve an escalation
+ *
+ * SECURITY FIX: This function now verifies group membership against the database,
+ * NOT trusting JWT claims which can be manipulated by attackers.
+ *
+ * Authorization is granted if ANY of the following are true:
+ * 1. User has admin role (verified from token, but roles are signed by auth server)
+ * 2. User is directly assigned as an approver for this escalation (database check)
+ * 3. User is the direct target of the escalation (escalatedTo === userId)
+ * 4. User has verified group membership matching escalatedTo (database check)
+ *
+ * All authorization decisions are logged for audit purposes.
  */
-function canResolveEscalation(
+async function canResolveEscalation(
   user: { sub?: string; roles?: string[]; groups?: string[] },
-  escalation: { escalatedTo: string; tenantId: string },
+  escalation: { id: string; escalatedTo: string; tenantId: string },
   userTenantId: string
-): { allowed: boolean; reason?: string } {
+): Promise<{ allowed: boolean; reason?: string; authMethod?: string }> {
+  const userId = user.sub;
+  const escalationId = escalation.id;
+
   // Tenant isolation: user must belong to same tenant
   if (userTenantId !== escalation.tenantId) {
+    apiLogger.warn(
+      { userId, escalationId, userTenantId, escalationTenantId: escalation.tenantId },
+      'Authorization denied: tenant mismatch'
+    );
     return { allowed: false, reason: 'Escalation belongs to different tenant' };
   }
 
-  // Admin override
+  // Admin override - roles in JWT are signed by auth server, so we trust them
+  // Note: For highest security, admin roles could also be verified against database
   const roles = user.roles ?? [];
   if (roles.includes('admin') || roles.includes('tenant:admin') || roles.includes('escalation:admin')) {
-    return { allowed: true };
+    apiLogger.info(
+      { userId, escalationId, authMethod: 'admin_role' },
+      'Authorization granted: admin role'
+    );
+    return { allowed: true, authMethod: 'admin_role' };
   }
-
-  // Check if user is in the escalatedTo group/role
-  const groups = user.groups ?? [];
-  const userId = user.sub;
 
   // escalatedTo can be a user ID, role, or group name
   const escalatedTo = escalation.escalatedTo;
 
-  // Direct user match
+  // Direct user match - if escalation was assigned directly to this user
   if (userId && escalatedTo === userId) {
-    return { allowed: true };
+    apiLogger.info(
+      { userId, escalationId, authMethod: 'direct_assignment' },
+      'Authorization granted: direct user assignment'
+    );
+    return { allowed: true, authMethod: 'direct_assignment' };
   }
 
-  // Role match
-  if (roles.includes(escalatedTo)) {
-    return { allowed: true };
+  // Check if user is explicitly assigned as an approver for this escalation
+  // This is a database check, not trusting JWT claims
+  if (userId) {
+    try {
+      const approverResult = await isAssignedApprover(escalationId, userId, userTenantId);
+      if (approverResult.isApprover) {
+        apiLogger.info(
+          { userId, escalationId, authMethod: 'explicit_approver', assignedAt: approverResult.assignedAt },
+          'Authorization granted: explicitly assigned approver'
+        );
+        return { allowed: true, authMethod: 'explicit_approver' };
+      }
+    } catch (error) {
+      apiLogger.error(
+        { error, userId, escalationId },
+        'Error checking explicit approver assignment'
+      );
+      // Continue to other checks - don't fail open, but don't fail closed on DB errors
+    }
   }
 
-  // Group match
-  if (groups.includes(escalatedTo)) {
-    return { allowed: true };
+  // SECURITY FIX: Verify group membership against database, NOT JWT claims
+  // The old code trusted user.groups from JWT which attackers could manipulate
+  if (userId) {
+    try {
+      const groupResult = await verifyGroupMembership(userId, escalatedTo, userTenantId);
+      if (groupResult.isMember) {
+        apiLogger.info(
+          { userId, escalationId, groupName: escalatedTo, authMethod: 'verified_group_membership', source: groupResult.source },
+          'Authorization granted: verified group membership'
+        );
+        return { allowed: true, authMethod: 'verified_group_membership' };
+      }
+    } catch (error) {
+      apiLogger.error(
+        { error, userId, escalationId, groupName: escalatedTo },
+        'Error verifying group membership'
+      );
+      // Continue to denial - fail closed on DB errors for security
+    }
   }
 
-  // Check for approver role
-  if (roles.includes('approver') || roles.includes('tenant:approver')) {
-    return { allowed: true };
-  }
+  // Note: We no longer trust JWT group claims (user.groups) for authorization
+  // The following code has been removed as it was the source of the vulnerability:
+  // if (groups.includes(escalatedTo)) { return { allowed: true }; }
+
+  // Note: Generic approver roles are also no longer trusted from JWT
+  // If approver roles are needed, they should be verified against the database
+  // The following code has been removed:
+  // if (roles.includes('approver') || roles.includes('tenant:approver')) { return { allowed: true }; }
+
+  apiLogger.warn(
+    { userId, escalationId, escalatedTo },
+    'Authorization denied: no valid authorization method found'
+  );
 
   return {
     allowed: false,
-    reason: `User not authorized to resolve escalation (escalatedTo: ${escalatedTo})`,
+    reason: `User not authorized to resolve escalation (escalatedTo: ${escalatedTo}). Authorization requires: admin role, explicit approver assignment, or verified group membership.`,
   };
 }
 
@@ -319,13 +404,32 @@ declare module '@fastify/jwt' {
   }
 }
 
+/**
+ * Extract and verify tenant ID from JWT token.
+ *
+ * SECURITY: This function verifies that the user (sub claim) is actually a member
+ * of the tenant specified in the tenantId claim. This prevents cross-tenant data
+ * exposure attacks where an attacker modifies JWT claims to access other tenants' data.
+ *
+ * @param request - The Fastify request object
+ * @returns The verified tenant ID
+ * @throws ForbiddenError if tenant context is missing or user is not a member
+ */
 async function getTenantId(request: FastifyRequest): Promise<string> {
-  const payload = await request.jwtVerify<{ tenantId?: string }>();
+  const payload = await request.jwtVerify<{ tenantId?: string; sub?: string }>();
+
   if (!payload.tenantId) {
-    const error = new Error('Tenant context missing from token');
-    (error as Error & { statusCode?: number }).statusCode = 403;
-    throw error;
+    throw new ForbiddenError('Tenant context missing from token');
   }
+
+  if (!payload.sub) {
+    throw new ForbiddenError('User identifier missing from token');
+  }
+
+  // CRITICAL SECURITY CHECK: Verify user is actually a member of the claimed tenant
+  // This prevents attackers from modifying JWT tenantId claims to access other tenants' data
+  await requireTenantMembership(payload.sub, payload.tenantId);
+
   return payload.tenantId;
 }
 
@@ -655,12 +759,13 @@ export async function createServer(): Promise<FastifyInstance> {
         }
       });
 
-      // Intent routes
+      // Intent routes - using standardized API response envelope
       api.post('/intents', async (request, reply) => {
         const tenantId = await getTenantId(request);
         const body = intentSubmissionSchema.parse(request.body ?? {});
         const intent = await intentService.submit(body, { tenantId });
-        return reply.code(202).send(intent);
+        // Use sendSuccess with ACCEPTED status for async processing
+        return sendSuccess(reply, intent, HttpStatus.ACCEPTED, request);
       });
 
       api.get('/intents/:id', async (request, reply) => {
@@ -668,15 +773,15 @@ export async function createServer(): Promise<FastifyInstance> {
         const params = intentIdParamsSchema.parse(request.params ?? {});
         const result = await intentService.getWithEvents(params.id, tenantId);
         if (!result) {
-          return reply.status(404).send({
-            error: { code: 'INTENT_NOT_FOUND', message: 'Intent not found' },
-          });
+          // Use standardized not found response
+          return sendNotFound(reply, 'Intent', request);
         }
-        return reply.send({
+        // Use standardized success response
+        return sendSuccess(reply, {
           ...result.intent,
           events: result.events,
           evaluations: result.evaluations ?? [],
-        });
+        }, HttpStatus.OK, request);
       });
 
       api.get('/intents', async (request, reply) => {
@@ -689,18 +794,15 @@ export async function createServer(): Promise<FastifyInstance> {
         if (query.cursor) listOptions.cursor = query.cursor;
         const intents = await intentService.list(listOptions);
 
-        // Include next cursor for pagination
+        // Use standardized cursor pagination response
         const nextCursor = intents.length > 0 ? intents[intents.length - 1]?.id : undefined;
-        return reply.send({
-          data: intents,
-          pagination: {
-            nextCursor,
-            hasMore: intents.length === (query.limit ?? 50),
-          },
-        });
+        return sendCursorPaginated(reply, intents, {
+          nextCursor,
+          hasMore: intents.length === (query.limit ?? 50),
+        }, request);
       });
 
-      // Cancel an intent
+      // Cancel an intent - using standardized API response envelope
       api.post('/intents/:id/cancel', async (request, reply) => {
         const tenantId = await getTenantId(request);
         const params = intentIdParamsSchema.parse(request.params ?? {});
@@ -713,15 +815,18 @@ export async function createServer(): Promise<FastifyInstance> {
         );
 
         if (!intent) {
-          return reply.status(404).send({
-            error: {
-              code: 'INTENT_NOT_FOUND_OR_NOT_CANCELLABLE',
-              message: 'Intent not found or cannot be cancelled in current state'
-            },
-          });
+          // Use standardized error response
+          return sendError(
+            reply,
+            'INTENT_NOT_FOUND_OR_NOT_CANCELLABLE',
+            'Intent not found or cannot be cancelled in current state',
+            HttpStatus.NOT_FOUND,
+            undefined,
+            request
+          );
         }
 
-        return reply.send(intent);
+        return sendSuccess(reply, intent, HttpStatus.OK, request);
       });
 
       // Soft delete an intent (GDPR)
@@ -861,8 +966,8 @@ export async function createServer(): Promise<FastifyInstance> {
           });
         }
 
-        // Authorization check
-        const authResult = canResolveEscalation(user, escalationToCheck, tenantId);
+        // Authorization check - now async with database verification
+        const authResult = await canResolveEscalation(user, escalationToCheck, tenantId);
         if (!authResult.allowed) {
           apiLogger.warn(
             { escalationId: params.id, userId: user.sub, reason: authResult.reason },
@@ -910,8 +1015,8 @@ export async function createServer(): Promise<FastifyInstance> {
           });
         }
 
-        // Authorization check
-        const authResult = canResolveEscalation(user, escalationToCheck, tenantId);
+        // Authorization check - now async with database verification
+        const authResult = await canResolveEscalation(user, escalationToCheck, tenantId);
         if (!authResult.allowed) {
           apiLogger.warn(
             { escalationId: params.id, userId: user.sub, reason: authResult.reason },
@@ -942,6 +1047,147 @@ export async function createServer(): Promise<FastifyInstance> {
         }
 
         return reply.send(escalation);
+      });
+
+      // ========== Escalation Approver Management ==========
+
+      // Schema for assigning approvers
+      const assignApproverBodySchema = z.object({
+        userId: z.string().min(1).max(255),
+      });
+
+      // Assign an approver to an escalation
+      api.post('/escalations/:id/assign', async (request, reply) => {
+        const tenantId = await getTenantId(request);
+        const params = escalationIdParamsSchema.parse(request.params ?? {});
+        const body = assignApproverBodySchema.parse(request.body ?? {});
+        const user = request.user as { sub?: string; roles?: string[] };
+
+        // Only admins or the escalation creator can assign approvers
+        const roles = user.roles ?? [];
+        const isAdmin = roles.includes('admin') || roles.includes('tenant:admin') || roles.includes('escalation:admin');
+
+        if (!isAdmin) {
+          return reply.status(403).send({
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Only administrators can assign approvers to escalations',
+            },
+          });
+        }
+
+        // Verify escalation exists and belongs to tenant
+        const escalation = await escalationService.get(params.id, tenantId);
+        if (!escalation) {
+          return reply.status(404).send({
+            error: { code: 'ESCALATION_NOT_FOUND', message: 'Escalation not found' },
+          });
+        }
+
+        // Escalation must be pending or acknowledged to assign approvers
+        if (!['pending', 'acknowledged'].includes(escalation.status)) {
+          return reply.status(400).send({
+            error: {
+              code: 'INVALID_STATE',
+              message: `Cannot assign approvers to escalation in ${escalation.status} status`,
+            },
+          });
+        }
+
+        try {
+          const assignment = await assignApprover({
+            escalationId: params.id,
+            userId: body.userId,
+            tenantId,
+            assignedBy: user.sub ?? 'unknown',
+          });
+
+          apiLogger.info(
+            { escalationId: params.id, assignedUserId: body.userId, assignedBy: user.sub },
+            'Approver assigned to escalation'
+          );
+
+          return reply.status(201).send({
+            id: assignment.id,
+            escalationId: params.id,
+            userId: body.userId,
+            assignedAt: assignment.assignedAt,
+            assignedBy: user.sub,
+          });
+        } catch (error) {
+          apiLogger.error(
+            { error, escalationId: params.id, userId: body.userId },
+            'Failed to assign approver'
+          );
+          throw error;
+        }
+      });
+
+      // Remove an approver from an escalation
+      api.delete('/escalations/:id/assign/:userId', async (request, reply) => {
+        const tenantId = await getTenantId(request);
+        const params = z.object({
+          id: z.string().uuid(),
+          userId: z.string().min(1),
+        }).parse(request.params ?? {});
+        const user = request.user as { sub?: string; roles?: string[] };
+
+        // Only admins can remove approvers
+        const roles = user.roles ?? [];
+        const isAdmin = roles.includes('admin') || roles.includes('tenant:admin') || roles.includes('escalation:admin');
+
+        if (!isAdmin) {
+          return reply.status(403).send({
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Only administrators can remove approvers from escalations',
+            },
+          });
+        }
+
+        // Verify escalation exists and belongs to tenant
+        const escalation = await escalationService.get(params.id, tenantId);
+        if (!escalation) {
+          return reply.status(404).send({
+            error: { code: 'ESCALATION_NOT_FOUND', message: 'Escalation not found' },
+          });
+        }
+
+        const removed = await removeApprover(params.id, params.userId, tenantId);
+
+        if (!removed) {
+          return reply.status(404).send({
+            error: { code: 'APPROVER_NOT_FOUND', message: 'Approver assignment not found' },
+          });
+        }
+
+        apiLogger.info(
+          { escalationId: params.id, removedUserId: params.userId, removedBy: user.sub },
+          'Approver removed from escalation'
+        );
+
+        return reply.status(204).send();
+      });
+
+      // List approvers for an escalation
+      api.get('/escalations/:id/approvers', async (request, reply) => {
+        const tenantId = await getTenantId(request);
+        const params = escalationIdParamsSchema.parse(request.params ?? {});
+
+        // Verify escalation exists and belongs to tenant
+        const escalation = await escalationService.get(params.id, tenantId);
+        if (!escalation) {
+          return reply.status(404).send({
+            error: { code: 'ESCALATION_NOT_FOUND', message: 'Escalation not found' },
+          });
+        }
+
+        const approvers = await listApprovers(params.id, tenantId);
+
+        return reply.send({
+          data: approvers,
+          escalationId: params.id,
+        });
       });
 
       // ========== Intent Replay ==========
@@ -1563,56 +1809,148 @@ export async function createServer(): Promise<FastifyInstance> {
           })),
         });
       });
+
+      // ========== GDPR Routes ==========
+
+      // Schema for GDPR export request
+      const gdprExportBodySchema = z.object({
+        userId: z.string().uuid(),
+      });
+
+      const gdprRequestIdParamsSchema = z.object({
+        requestId: z.string().uuid(),
+      });
+
+      // Initiate GDPR data export (async job)
+      api.post('/intent/gdpr/export', async (request, reply) => {
+        const tenantId = await getTenantId(request);
+        const user = request.user as { sub?: string };
+        const body = gdprExportBodySchema.parse(request.body ?? {});
+
+        // Create export request
+        const exportRequest = await gdprService.createExportRequest(
+          body.userId,
+          tenantId,
+          user.sub ?? 'unknown'
+        );
+
+        // Queue the export job
+        await enqueueGdprExport(exportRequest.id, body.userId, tenantId);
+
+        apiLogger.info(
+          { requestId: exportRequest.id, userId: body.userId, tenantId },
+          'GDPR export initiated'
+        );
+
+        return reply.code(202).send({
+          requestId: exportRequest.id,
+          status: exportRequest.status,
+          message: 'Export request queued. Use the requestId to check status.',
+          expiresAt: exportRequest.expiresAt,
+        });
+      });
+
+      // Get GDPR export status
+      api.get('/intent/gdpr/export/:requestId', async (request, reply) => {
+        const tenantId = await getTenantId(request);
+        const params = gdprRequestIdParamsSchema.parse(request.params ?? {});
+
+        const exportRequest = await gdprService.getExportRequest(params.requestId, tenantId);
+        if (!exportRequest) {
+          return reply.status(404).send({
+            error: {
+              code: 'EXPORT_REQUEST_NOT_FOUND',
+              message: 'Export request not found or expired',
+            },
+          });
+        }
+
+        return reply.send({
+          requestId: exportRequest.id,
+          userId: exportRequest.userId,
+          status: exportRequest.status,
+          requestedAt: exportRequest.requestedAt,
+          completedAt: exportRequest.completedAt,
+          expiresAt: exportRequest.expiresAt,
+          downloadUrl: exportRequest.downloadUrl,
+          error: exportRequest.error,
+        });
+      });
+
+      // Download GDPR export data
+      api.get('/intent/gdpr/export/:requestId/download', async (request, reply) => {
+        const tenantId = await getTenantId(request);
+        const params = gdprRequestIdParamsSchema.parse(request.params ?? {});
+
+        const exportData = await gdprService.getExportData(params.requestId, tenantId);
+        if (!exportData) {
+          return reply.status(404).send({
+            error: {
+              code: 'EXPORT_DATA_NOT_FOUND',
+              message: 'Export data not found, not ready, or expired',
+            },
+          });
+        }
+
+        // Return as JSON file download
+        return reply
+          .header('Content-Type', 'application/json')
+          .header(
+            'Content-Disposition',
+            `attachment; filename="gdpr-export-${exportData.userId}-${exportData.exportTimestamp.split('T')[0]}.json"`
+          )
+          .send(exportData);
+      });
+
+      // GDPR right to erasure (soft delete user data)
+      api.delete('/intent/gdpr/data', async (request, reply) => {
+        const tenantId = await getTenantId(request);
+        const user = request.user as { sub?: string; roles?: string[] };
+        const body = gdprExportBodySchema.parse(request.body ?? {});
+
+        // Require admin role or self-request for erasure
+        const roles = user.roles ?? [];
+        const isAdmin = roles.includes('admin') || roles.includes('tenant:admin') || roles.includes('gdpr:admin');
+        const isSelfRequest = user.sub === body.userId;
+
+        if (!isAdmin && !isSelfRequest) {
+          return reply.status(403).send({
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Only administrators or the data subject can request data erasure',
+            },
+          });
+        }
+
+        const result = await gdprService.eraseUserData(
+          body.userId,
+          tenantId,
+          user.sub ?? 'unknown'
+        );
+
+        apiLogger.info(
+          { userId: body.userId, tenantId, erasedBy: user.sub, counts: result.counts },
+          'GDPR data erasure completed'
+        );
+
+        return reply.send({
+          message: 'User data has been erased in compliance with GDPR Article 17',
+          userId: result.userId,
+          erasedAt: result.erasedAt,
+          counts: result.counts,
+        });
+      });
     },
     { prefix: config.api.basePath }
   );
 
-  // Error handler - maps VorionError to proper HTTP responses
-  server.setErrorHandler((error, request, reply) => {
-    // Handle VorionError instances with their structured data
-    if (isVorionError(error)) {
-      const level = error.statusCode >= 500 ? 'error' : 'warn';
-      apiLogger[level](
-        {
-          errorCode: error.code,
-          errorName: error.name,
-          statusCode: error.statusCode,
-          details: error.details,
-          requestId: request.id,
-        },
-        error.message
-      );
-
-      // Add Retry-After header for rate limit errors
-      if (error instanceof RateLimitError && error.retryAfter !== undefined) {
-        reply.header('Retry-After', error.retryAfter.toString());
-      }
-
-      return reply.status(error.statusCode).send({
-        error: error.toJSON(),
-      });
-    }
-
-    // Handle generic errors
-    apiLogger.error(
-      {
-        error: error.message,
-        stack: error.stack,
-        requestId: request.id,
-      },
-      'Request error'
-    );
-
-    return reply.status(error.statusCode ?? 500).send({
-      error: {
-        code: error.code ?? 'INTERNAL_ERROR',
-        message:
-          config.env === 'production'
-            ? 'An error occurred'
-            : error.message,
-      },
-    });
-  });
+  // Error handler - uses standardized API response envelope
+  // The createStandardErrorHandler provides consistent error formatting with:
+  // - Proper HTTP status code mapping for VorionError types
+  // - Trace ID inclusion for debugging
+  // - Error detail sanitization in production
+  // - Zod validation error handling
+  server.setErrorHandler(createStandardErrorHandler(config.env));
 
   return server;
 }
@@ -1640,6 +1978,10 @@ export async function startServer(): Promise<void> {
       // Shutdown workers gracefully
       await shutdownWorkers();
       apiLogger.info('Workers shutdown complete');
+
+      // Shutdown GDPR workers
+      await shutdownGdprWorker();
+      apiLogger.info('GDPR workers shutdown complete');
 
       process.exit(0);
     } catch (error) {
@@ -1669,6 +2011,13 @@ export async function startServer(): Promise<void> {
       apiLogger.info('Scheduler started');
     } catch (error) {
       apiLogger.error({ error }, 'Failed to start scheduler');
+    }
+
+    try {
+      registerGdprWorker();
+      apiLogger.info('GDPR workers started');
+    } catch (error) {
+      apiLogger.error({ error }, 'Failed to start GDPR workers');
     }
 
     apiLogger.info(

@@ -85,6 +85,9 @@ const mockWebhookConfig = {
   timeoutMs: 10000,
   retryAttempts: 3,
   retryDelayMs: 1000,
+  allowDnsChange: false,
+  circuitFailureThreshold: 5,
+  circuitResetTimeoutMs: 300000, // 5 minutes
 };
 
 vi.mock('../../../src/common/config.js', () => {
@@ -94,6 +97,16 @@ vi.mock('../../../src/common/config.js', () => {
         timeoutMs: 10000,
         retryAttempts: 3,
         retryDelayMs: 1000,
+        allowDnsChange: false,
+        circuitFailureThreshold: 5,
+        circuitResetTimeoutMs: 300000,
+      },
+      env: 'development',
+      encryption: {
+        key: 'test-encryption-key-32-chars-min',
+        salt: 'test-salt-16-chars',
+        pbkdf2Iterations: 1000, // Low for fast tests
+        kdfVersion: 2,
       },
     })),
   };
@@ -131,6 +144,7 @@ vi.mock('node:util', async (importOriginal) => {
 import {
   validateWebhookUrl,
   validateWebhookUrlAtRuntime,
+  validateWebhookIpConsistency,
   WebhookService,
   type WebhookConfig,
 } from '../../../src/intent/webhooks.js';
@@ -148,6 +162,9 @@ beforeEach(() => {
     timeoutMs: 10000,
     retryAttempts: 3,
     retryDelayMs: 1000,
+    allowDnsChange: false,
+    circuitFailureThreshold: 5,
+    circuitResetTimeoutMs: 300000,
   };
 });
 
@@ -506,6 +523,13 @@ describe('WebhookService', () => {
       events: ['escalation.created', 'escalation.approved'],
     };
 
+    beforeEach(() => {
+      // Setup DNS mock to allow registration
+      mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+        callback(null, { address: '93.184.216.34', family: 4 });
+      });
+    });
+
     it('should register a valid webhook', async () => {
       const webhookId = await service.registerWebhook('tenant-123', validConfig);
 
@@ -526,13 +550,26 @@ describe('WebhookService', () => {
       );
     });
 
-    it('should store webhook config in Redis', async () => {
+    it('should store webhook config in Redis with encrypted secret', async () => {
       const webhookId = await service.registerWebhook('tenant-123', validConfig);
 
+      // Verify set was called with the right key
       expect(mockRedis.set).toHaveBeenCalledWith(
         expect.stringContaining(`webhook:config:tenant-123:${webhookId}`),
-        JSON.stringify(validConfig)
+        expect.any(String)
       );
+
+      // Verify the stored data has encrypted secret, not plaintext
+      const setCall = mockRedis.set.mock.calls.find((call: any) =>
+        call[0].includes(`webhook:config:tenant-123:${webhookId}`)
+      );
+      const storedData = JSON.parse(setCall[1]);
+
+      // Should have encryptedSecret, not plaintext secret
+      expect(storedData.encryptedSecret).toBeDefined();
+      expect(storedData.secret).toBeUndefined();
+      // Plaintext secret should NOT appear in stored JSON
+      expect(setCall[1]).not.toContain('test-secret');
     });
 
     it('should return webhook ID as valid UUID', async () => {
@@ -561,7 +598,7 @@ describe('WebhookService', () => {
           tenantId: 'tenant-123',
           url: validConfig.url,
         }),
-        'Webhook registered'
+        'Webhook registered with DNS pinning'
       );
     });
   });
@@ -1598,6 +1635,993 @@ describe('WebhookService', () => {
       const newService = createWebhookService();
 
       expect(newService).toBeInstanceOf(WebhookService);
+    });
+  });
+
+  describe('Webhook Secret Encryption', () => {
+    const validConfig: WebhookConfig = {
+      url: 'https://api.example.com/webhooks',
+      secret: 'my-super-secret-key',
+      enabled: true,
+      events: ['escalation.created', 'escalation.approved'],
+    };
+
+    it('should encrypt webhook secret when registering', async () => {
+      const webhookId = await service.registerWebhook('tenant-123', validConfig);
+
+      // Verify the stored data has encrypted secret, not plaintext
+      const setCall = mockRedis.set.mock.calls.find((call: any) =>
+        call[0].includes(`webhook:config:tenant-123:${webhookId}`)
+      );
+      expect(setCall).toBeDefined();
+
+      const storedData = JSON.parse(setCall[1]);
+
+      // Should NOT have plaintext secret
+      expect(storedData.secret).toBeUndefined();
+
+      // Should have encrypted secret envelope
+      expect(storedData.encryptedSecret).toBeDefined();
+      expect(storedData.encryptedSecret.ciphertext).toBeDefined();
+      expect(storedData.encryptedSecret.iv).toBeDefined();
+      expect(storedData.encryptedSecret.authTag).toBeDefined();
+      expect(storedData.encryptedSecret.version).toBe(1);
+
+      // Verify the secret is not stored in plaintext
+      const storedJson = setCall[1];
+      expect(storedJson).not.toContain('my-super-secret-key');
+    });
+
+    it('should decrypt webhook secret when retrieving', async () => {
+      // First register with secret
+      const webhookId = await service.registerWebhook('tenant-123', validConfig);
+
+      // Get the stored encrypted data
+      const setCall = mockRedis.set.mock.calls.find((call: any) =>
+        call[0].includes(`webhook:config:tenant-123:${webhookId}`)
+      );
+      const storedData = setCall[1];
+
+      // Setup mocks for retrieval
+      mockRedis.smembers.mockResolvedValue([webhookId]);
+      mockRedis.get.mockResolvedValue(storedData);
+
+      // Retrieve webhooks
+      const webhooks = await service.getWebhooks('tenant-123');
+
+      expect(webhooks).toHaveLength(1);
+      expect(webhooks[0].config.secret).toBe('my-super-secret-key');
+    });
+
+    it('should handle webhooks without secrets', async () => {
+      const configWithoutSecret: WebhookConfig = {
+        url: 'https://api.example.com/webhooks',
+        enabled: true,
+        events: ['escalation.created'],
+        // No secret
+      };
+
+      const webhookId = await service.registerWebhook('tenant-123', configWithoutSecret);
+
+      const setCall = mockRedis.set.mock.calls.find((call: any) =>
+        call[0].includes(`webhook:config:tenant-123:${webhookId}`)
+      );
+      const storedData = JSON.parse(setCall[1]);
+
+      // Should not have encryptedSecret when no secret provided
+      expect(storedData.encryptedSecret).toBeUndefined();
+      expect(storedData.secret).toBeUndefined();
+
+      // Verify retrieval works
+      mockRedis.smembers.mockResolvedValue([webhookId]);
+      mockRedis.get.mockResolvedValue(setCall[1]);
+
+      const webhooks = await service.getWebhooks('tenant-123');
+      expect(webhooks[0].config.secret).toBeUndefined();
+    });
+
+    it('should handle legacy plaintext secrets gracefully', async () => {
+      // Simulate legacy data with plaintext secret
+      const legacyData: WebhookConfig = {
+        url: 'https://api.example.com/webhooks',
+        secret: 'legacy-plaintext-secret',
+        enabled: true,
+        events: ['escalation.created'],
+      };
+
+      mockRedis.smembers.mockResolvedValue(['legacy-webhook']);
+      mockRedis.get.mockResolvedValue(JSON.stringify(legacyData));
+
+      // Should still be able to retrieve and use the secret
+      const webhooks = await service.getWebhooks('tenant-123');
+
+      expect(webhooks).toHaveLength(1);
+      expect(webhooks[0].config.secret).toBe('legacy-plaintext-secret');
+
+      // Should log a warning about legacy plaintext secret
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ hasPlaintextSecret: true }),
+        expect.stringContaining('legacy plaintext secret')
+      );
+    });
+
+    it('should preserve other config fields when encrypting/decrypting', async () => {
+      const fullConfig: WebhookConfig = {
+        url: 'https://api.example.com/webhooks',
+        secret: 'test-secret',
+        enabled: true,
+        events: ['escalation.created', 'escalation.approved'],
+        retryAttempts: 5,
+        retryDelayMs: 2000,
+      };
+
+      const webhookId = await service.registerWebhook('tenant-123', fullConfig);
+
+      const setCall = mockRedis.set.mock.calls.find((call: any) =>
+        call[0].includes(`webhook:config:tenant-123:${webhookId}`)
+      );
+
+      mockRedis.smembers.mockResolvedValue([webhookId]);
+      mockRedis.get.mockResolvedValue(setCall[1]);
+
+      const webhooks = await service.getWebhooks('tenant-123');
+
+      expect(webhooks[0].config.url).toBe('https://api.example.com/webhooks');
+      expect(webhooks[0].config.enabled).toBe(true);
+      expect(webhooks[0].config.events).toEqual(['escalation.created', 'escalation.approved']);
+      expect(webhooks[0].config.retryAttempts).toBe(5);
+      expect(webhooks[0].config.retryDelayMs).toBe(2000);
+      expect(webhooks[0].config.secret).toBe('test-secret');
+    });
+
+    it('should use encrypted secret correctly for HMAC signature', async () => {
+      // Setup DNS mock for runtime validation
+      mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+        callback(null, { address: '93.184.216.34', family: 4 });
+      });
+
+      // Register webhook with secret
+      const webhookId = await service.registerWebhook('tenant-123', validConfig);
+
+      const setCall = mockRedis.set.mock.calls.find((call: any) =>
+        call[0].includes(`webhook:config:tenant-123:${webhookId}`)
+      );
+
+      // Setup for notification
+      mockRedis.smembers.mockResolvedValue([webhookId]);
+      mockRedis.get.mockResolvedValue(setCall[1]);
+      mockFetch.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+
+      const mockEscalation: EscalationRecord = {
+        id: 'esc-123',
+        intentId: 'intent-456',
+        tenantId: 'tenant-123',
+        reason: 'Test',
+        reasonCategory: 'trust_insufficient',
+        escalatedTo: 'team',
+        status: 'pending',
+        timeout: 'PT1H',
+        timeoutAt: new Date(Date.now() + 3600000).toISOString(),
+        slaBreached: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await service.notifyEscalation('escalation.created', mockEscalation);
+
+      // Verify the signature was computed with the decrypted secret
+      const fetchCall = mockFetch.mock.calls[0];
+      const body = fetchCall[1].body;
+      const signature = fetchCall[1].headers['X-Webhook-Signature'];
+
+      expect(signature).toBeDefined();
+
+      // Verify signature was computed with the original secret
+      const expectedSignature = `sha256=${createHmac('sha256', 'my-super-secret-key').update(body).digest('hex')}`;
+      expect(signature).toBe(expectedSignature);
+    });
+  });
+
+  describe('DNS Pinning Protection', () => {
+    describe('validateWebhookIpConsistency', () => {
+      it('should allow when current IP matches stored IP', async () => {
+        mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+          callback(null, { address: '93.184.216.34', family: 4 });
+        });
+
+        const result = await validateWebhookIpConsistency(
+          'https://example.com/webhook',
+          '93.184.216.34'
+        );
+
+        expect(result.valid).toBe(true);
+        expect(result.currentIp).toBe('93.184.216.34');
+        expect(result.storedIp).toBe('93.184.216.34');
+      });
+
+      it('should detect DNS rebinding when IP changes', async () => {
+        // Attacker changed DNS to point to internal IP
+        mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+          callback(null, { address: '169.254.169.254', family: 4 });
+        });
+
+        const result = await validateWebhookIpConsistency(
+          'https://attacker.com/webhook',
+          '93.184.216.34' // Was originally a public IP
+        );
+
+        expect(result.valid).toBe(false);
+        expect(result.reason).toContain('does not match stored IP');
+        expect(result.currentIp).toBe('169.254.169.254');
+        expect(result.storedIp).toBe('93.184.216.34');
+      });
+
+      it('should allow legacy webhooks without stored IP with warning', async () => {
+        const result = await validateWebhookIpConsistency(
+          'https://example.com/webhook',
+          undefined // No stored IP
+        );
+
+        expect(result.valid).toBe(true);
+        expect(result.reason).toBe('No stored IP (legacy webhook)');
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({ url: 'https://example.com/webhook' }),
+          expect.stringContaining('no stored IP')
+        );
+      });
+
+      it('should handle IP addresses in URL directly', async () => {
+        const result = await validateWebhookIpConsistency(
+          'https://8.8.8.8/webhook',
+          '8.8.8.8'
+        );
+
+        expect(result.valid).toBe(true);
+        expect(result.currentIp).toBe('8.8.8.8');
+        // DNS lookup should not be called for IP addresses
+        expect(mockDnsLookup).not.toHaveBeenCalled();
+      });
+
+      it('should detect mismatch for IP addresses in URL', async () => {
+        const result = await validateWebhookIpConsistency(
+          'https://8.8.4.4/webhook',
+          '8.8.8.8'
+        );
+
+        expect(result.valid).toBe(false);
+        expect(result.reason).toContain('does not match stored IP');
+      });
+
+      it('should fail gracefully on DNS resolution error', async () => {
+        mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+          callback(new Error('ENOTFOUND'));
+        });
+
+        const result = await validateWebhookIpConsistency(
+          'https://example.com/webhook',
+          '93.184.216.34'
+        );
+
+        expect(result.valid).toBe(false);
+        expect(result.reason).toBe('Failed to resolve webhook URL hostname');
+      });
+    });
+
+    describe('Registration stores resolved IP', () => {
+      it('should store resolved IP when registering webhook', async () => {
+        mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+          callback(null, { address: '93.184.216.34', family: 4 });
+        });
+
+        const webhookConfig: WebhookConfig = {
+          url: 'https://api.example.com/webhook',
+          enabled: true,
+          events: ['escalation.created'],
+        };
+
+        const webhookId = await service.registerWebhook('tenant-123', webhookConfig);
+
+        // Verify the stored config includes resolvedIp
+        const setCall = mockRedis.set.mock.calls.find((call: any) =>
+          call[0].includes(`webhook:config:tenant-123:${webhookId}`)
+        );
+        expect(setCall).toBeDefined();
+
+        const storedData = JSON.parse(setCall[1]);
+        expect(storedData.resolvedIp).toBe('93.184.216.34');
+      });
+
+      it('should log registration with DNS pinning info', async () => {
+        mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+          callback(null, { address: '93.184.216.34', family: 4 });
+        });
+
+        const webhookConfig: WebhookConfig = {
+          url: 'https://api.example.com/webhook',
+          enabled: true,
+          events: ['escalation.created'],
+        };
+
+        await service.registerWebhook('tenant-123', webhookConfig);
+
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            tenantId: 'tenant-123',
+            url: 'https://api.example.com/webhook',
+            resolvedIp: '93.184.216.34',
+          }),
+          'Webhook registered with DNS pinning'
+        );
+      });
+    });
+
+    describe('Delivery blocks DNS rebinding', () => {
+      const mockEscalation: EscalationRecord = {
+        id: 'esc-123',
+        intentId: 'intent-456',
+        tenantId: 'tenant-789',
+        reason: 'Test',
+        reasonCategory: 'trust_insufficient',
+        escalatedTo: 'team',
+        status: 'pending',
+        timeout: 'PT1H',
+        timeoutAt: new Date(Date.now() + 3600000).toISOString(),
+        slaBreached: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      it('should block delivery when DNS rebinding detected', async () => {
+        // Webhook was registered with public IP
+        const webhookConfig: WebhookConfig = {
+          url: 'https://attacker.com/webhook',
+          enabled: true,
+          events: ['escalation.created'],
+          resolvedIp: '93.184.216.34', // Original public IP
+        };
+
+        // DNS now points to AWS metadata (attack!)
+        mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+          callback(null, { address: '169.254.169.254', family: 4 });
+        });
+
+        mockRedis.smembers.mockResolvedValue(['webhook-1']);
+        mockRedis.get.mockResolvedValue(JSON.stringify(webhookConfig));
+        mockFetch.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+
+        const promise = service.notifyEscalation('escalation.created', mockEscalation);
+
+        // Fast-forward through retry delays
+        await vi.advanceTimersByTimeAsync(1000);
+        await vi.advanceTimersByTimeAsync(2000);
+
+        const results = await promise;
+
+        // Delivery should fail
+        expect(results[0].success).toBe(false);
+        expect(results[0].error).toContain('does not match stored IP');
+
+        // Should NOT have called fetch (blocked before HTTP request)
+        expect(mockFetch).not.toHaveBeenCalled();
+
+        // Should log the DNS rebinding attack
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            currentIp: '169.254.169.254',
+            storedIp: '93.184.216.34',
+          }),
+          expect.stringContaining('DNS rebinding attack detected')
+        );
+      });
+
+      it('should allow delivery when IP is consistent', async () => {
+        const webhookConfig: WebhookConfig = {
+          url: 'https://api.example.com/webhook',
+          enabled: true,
+          events: ['escalation.created'],
+          resolvedIp: '93.184.216.34',
+        };
+
+        // DNS still points to same IP
+        mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+          callback(null, { address: '93.184.216.34', family: 4 });
+        });
+
+        mockRedis.smembers.mockResolvedValue(['webhook-1']);
+        mockRedis.get.mockResolvedValue(JSON.stringify(webhookConfig));
+        mockFetch.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+
+        const results = await service.notifyEscalation('escalation.created', mockEscalation);
+
+        expect(results[0].success).toBe(true);
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      it('should allow delivery for legacy webhooks without resolvedIp', async () => {
+        const legacyWebhookConfig: WebhookConfig = {
+          url: 'https://api.example.com/webhook',
+          enabled: true,
+          events: ['escalation.created'],
+          // No resolvedIp - legacy webhook
+        };
+
+        mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+          callback(null, { address: '93.184.216.34', family: 4 });
+        });
+
+        mockRedis.smembers.mockResolvedValue(['webhook-1']);
+        mockRedis.get.mockResolvedValue(JSON.stringify(legacyWebhookConfig));
+        mockFetch.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+
+        const results = await service.notifyEscalation('escalation.created', mockEscalation);
+
+        expect(results[0].success).toBe(true);
+        expect(mockFetch).toHaveBeenCalled();
+
+        // Should log warning about legacy webhook
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({ url: 'https://api.example.com/webhook' }),
+          expect.stringContaining('no stored IP')
+        );
+      });
+    });
+
+    describe('VORION_WEBHOOK_ALLOW_DNS_CHANGE config', () => {
+      it('should bypass DNS pinning when allowDnsChange is true', async () => {
+        // Enable DNS change allowance
+        (globalThis as any).__mockWebhookConfig = {
+          timeoutMs: 10000,
+          retryAttempts: 3,
+          retryDelayMs: 1000,
+          allowDnsChange: true,
+        };
+
+        const webhookConfig: WebhookConfig = {
+          url: 'https://api.example.com/webhook',
+          enabled: true,
+          events: ['escalation.created'],
+          resolvedIp: '93.184.216.34', // Original IP
+        };
+
+        // DNS changed to different (but still public) IP
+        mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+          callback(null, { address: '93.184.216.35', family: 4 }); // Different IP
+        });
+
+        mockRedis.smembers.mockResolvedValue(['webhook-1']);
+        mockRedis.get.mockResolvedValue(JSON.stringify(webhookConfig));
+        mockFetch.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+
+        const mockEscalation: EscalationRecord = {
+          id: 'esc-123',
+          intentId: 'intent-456',
+          tenantId: 'tenant-789',
+          reason: 'Test',
+          reasonCategory: 'trust_insufficient',
+          escalatedTo: 'team',
+          status: 'pending',
+          timeout: 'PT1H',
+          timeoutAt: new Date(Date.now() + 3600000).toISOString(),
+          slaBreached: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        const results = await service.notifyEscalation('escalation.created', mockEscalation);
+
+        // Should succeed because DNS change is allowed
+        expect(results[0].success).toBe(true);
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      it('should still block private IPs even when allowDnsChange is true', async () => {
+        // Enable DNS change allowance
+        (globalThis as any).__mockWebhookConfig = {
+          timeoutMs: 10000,
+          retryAttempts: 3,
+          retryDelayMs: 1000,
+          allowDnsChange: true,
+        };
+
+        const webhookConfig: WebhookConfig = {
+          url: 'https://api.example.com/webhook',
+          enabled: true,
+          events: ['escalation.created'],
+          resolvedIp: '93.184.216.34',
+        };
+
+        // DNS changed to private IP (SSRF attack!)
+        mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+          callback(null, { address: '169.254.169.254', family: 4 });
+        });
+
+        mockRedis.smembers.mockResolvedValue(['webhook-1']);
+        mockRedis.get.mockResolvedValue(JSON.stringify(webhookConfig));
+        mockFetch.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+
+        const mockEscalation: EscalationRecord = {
+          id: 'esc-123',
+          intentId: 'intent-456',
+          tenantId: 'tenant-789',
+          reason: 'Test',
+          reasonCategory: 'trust_insufficient',
+          escalatedTo: 'team',
+          status: 'pending',
+          timeout: 'PT1H',
+          timeoutAt: new Date(Date.now() + 3600000).toISOString(),
+          slaBreached: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        const promise = service.notifyEscalation('escalation.created', mockEscalation);
+
+        // Fast-forward through retry delays
+        await vi.advanceTimersByTimeAsync(1000);
+        await vi.advanceTimersByTimeAsync(2000);
+
+        const results = await promise;
+
+        // Should fail - runtime SSRF check still blocks private IPs
+        expect(results[0].success).toBe(false);
+        expect(results[0].error).toContain('private IP');
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Circuit Breaker', () => {
+    const mockEscalation: EscalationRecord = {
+      id: 'esc-123',
+      intentId: 'intent-456',
+      tenantId: 'tenant-789',
+      reason: 'Test',
+      reasonCategory: 'trust_insufficient',
+      escalatedTo: 'team',
+      status: 'pending',
+      timeout: 'PT1H',
+      timeoutAt: new Date(Date.now() + 3600000).toISOString(),
+      slaBreached: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const mockWebhookConfig: WebhookConfig = {
+      url: 'https://api.example.com/webhook',
+      enabled: true,
+      events: ['escalation.created'],
+      retryAttempts: 1, // Low retry count for faster tests
+      retryDelayMs: 10,
+    };
+
+    beforeEach(() => {
+      // Setup DNS mock for runtime validation
+      mockDnsLookup.mockImplementation((hostname: string, callback: Function) => {
+        callback(null, { address: '93.184.216.34', family: 4 });
+      });
+
+      // Default circuit breaker config: 5 failures, 5 min reset
+      (globalThis as any).__mockWebhookConfig = {
+        timeoutMs: 10000,
+        retryAttempts: 1,
+        retryDelayMs: 10,
+        allowDnsChange: false,
+        circuitFailureThreshold: 5,
+        circuitResetTimeoutMs: 300000, // 5 minutes
+      };
+
+      mockRedis.smembers.mockResolvedValue(['webhook-1']);
+      mockRedis.get.mockImplementation((key: string) => {
+        if (key.startsWith('webhook:config:')) {
+          return Promise.resolve(JSON.stringify(mockWebhookConfig));
+        }
+        // Circuit state - default to null (closed)
+        return Promise.resolve(null);
+      });
+    });
+
+    describe('Circuit opens after consecutive failures', () => {
+      it('should open circuit after reaching failure threshold', async () => {
+        // Configure low threshold for test
+        (globalThis as any).__mockWebhookConfig = {
+          ...((globalThis as any).__mockWebhookConfig),
+          circuitFailureThreshold: 3,
+        };
+
+        // All deliveries fail
+        mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' });
+
+        // First failure
+        await service.notifyEscalation('escalation.created', mockEscalation);
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+
+        // Verify circuit state was stored
+        expect(mockRedis.set).toHaveBeenCalledWith(
+          'webhook:circuit:tenant-789:webhook-1',
+          expect.any(String),
+          'EX',
+          86400
+        );
+
+        // Parse the stored circuit state
+        const setCall = mockRedis.set.mock.calls.find((call: any) =>
+          call[0] === 'webhook:circuit:tenant-789:webhook-1'
+        );
+        expect(setCall).toBeDefined();
+
+        const circuitState = JSON.parse(setCall[1]);
+        expect(circuitState.failures).toBe(1);
+        expect(circuitState.state).toBe('closed'); // Not yet at threshold
+      });
+
+      it('should track failure count and open circuit at threshold', async () => {
+        // Configure threshold of 2 for faster test
+        (globalThis as any).__mockWebhookConfig = {
+          ...((globalThis as any).__mockWebhookConfig),
+          circuitFailureThreshold: 2,
+        };
+
+        mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' });
+
+        // Track the circuit state through multiple failures
+        let currentCircuitState = { failures: 0, openedAt: null, state: 'closed' };
+
+        mockRedis.get.mockImplementation((key: string) => {
+          if (key.startsWith('webhook:config:')) {
+            return Promise.resolve(JSON.stringify(mockWebhookConfig));
+          }
+          if (key.startsWith('webhook:circuit:')) {
+            return Promise.resolve(JSON.stringify(currentCircuitState));
+          }
+          return Promise.resolve(null);
+        });
+
+        mockRedis.set.mockImplementation((key: string, value: string) => {
+          if (key.startsWith('webhook:circuit:')) {
+            currentCircuitState = JSON.parse(value);
+          }
+          return Promise.resolve('OK');
+        });
+
+        // First failure - should not open circuit
+        await service.notifyEscalation('escalation.created', mockEscalation);
+        expect(currentCircuitState.failures).toBe(1);
+        expect(currentCircuitState.state).toBe('closed');
+
+        // Second failure - should open circuit
+        await service.notifyEscalation('escalation.created', mockEscalation);
+        expect(currentCircuitState.failures).toBe(2);
+        expect(currentCircuitState.state).toBe('open');
+        expect(currentCircuitState.openedAt).toBeDefined();
+      });
+    });
+
+    describe('Circuit skips delivery when open', () => {
+      it('should skip delivery when circuit is open', async () => {
+        const openCircuitState = {
+          failures: 5,
+          openedAt: Date.now(), // Just opened
+          state: 'open',
+        };
+
+        mockRedis.get.mockImplementation((key: string) => {
+          if (key.startsWith('webhook:config:')) {
+            return Promise.resolve(JSON.stringify(mockWebhookConfig));
+          }
+          if (key.startsWith('webhook:circuit:')) {
+            return Promise.resolve(JSON.stringify(openCircuitState));
+          }
+          return Promise.resolve(null);
+        });
+
+        mockFetch.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+
+        const results = await service.notifyEscalation('escalation.created', mockEscalation);
+
+        // Should not call fetch - circuit is open
+        expect(mockFetch).not.toHaveBeenCalled();
+
+        // Should return skipped result
+        expect(results[0].success).toBe(false);
+        expect(results[0].skippedByCircuitBreaker).toBe(true);
+        expect(results[0].error).toContain('Circuit breaker open');
+        expect(results[0].attempts).toBe(0);
+      });
+    });
+
+    describe('Half-open state and recovery', () => {
+      it('should transition to half-open after reset timeout', async () => {
+        // Configure short reset timeout for test
+        (globalThis as any).__mockWebhookConfig = {
+          ...((globalThis as any).__mockWebhookConfig),
+          circuitResetTimeoutMs: 1000, // 1 second
+        };
+
+        // Circuit was opened 2 seconds ago (past reset timeout)
+        const openCircuitState = {
+          failures: 5,
+          openedAt: Date.now() - 2000,
+          state: 'open',
+        };
+
+        let currentCircuitState = { ...openCircuitState };
+
+        mockRedis.get.mockImplementation((key: string) => {
+          if (key.startsWith('webhook:config:')) {
+            return Promise.resolve(JSON.stringify(mockWebhookConfig));
+          }
+          if (key.startsWith('webhook:circuit:')) {
+            return Promise.resolve(JSON.stringify(currentCircuitState));
+          }
+          return Promise.resolve(null);
+        });
+
+        mockRedis.set.mockImplementation((key: string, value: string) => {
+          if (key.startsWith('webhook:circuit:')) {
+            currentCircuitState = JSON.parse(value);
+          }
+          return Promise.resolve('OK');
+        });
+
+        // Delivery succeeds
+        mockFetch.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+
+        const results = await service.notifyEscalation('escalation.created', mockEscalation);
+
+        // Should have called fetch (half-open allows one attempt)
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+
+        // Should succeed
+        expect(results[0].success).toBe(true);
+
+        // Circuit should be closed now
+        expect(currentCircuitState.state).toBe('closed');
+        expect(currentCircuitState.failures).toBe(0);
+      });
+
+      it('should reopen circuit if half-open test fails', async () => {
+        // Configure short reset timeout for test
+        (globalThis as any).__mockWebhookConfig = {
+          ...((globalThis as any).__mockWebhookConfig),
+          circuitResetTimeoutMs: 1000,
+        };
+
+        // Circuit was opened 2 seconds ago (past reset timeout)
+        const openCircuitState = {
+          failures: 5,
+          openedAt: Date.now() - 2000,
+          state: 'open',
+        };
+
+        let currentCircuitState = { ...openCircuitState };
+
+        mockRedis.get.mockImplementation((key: string) => {
+          if (key.startsWith('webhook:config:')) {
+            return Promise.resolve(JSON.stringify(mockWebhookConfig));
+          }
+          if (key.startsWith('webhook:circuit:')) {
+            return Promise.resolve(JSON.stringify(currentCircuitState));
+          }
+          return Promise.resolve(null);
+        });
+
+        mockRedis.set.mockImplementation((key: string, value: string) => {
+          if (key.startsWith('webhook:circuit:')) {
+            currentCircuitState = JSON.parse(value);
+          }
+          return Promise.resolve('OK');
+        });
+
+        // Delivery fails
+        mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' });
+
+        const results = await service.notifyEscalation('escalation.created', mockEscalation);
+
+        // Should have called fetch
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+
+        // Should fail
+        expect(results[0].success).toBe(false);
+
+        // Circuit should be reopened
+        expect(currentCircuitState.state).toBe('open');
+        expect(currentCircuitState.failures).toBe(6); // Incremented
+        expect(currentCircuitState.openedAt).toBeGreaterThan(openCircuitState.openedAt!);
+      });
+    });
+
+    describe('Success resets failures', () => {
+      it('should reset failure count on successful delivery', async () => {
+        // Circuit has 3 failures but not at threshold
+        const circuitState = {
+          failures: 3,
+          openedAt: null,
+          state: 'closed',
+        };
+
+        let currentCircuitState = { ...circuitState };
+
+        mockRedis.get.mockImplementation((key: string) => {
+          if (key.startsWith('webhook:config:')) {
+            return Promise.resolve(JSON.stringify(mockWebhookConfig));
+          }
+          if (key.startsWith('webhook:circuit:')) {
+            return Promise.resolve(JSON.stringify(currentCircuitState));
+          }
+          return Promise.resolve(null);
+        });
+
+        mockRedis.set.mockImplementation((key: string, value: string) => {
+          if (key.startsWith('webhook:circuit:')) {
+            currentCircuitState = JSON.parse(value);
+          }
+          return Promise.resolve('OK');
+        });
+
+        // Delivery succeeds
+        mockFetch.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+
+        await service.notifyEscalation('escalation.created', mockEscalation);
+
+        // Failures should be reset
+        expect(currentCircuitState.failures).toBe(0);
+        expect(currentCircuitState.state).toBe('closed');
+      });
+    });
+
+    describe('getCircuitBreakerStatus', () => {
+      it('should return circuit status with time until reset', async () => {
+        (globalThis as any).__mockWebhookConfig = {
+          ...((globalThis as any).__mockWebhookConfig),
+          circuitResetTimeoutMs: 300000, // 5 minutes
+        };
+
+        const openCircuitState = {
+          failures: 5,
+          openedAt: Date.now() - 60000, // Opened 1 minute ago
+          state: 'open',
+        };
+
+        mockRedis.get.mockImplementation((key: string) => {
+          if (key.startsWith('webhook:circuit:')) {
+            return Promise.resolve(JSON.stringify(openCircuitState));
+          }
+          return Promise.resolve(null);
+        });
+
+        const status = await service.getCircuitBreakerStatus('tenant-789', 'webhook-1');
+
+        expect(status.state).toBe('open');
+        expect(status.failures).toBe(5);
+        expect(status.timeUntilResetMs).toBeDefined();
+        // Should be approximately 4 minutes (240000ms)
+        expect(status.timeUntilResetMs).toBeGreaterThan(230000);
+        expect(status.timeUntilResetMs).toBeLessThan(250000);
+      });
+
+      it('should return closed circuit status without timeUntilReset', async () => {
+        mockRedis.get.mockResolvedValue(null); // No circuit state = closed
+
+        const status = await service.getCircuitBreakerStatus('tenant-789', 'webhook-1');
+
+        expect(status.state).toBe('closed');
+        expect(status.failures).toBe(0);
+        expect(status.timeUntilResetMs).toBeUndefined();
+      });
+    });
+
+    describe('resetCircuitBreaker', () => {
+      it('should manually reset an open circuit', async () => {
+        const openCircuitState = {
+          failures: 10,
+          openedAt: Date.now(),
+          state: 'open',
+        };
+
+        let currentCircuitState = { ...openCircuitState };
+
+        mockRedis.get.mockImplementation((key: string) => {
+          if (key.startsWith('webhook:circuit:')) {
+            return Promise.resolve(JSON.stringify(currentCircuitState));
+          }
+          return Promise.resolve(null);
+        });
+
+        mockRedis.set.mockImplementation((key: string, value: string) => {
+          if (key.startsWith('webhook:circuit:')) {
+            currentCircuitState = JSON.parse(value);
+          }
+          return Promise.resolve('OK');
+        });
+
+        await service.resetCircuitBreaker('tenant-789', 'webhook-1');
+
+        expect(currentCircuitState.state).toBe('closed');
+        expect(currentCircuitState.failures).toBe(0);
+        expect(currentCircuitState.openedAt).toBeNull();
+
+        // Should log the reset
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            tenantId: 'tenant-789',
+            webhookId: 'webhook-1',
+            previousState: 'open',
+          }),
+          'Circuit breaker manually reset'
+        );
+      });
+    });
+
+    describe('Circuit breaker with multiple webhooks', () => {
+      it('should track circuit state independently per webhook', async () => {
+        const webhook1Config: WebhookConfig = {
+          url: 'https://webhook1.example.com/hook',
+          enabled: true,
+          events: ['escalation.created'],
+          retryAttempts: 1,
+          retryDelayMs: 10,
+        };
+
+        const webhook2Config: WebhookConfig = {
+          url: 'https://webhook2.example.com/hook',
+          enabled: true,
+          events: ['escalation.created'],
+          retryAttempts: 1,
+          retryDelayMs: 10,
+        };
+
+        (globalThis as any).__mockWebhookConfig = {
+          ...((globalThis as any).__mockWebhookConfig),
+          circuitFailureThreshold: 1, // Open after 1 failure
+        };
+
+        const circuitStates: Record<string, any> = {};
+
+        mockRedis.smembers.mockResolvedValue(['webhook-1', 'webhook-2']);
+
+        mockRedis.get.mockImplementation((key: string) => {
+          if (key === 'webhook:config:tenant-789:webhook-1') {
+            return Promise.resolve(JSON.stringify(webhook1Config));
+          }
+          if (key === 'webhook:config:tenant-789:webhook-2') {
+            return Promise.resolve(JSON.stringify(webhook2Config));
+          }
+          if (key.startsWith('webhook:circuit:')) {
+            return Promise.resolve(circuitStates[key] ? JSON.stringify(circuitStates[key]) : null);
+          }
+          return Promise.resolve(null);
+        });
+
+        mockRedis.set.mockImplementation((key: string, value: string) => {
+          if (key.startsWith('webhook:circuit:')) {
+            circuitStates[key] = JSON.parse(value);
+          }
+          return Promise.resolve('OK');
+        });
+
+        // First webhook fails, second succeeds
+        mockFetch
+          .mockResolvedValueOnce({ ok: false, status: 500, statusText: 'Error' }) // webhook-1
+          .mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK' }); // webhook-2
+
+        const results = await service.notifyEscalation('escalation.created', mockEscalation);
+
+        expect(results).toHaveLength(2);
+        expect(results[0].success).toBe(false); // webhook-1 failed
+        expect(results[1].success).toBe(true); // webhook-2 succeeded
+
+        // Check circuit states
+        const circuit1 = circuitStates['webhook:circuit:tenant-789:webhook-1'];
+        const circuit2 = circuitStates['webhook:circuit:tenant-789:webhook-2'];
+
+        // webhook-1 should have open circuit (1 failure = threshold)
+        expect(circuit1.state).toBe('open');
+        expect(circuit1.failures).toBe(1);
+
+        // webhook-2 should have closed circuit with 0 failures
+        expect(circuit2.state).toBe('closed');
+        expect(circuit2.failures).toBe(0);
+      });
     });
   });
 });

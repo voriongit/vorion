@@ -28,6 +28,27 @@ import {
   updateQueueGauges,
   recordError,
   getMetrics,
+  // New metrics
+  deduplicateLockContentionTotal,
+  trustGateBypassesTotal,
+  intentDeduplicationsTotal,
+  policyCacheHitsTotal,
+  policyCacheMissesTotal,
+  escalationSlaBreachRateGauge,
+  intentContextSizeBytes,
+  webhookDeliverySuccessTotal,
+  webhookDeliveryFailureTotal,
+  escalationApprovalRateGauge,
+  // New helper functions
+  recordLockContention,
+  recordTrustGateBypass,
+  recordDeduplication,
+  recordPolicyCacheHit,
+  recordPolicyCacheMiss,
+  updateSlaBreachRate,
+  recordIntentContextSize,
+  recordWebhookDelivery,
+  updateEscalationApprovalRate,
 } from '../../../src/intent/metrics.js';
 
 describe('Metrics Module', () => {
@@ -398,6 +419,195 @@ describe('Metrics Module', () => {
       escalationResolutions.inc({ tenant_id: 'tenant', resolution: 'timeout' });
 
       expect(true).toBe(true);
+    });
+  });
+
+  describe('New Observability Metrics', () => {
+    describe('Lock Contention Metrics', () => {
+      it('should increment deduplicateLockContentionTotal', () => {
+        deduplicateLockContentionTotal.inc({ tenant_id: 'tenant-1', outcome: 'acquired' });
+        deduplicateLockContentionTotal.inc({ tenant_id: 'tenant-1', outcome: 'timeout' });
+        deduplicateLockContentionTotal.inc({ tenant_id: 'tenant-1', outcome: 'conflict' });
+
+        expect(true).toBe(true);
+      });
+
+      it('should record lock contention via helper', () => {
+        recordLockContention('tenant-1', 'acquired');
+        recordLockContention('tenant-1', 'timeout');
+        recordLockContention('tenant-1', 'conflict');
+
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('Trust Gate Bypass Metrics', () => {
+      it('should increment trustGateBypassesTotal', () => {
+        trustGateBypassesTotal.inc({ tenant_id: 'tenant-1', intent_type: 'admin-action' });
+        trustGateBypassesTotal.inc({ tenant_id: 'tenant-1', intent_type: 'default' });
+
+        expect(true).toBe(true);
+      });
+
+      it('should record trust gate bypass via helper', () => {
+        recordTrustGateBypass('tenant-1', 'admin-action');
+        recordTrustGateBypass('tenant-1', null);
+        recordTrustGateBypass('tenant-1', undefined);
+
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('Deduplication Metrics', () => {
+      it('should increment intentDeduplicationsTotal', () => {
+        intentDeduplicationsTotal.inc({ tenant_id: 'tenant-1', outcome: 'new' });
+        intentDeduplicationsTotal.inc({ tenant_id: 'tenant-1', outcome: 'duplicate' });
+        intentDeduplicationsTotal.inc({ tenant_id: 'tenant-1', outcome: 'race_resolved' });
+
+        expect(true).toBe(true);
+      });
+
+      it('should record deduplication via helper', () => {
+        recordDeduplication('tenant-1', 'new');
+        recordDeduplication('tenant-1', 'duplicate');
+        recordDeduplication('tenant-1', 'race_resolved');
+
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('Policy Cache Metrics', () => {
+      it('should increment policyCacheHitsTotal', () => {
+        policyCacheHitsTotal.inc({ tenant_id: 'tenant-1', namespace: 'default' });
+        policyCacheHitsTotal.inc({ tenant_id: 'tenant-1', namespace: 'security' });
+
+        expect(true).toBe(true);
+      });
+
+      it('should increment policyCacheMissesTotal', () => {
+        policyCacheMissesTotal.inc({ tenant_id: 'tenant-1', namespace: 'default' });
+        policyCacheMissesTotal.inc({ tenant_id: 'tenant-1', namespace: 'security' });
+
+        expect(true).toBe(true);
+      });
+
+      it('should record policy cache hit via helper', () => {
+        recordPolicyCacheHit('tenant-1', 'default');
+        recordPolicyCacheHit('tenant-1', 'security');
+
+        expect(true).toBe(true);
+      });
+
+      it('should record policy cache miss via helper', () => {
+        recordPolicyCacheMiss('tenant-1', 'default');
+        recordPolicyCacheMiss('tenant-1', 'security');
+
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('SLA Breach Rate Metrics', () => {
+      it('should set escalationSlaBreachRateGauge', () => {
+        escalationSlaBreachRateGauge.set({ tenant_id: 'tenant-1' }, 0.15);
+        escalationSlaBreachRateGauge.set({ tenant_id: 'tenant-2' }, 0.05);
+
+        expect(true).toBe(true);
+      });
+
+      it('should update SLA breach rate via helper', () => {
+        updateSlaBreachRate('tenant-1', 0.15);
+        updateSlaBreachRate('tenant-2', 0);
+        updateSlaBreachRate('tenant-3', 1.0);
+
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('Intent Context Size Metrics', () => {
+      it('should observe intentContextSizeBytes', () => {
+        intentContextSizeBytes.observe({ tenant_id: 'tenant-1', intent_type: 'data-access' }, 1024);
+        intentContextSizeBytes.observe({ tenant_id: 'tenant-1', intent_type: 'default' }, 512);
+
+        expect(true).toBe(true);
+      });
+
+      it('should record context size via helper', () => {
+        recordIntentContextSize('tenant-1', 'data-access', 1024);
+        recordIntentContextSize('tenant-1', null, 512);
+        recordIntentContextSize('tenant-1', undefined, 256);
+
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('Webhook Delivery Metrics', () => {
+      it('should increment webhookDeliverySuccessTotal', () => {
+        webhookDeliverySuccessTotal.inc({ tenant_id: 'tenant-1', event_type: 'escalation.created' });
+        webhookDeliverySuccessTotal.inc({ tenant_id: 'tenant-1', event_type: 'intent.approved' });
+
+        expect(true).toBe(true);
+      });
+
+      it('should increment webhookDeliveryFailureTotal', () => {
+        webhookDeliveryFailureTotal.inc({ tenant_id: 'tenant-1', event_type: 'escalation.created' });
+        webhookDeliveryFailureTotal.inc({ tenant_id: 'tenant-1', event_type: 'intent.denied' });
+
+        expect(true).toBe(true);
+      });
+
+      it('should record webhook delivery via helper', () => {
+        recordWebhookDelivery('tenant-1', 'escalation.created', true);
+        recordWebhookDelivery('tenant-1', 'escalation.created', false);
+        recordWebhookDelivery('tenant-1', 'intent.approved', true);
+
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('Escalation Approval Rate Metrics', () => {
+      it('should set escalationApprovalRateGauge', () => {
+        escalationApprovalRateGauge.set({ tenant_id: 'tenant-1' }, 0.75);
+        escalationApprovalRateGauge.set({ tenant_id: 'tenant-2' }, 0.90);
+
+        expect(true).toBe(true);
+      });
+
+      it('should update escalation approval rate via helper', () => {
+        updateEscalationApprovalRate('tenant-1', 0.75);
+        updateEscalationApprovalRate('tenant-2', 0.5);
+        updateEscalationApprovalRate('tenant-3', 1.0);
+
+        expect(true).toBe(true);
+      });
+    });
+  });
+
+  describe('New Metrics in getMetrics output', () => {
+    it('should include new observability metrics in Prometheus format', async () => {
+      // Add some sample data for new metrics
+      recordLockContention('test-tenant', 'acquired');
+      recordTrustGateBypass('test-tenant', 'test-type');
+      recordDeduplication('test-tenant', 'new');
+      recordPolicyCacheHit('test-tenant', 'default');
+      recordPolicyCacheMiss('test-tenant', 'security');
+      updateSlaBreachRate('test-tenant', 0.1);
+      recordIntentContextSize('test-tenant', 'test-type', 2048);
+      recordWebhookDelivery('test-tenant', 'intent.approved', true);
+      updateEscalationApprovalRate('test-tenant', 0.8);
+
+      const metrics = await getMetrics();
+
+      // Verify new metrics are present
+      expect(metrics).toContain('vorion_deduplicate_lock_contention_total');
+      expect(metrics).toContain('vorion_trust_gate_bypasses_total');
+      expect(metrics).toContain('vorion_intent_deduplications_total');
+      expect(metrics).toContain('vorion_policy_cache_hits_total');
+      expect(metrics).toContain('vorion_policy_cache_misses_total');
+      expect(metrics).toContain('vorion_escalation_sla_breach_rate');
+      expect(metrics).toContain('vorion_intent_context_size_bytes');
+      expect(metrics).toContain('vorion_webhook_delivery_success_total');
+      expect(metrics).toContain('vorion_webhook_delivery_failure_total');
+      expect(metrics).toContain('vorion_escalation_approval_rate');
     });
   });
 });

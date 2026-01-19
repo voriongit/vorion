@@ -327,6 +327,223 @@ export const dbPoolConnectionsWaiting = new Gauge({
 });
 
 // ============================================================================
+// Lock Contention Metrics
+// ============================================================================
+
+/**
+ * Lock contention events during deduplication
+ */
+export const deduplicateLockContentionTotal = new Counter({
+  name: 'vorion_deduplicate_lock_contention_total',
+  help: 'Total lock contention events during intent deduplication',
+  labelNames: ['tenant_id', 'outcome'] as const, // outcome: acquired, timeout, conflict
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// Trust Gate Bypass Metrics
+// ============================================================================
+
+/**
+ * Trust gate bypass events (when bypassTrustGate is used)
+ */
+export const trustGateBypassesTotal = new Counter({
+  name: 'vorion_trust_gate_bypasses_total',
+  help: 'Total trust gate bypass events',
+  labelNames: ['tenant_id', 'intent_type'] as const,
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// Deduplication Metrics
+// ============================================================================
+
+/**
+ * Intent deduplication attempts
+ */
+export const intentDeduplicationsTotal = new Counter({
+  name: 'vorion_intent_deduplications_total',
+  help: 'Total intent deduplication attempts',
+  labelNames: ['tenant_id', 'outcome'] as const, // outcome: new, duplicate, race_resolved
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// Policy Cache Metrics
+// ============================================================================
+
+/**
+ * Policy cache hits
+ */
+export const policyCacheHitsTotal = new Counter({
+  name: 'vorion_policy_cache_hits_total',
+  help: 'Total policy cache hits',
+  labelNames: ['tenant_id', 'namespace'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Policy cache misses
+ */
+export const policyCacheMissesTotal = new Counter({
+  name: 'vorion_policy_cache_misses_total',
+  help: 'Total policy cache misses',
+  labelNames: ['tenant_id', 'namespace'] as const,
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// SLA Metrics
+// ============================================================================
+
+/**
+ * Escalation SLA breach rate gauge (0-1 representing percentage)
+ */
+export const escalationSlaBreachRateGauge = new Gauge({
+  name: 'vorion_escalation_sla_breach_rate',
+  help: 'Current SLA breach rate for escalations (0-1)',
+  labelNames: ['tenant_id'] as const,
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// Intent Context Metrics
+// ============================================================================
+
+/**
+ * Intent context size in bytes (histogram)
+ */
+export const intentContextSizeBytes = new Histogram({
+  name: 'vorion_intent_context_size_bytes',
+  help: 'Size of intent context payload in bytes',
+  labelNames: ['tenant_id', 'intent_type'] as const,
+  buckets: [256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536],
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// Webhook Metrics
+// ============================================================================
+
+/**
+ * Webhook delivery success counter
+ */
+export const webhookDeliverySuccessTotal = new Counter({
+  name: 'vorion_webhook_delivery_success_total',
+  help: 'Total successful webhook deliveries',
+  labelNames: ['tenant_id', 'event_type'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Webhook delivery failure counter
+ */
+export const webhookDeliveryFailureTotal = new Counter({
+  name: 'vorion_webhook_delivery_failure_total',
+  help: 'Total failed webhook deliveries',
+  labelNames: ['tenant_id', 'event_type'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Current circuit breaker state per webhook (0=closed, 1=open, 2=half_open)
+ */
+export const webhookCircuitBreakerState = new Gauge({
+  name: 'vorion_webhook_circuit_breaker_state',
+  help: 'Current circuit breaker state (0=closed, 1=open, 2=half_open)',
+  labelNames: ['tenant_id', 'webhook_id'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Total number of circuit breaker trips (circuit opening)
+ */
+export const webhookCircuitBreakerTripsTotal = new Counter({
+  name: 'vorion_webhook_circuit_breaker_trips_total',
+  help: 'Total number of times circuit breaker has tripped (opened)',
+  labelNames: ['tenant_id', 'webhook_id'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Webhook deliveries skipped due to open circuit
+ */
+export const webhookDeliveriesSkippedTotal = new Counter({
+  name: 'vorion_webhook_deliveries_skipped_total',
+  help: 'Total webhook deliveries skipped due to open circuit breaker',
+  labelNames: ['tenant_id', 'webhook_id'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Circuit breaker state transitions
+ */
+export const webhookCircuitBreakerTransitions = new Counter({
+  name: 'vorion_webhook_circuit_breaker_transitions_total',
+  help: 'Total circuit breaker state transitions',
+  labelNames: ['tenant_id', 'webhook_id', 'from_state', 'to_state'] as const,
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// Escalation Approval Rate Metrics
+// ============================================================================
+
+/**
+ * Escalation approval rate gauge (0-1 representing percentage of approvals)
+ */
+export const escalationApprovalRateGauge = new Gauge({
+  name: 'vorion_escalation_approval_rate',
+  help: 'Current approval rate for escalations (0-1)',
+  labelNames: ['tenant_id'] as const,
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// Circuit Breaker Metrics (Generic)
+// ============================================================================
+
+/**
+ * Circuit breaker state changes (generic, for any circuit breaker)
+ */
+export const circuitBreakerStateChanges = new Counter({
+  name: 'vorion_circuit_breaker_state_changes_total',
+  help: 'Total circuit breaker state transitions',
+  labelNames: ['name', 'from_state', 'to_state'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Current circuit breaker state (gauge: 0=CLOSED, 1=HALF_OPEN, 2=OPEN)
+ */
+export const circuitBreakerState = new Gauge({
+  name: 'vorion_circuit_breaker_state',
+  help: 'Current circuit breaker state (0=CLOSED, 1=HALF_OPEN, 2=OPEN)',
+  labelNames: ['name'] as const,
+  registers: [intentRegistry],
+});
+
+/**
+ * Circuit breaker executions
+ */
+export const circuitBreakerExecutions = new Counter({
+  name: 'vorion_circuit_breaker_executions_total',
+  help: 'Total circuit breaker executions',
+  labelNames: ['name', 'result'] as const, // result: success, failure, rejected
+  registers: [intentRegistry],
+});
+
+/**
+ * Circuit breaker failure count (gauge for current failure count)
+ */
+export const circuitBreakerFailures = new Gauge({
+  name: 'vorion_circuit_breaker_failures',
+  help: 'Current failure count for circuit breaker',
+  labelNames: ['name'] as const,
+  registers: [intentRegistry],
+});
+
+// ============================================================================
 // Error Metrics
 // ============================================================================
 
@@ -571,6 +788,158 @@ export function updateDbPoolMetrics(
   dbPoolConnectionsActive.set(active);
   dbPoolConnectionsIdle.set(idle);
   dbPoolConnectionsWaiting.set(waiting);
+}
+
+// ============================================================================
+// New Observability Metrics Helper Functions
+// ============================================================================
+
+/**
+ * Record lock contention during deduplication
+ */
+export function recordLockContention(
+  tenantId: string,
+  outcome: 'acquired' | 'timeout' | 'conflict'
+): void {
+  deduplicateLockContentionTotal.inc({ tenant_id: tenantId, outcome });
+}
+
+/**
+ * Record trust gate bypass
+ */
+export function recordTrustGateBypass(
+  tenantId: string,
+  intentType: string | null | undefined
+): void {
+  trustGateBypassesTotal.inc({
+    tenant_id: tenantId,
+    intent_type: intentType ?? 'default',
+  });
+}
+
+/**
+ * Record deduplication attempt
+ */
+export function recordDeduplication(
+  tenantId: string,
+  outcome: 'new' | 'duplicate' | 'race_resolved'
+): void {
+  intentDeduplicationsTotal.inc({ tenant_id: tenantId, outcome });
+}
+
+/**
+ * Record policy cache hit
+ */
+export function recordPolicyCacheHit(tenantId: string, namespace: string): void {
+  policyCacheHitsTotal.inc({ tenant_id: tenantId, namespace });
+}
+
+/**
+ * Record policy cache miss
+ */
+export function recordPolicyCacheMiss(tenantId: string, namespace: string): void {
+  policyCacheMissesTotal.inc({ tenant_id: tenantId, namespace });
+}
+
+/**
+ * Update SLA breach rate gauge
+ */
+export function updateSlaBreachRate(tenantId: string, breachRate: number): void {
+  escalationSlaBreachRateGauge.set({ tenant_id: tenantId }, breachRate);
+}
+
+/**
+ * Record intent context size
+ */
+export function recordIntentContextSize(
+  tenantId: string,
+  intentType: string | null | undefined,
+  sizeBytes: number
+): void {
+  intentContextSizeBytes.observe(
+    { tenant_id: tenantId, intent_type: intentType ?? 'default' },
+    sizeBytes
+  );
+}
+
+/**
+ * Record webhook delivery result
+ */
+export function recordWebhookDelivery(
+  tenantId: string,
+  eventType: string,
+  success: boolean
+): void {
+  if (success) {
+    webhookDeliverySuccessTotal.inc({ tenant_id: tenantId, event_type: eventType });
+  } else {
+    webhookDeliveryFailureTotal.inc({ tenant_id: tenantId, event_type: eventType });
+  }
+}
+
+/**
+ * Update escalation approval rate gauge
+ */
+export function updateEscalationApprovalRate(tenantId: string, approvalRate: number): void {
+  escalationApprovalRateGauge.set({ tenant_id: tenantId }, approvalRate);
+}
+
+// ============================================================================
+// Circuit Breaker Metrics Helper Functions
+// ============================================================================
+
+/**
+ * Circuit breaker state numeric values for gauge
+ */
+export type CircuitBreakerStateType = 'CLOSED' | 'HALF_OPEN' | 'OPEN';
+
+const CIRCUIT_STATE_VALUES: Record<CircuitBreakerStateType, number> = {
+  CLOSED: 0,
+  HALF_OPEN: 1,
+  OPEN: 2,
+};
+
+/**
+ * Record circuit breaker state change
+ */
+export function recordCircuitBreakerStateChange(
+  name: string,
+  fromState: CircuitBreakerStateType,
+  toState: CircuitBreakerStateType
+): void {
+  circuitBreakerStateChanges.inc({
+    name,
+    from_state: fromState,
+    to_state: toState,
+  });
+  circuitBreakerState.set({ name }, CIRCUIT_STATE_VALUES[toState]);
+}
+
+/**
+ * Update circuit breaker state gauge
+ */
+export function updateCircuitBreakerState(
+  name: string,
+  state: CircuitBreakerStateType
+): void {
+  circuitBreakerState.set({ name }, CIRCUIT_STATE_VALUES[state]);
+}
+
+/**
+ * Record circuit breaker execution result
+ */
+export function recordCircuitBreakerExecution(
+  name: string,
+  result: 'success' | 'failure' | 'rejected'
+): void {
+  circuitBreakerExecutions.inc({ name, result });
+}
+
+/**
+ * Update circuit breaker failure count gauge
+ */
+export function updateCircuitBreakerFailures(name: string, failureCount: number): void {
+  circuitBreakerFailures.set({ name }, failureCount);
 }
 
 /**
