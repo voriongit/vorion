@@ -2,7 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout title="Learn Vorion" description="Educational platform for AI governance - Tutorials and documentation">
+<BaseLayout title="Learn Vorion" description="Omniscience - The Agentic AI Knowledge Base">
   <article class="py-16 sm:py-20">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Header -->
@@ -20,26 +20,39 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           </div>
           <div>
             <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">Learn Vorion</h1>
+            <p class="text-lg text-vorion-400 mb-2">Omniscience</p>
             <div class="flex flex-wrap items-center gap-3">
-              <span class="px-3 py-1 text-sm font-medium rounded-full bg-slate-500/20 text-slate-400 border border-slate-500/30">
-                In Development
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                Live
               </span>
               <span class="px-3 py-1 text-sm font-medium rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                 Open Source
               </span>
-              <span class="text-sm text-slate-500">CC BY-SA 4.0</span>
+              <span class="text-sm text-slate-500">CC BY 4.0</span>
             </div>
           </div>
         </div>
 
         <p class="text-xl text-slate-400 leading-relaxed">
-          Educational platform for AI governance. Tutorials, documentation, and interactive courses
-          on building trustworthy AI systems using the Vorion ecosystem.
+          The Agentic AI Knowledge Base. A comprehensive educational platform featuring a 212-term
+          AI lexicon, documentation on agent architecture, and Triad Synthesis - an AI assistant
+          that synthesizes perspectives from Gemini, Claude, and Grok.
         </p>
       </div>
 
       <!-- Links -->
       <div class="flex flex-wrap gap-4 mb-12 p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+        <a
+          href="https://learn.vorion.org"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-vorion-500 hover:bg-vorion-600 text-white transition-colors"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          Visit Omniscience
+        </a>
         <a
           href="https://github.com/voriongit/learn-vorion"
           target="_blank"
@@ -51,64 +64,61 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           </svg>
           View on GitHub
         </a>
-        <span class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 text-slate-500">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Coming Soon
-        </span>
       </div>
 
-      <!-- Coming Soon Notice -->
-      <div class="mb-12 p-8 rounded-xl bg-gradient-to-br from-vorion-500/10 to-accent-cyan/10 border border-vorion-500/20 text-center">
-        <div class="w-16 h-16 rounded-full bg-vorion-500/20 flex items-center justify-center text-3xl mx-auto mb-4">
-          🚧
-        </div>
-        <h3 class="text-xl font-semibold text-white mb-2">Under Construction</h3>
-        <p class="text-slate-400 max-w-md mx-auto">
-          We're building comprehensive learning resources for AI governance.
-          Star the repo to get notified when we launch!
-        </p>
-      </div>
-
-      <!-- Planned Content -->
+      <!-- Features -->
       <section class="mb-12">
-        <h2 class="text-2xl font-bold text-white mb-6">Planned Content</h2>
+        <h2 class="text-2xl font-bold text-white mb-6">Platform Features</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
-            <h3 class="font-semibold text-white mb-2">Getting Started</h3>
+            <h3 class="font-semibold text-white mb-2">Knowledge Graph (Lexicon)</h3>
+            <p class="text-sm text-slate-400 mb-3">
+              Searchable collection of 212+ AI-related terms with difficulty levels and categories.
+            </p>
+            <span class="text-xs text-vorion-400">212 terms indexed</span>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Triad Synthesis</h3>
+            <p class="text-sm text-slate-400 mb-3">
+              AI-powered assistant that synthesizes perspectives from Gemini, Claude, and Grok.
+            </p>
+            <span class="text-xs text-vorion-400">Multi-model consensus</span>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Neural Link</h3>
+            <p class="text-sm text-slate-400 mb-3">
+              Contribution system allowing users to expand and improve the knowledge base.
+            </p>
+            <span class="text-xs text-vorion-400">Community-driven</span>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Local First</h3>
+            <p class="text-sm text-slate-400 mb-3">
+              Sim Mode checks internal memory before consulting external AI resources.
+            </p>
+            <span class="text-xs text-vorion-400">Privacy-conscious</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Documentation Topics -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-6">Documentation</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Agent Architecture</h3>
             <ul class="text-sm text-slate-400 space-y-2">
-              <li>• Introduction to AI Governance</li>
-              <li>• Understanding Trust Levels</li>
-              <li>• Your First Governed Agent</li>
-              <li>• Policy Basics</li>
+              <li>• Autonomous agent design patterns</li>
+              <li>• Multi-agent orchestration</li>
+              <li>• Trust and governance models</li>
             </ul>
           </div>
           <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
-            <h3 class="font-semibold text-white mb-2">Deep Dives</h3>
+            <h3 class="font-semibold text-white mb-2">Vorion Ecosystem</h3>
             <ul class="text-sm text-slate-400 space-y-2">
-              <li>• Behavioral Scoring Algorithms</li>
-              <li>• Decay and Recovery Mechanics</li>
-              <li>• Policy Rule Authoring</li>
-              <li>• Audit Trail Analysis</li>
-            </ul>
-          </div>
-          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
-            <h3 class="font-semibold text-white mb-2">Integration Guides</h3>
-            <ul class="text-sm text-slate-400 space-y-2">
-              <li>• LangChain Integration</li>
-              <li>• Custom Agent SDKs</li>
-              <li>• Enterprise Deployment</li>
-              <li>• Compliance Mapping</li>
-            </ul>
-          </div>
-          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
-            <h3 class="font-semibold text-white mb-2">Reference</h3>
-            <ul class="text-sm text-slate-400 space-y-2">
-              <li>• API Documentation</li>
-              <li>• SDK Reference</li>
-              <li>• BASIS Specification</li>
-              <li>• Glossary</li>
+              <li>• BASIS Standard overview</li>
+              <li>• AgentAnchor integration</li>
+              <li>• Cognigate runtime</li>
             </ul>
           </div>
         </div>
@@ -118,17 +128,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       <section class="mb-12">
         <h2 class="text-2xl font-bold text-white mb-4">Contribute</h2>
         <p class="text-slate-400 mb-6">
-          Learn Vorion is open source under CC BY-SA 4.0. We welcome contributions
-          from the community - whether it's fixing typos, improving explanations,
-          or creating new tutorials.
+          Omniscience is open source under CC BY 4.0. Expand the lexicon, improve documentation,
+          or help build new features.
         </p>
         <a
-          href="https://github.com/voriongit/learn-vorion/blob/main/CONTRIBUTING.md"
+          href="https://github.com/voriongit/learn-vorion"
           target="_blank"
           rel="noopener noreferrer"
           class="inline-flex items-center gap-2 text-vorion-400 hover:text-vorion-300"
         >
-          Read the contribution guide
+          Contribute on GitHub
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
@@ -137,10 +146,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
       <!-- Related -->
       <section>
-        <h2 class="text-2xl font-bold text-white mb-4">Start Learning Now</h2>
-        <p class="text-slate-400 mb-4">
-          While we build the learning platform, explore the existing documentation:
-        </p>
+        <h2 class="text-2xl font-bold text-white mb-4">Related Projects</h2>
         <div class="flex flex-wrap gap-4">
           <a href="/projects/basis" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
             BASIS Standard
@@ -149,7 +155,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             ATSF Framework
           </a>
           <a href="/packages" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
-            Package Documentation
+            Packages
           </a>
         </div>
       </section>
