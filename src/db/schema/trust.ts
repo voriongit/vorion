@@ -47,6 +47,9 @@ export const trustRecords = pgTable(
     lastCalculatedAt: timestamp('last_calculated_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
+    lastActivityAt: timestamp('last_activity_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
 
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: true })

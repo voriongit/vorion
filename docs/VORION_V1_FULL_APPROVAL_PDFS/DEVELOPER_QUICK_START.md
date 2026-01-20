@@ -451,6 +451,37 @@ for proof in proofs:
     print(f"{proof.created_at}: {proof.intent_goal} - {proof.status}")
 ```
 
+### Privacy-Preserving Verification (ZK Proofs)
+
+For sensitive verifications, request zero-knowledge proofs that prove claims without revealing actual values:
+
+```python
+# Request ZK audit
+audit = client.audits.request(
+    entity_id="user_123",
+    mode="zk",  # "full", "selective", or "zk"
+    claims=[
+        {"type": "score_gte_threshold", "threshold": 75},
+        {"type": "trust_level_gte", "level": 2},
+        {"type": "no_denials_since", "days": 30}
+    ]
+)
+
+# Verify the ZK proof
+for claim in audit.claims:
+    print(f"{claim.type}: {claim.verified}")  # True/False without revealing actual values
+```
+
+**ZK Claim Types:**
+
+| Claim | Description |
+|-------|-------------|
+| `score_gte_threshold` | Prove score meets minimum |
+| `trust_level_gte` | Prove trust level |
+| `decay_milestone_lte` | Prove recent activity |
+| `chain_valid` | Prove proof chain integrity |
+| `no_denials_since` | Prove clean record |
+
 ---
 
 ## 7. Check Trust Scores
@@ -499,11 +530,27 @@ console.log(`Capabilities: ${trust.capabilities.join(', ')}`);
 
 | Level | Score | Name | Typical Capabilities |
 |-------|-------|------|---------------------|
-| L0 | 0-199 | Untrusted | Read-only |
-| L1 | 200-399 | Provisional | Limited write |
-| L2 | 400-599 | Trusted | Standard operations |
-| L3 | 600-799 | Verified | Extended operations |
-| L4 | 800-1000 | Privileged | Full access |
+| L0 | 0-24 | Untrusted | Human approval required |
+| L1 | 25-49 | Provisional | Limited operations |
+| L2 | 50-74 | Trusted | Standard operations |
+| L3 | 75-89 | Verified | Extended operations |
+| L4 | 90-100 | Privileged | Full autonomy |
+
+### Trust Decay
+
+Trust scores decay over inactivity using a **182-day half-life** with stepped milestones:
+
+| Days Inactive | Decay Factor | Effect |
+|---------------|--------------|--------|
+| 0-6 | 100% | Grace period |
+| 7 | ~93% | Early warning |
+| 14 | ~87% | Two-week checkpoint |
+| 28 | ~80% | One-month threshold |
+| 56 | ~70% | Two-month mark |
+| 112 | ~58% | Four-month drop |
+| 182 | 50% | Half-life reached |
+
+Activity resets the decay clock. Positive signals can provide recovery bonuses.
 
 ---
 

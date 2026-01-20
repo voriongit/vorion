@@ -151,6 +151,78 @@ GET  /v1/proof/verify/{id}  # Verify a record
 
 ---
 
+## Enhanced Security (Optional)
+
+Beyond the required linear hash chain, PROOF supports optional security enhancements:
+
+### Merkle Tree Aggregation
+
+Batch verification for high-volume environments with O(log n) proof verification:
+
+```
+       ┌─────────────┐
+       │ Merkle Root │
+       │   0xabc...  │
+       └──────┬──────┘
+              │
+     ┌────────┴────────┐
+     │                 │
+┌────▼────┐      ┌────▼────┐
+│  Hash   │      │  Hash   │
+│ 0x12... │      │ 0x34... │
+└────┬────┘      └────┬────┘
+     │                 │
+ ┌───┴───┐        ┌───┴───┐
+ │       │        │       │
+┌▼┐     ┌▼┐      ┌▼┐     ┌▼┐
+│P│     │P│      │P│     │P│
+│1│     │2│      │3│     │4│
+└─┘     └─┘      └─┘     └─┘
+```
+
+- **External Anchoring**: Ethereum, Polygon, RFC 3161 TSA
+- **Batch Windows**: Configurable aggregation periods
+- **Inclusion Proofs**: Verify individual record membership
+
+### Zero-Knowledge Proofs
+
+Privacy-preserving trust attestation via Circom/Groth16:
+
+| ZK Claim Type | Description |
+|---------------|-------------|
+| `score_gte_threshold` | Prove score meets minimum without revealing actual value |
+| `trust_level_gte` | Prove trust level without revealing exact score |
+| `decay_milestone_lte` | Prove recent activity without revealing exact dates |
+| `chain_valid` | Prove proof chain integrity |
+| `no_denials_since` | Prove clean record without revealing history details |
+
+---
+
+## Tiered Audit System
+
+PROOF supports three audit modes to balance transparency and privacy:
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Full** | Complete proof chain export | Regulatory compliance, legal discovery |
+| **Selective** | Filtered, redacted disclosure | Partner due diligence, incident review |
+| **ZK** | Zero-knowledge claims only | Privacy-preserving verification |
+
+```typescript
+// Example: Request ZK audit
+const audit = await proof.requestAudit({
+  mode: 'zk',
+  claims: [
+    { type: 'score_gte_threshold', threshold: 75 },
+    { type: 'trust_level_gte', level: 2 },
+    { type: 'no_denials_since', days: 30 }
+  ]
+});
+// Returns: proofs without revealing actual scores/history
+```
+
+---
+
 ## Next Layer
 
 For high-risk decisions, PROOF commits to [**CHAIN**](/layers/chain) for blockchain anchoring.
