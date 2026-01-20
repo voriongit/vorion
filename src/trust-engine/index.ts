@@ -61,6 +61,32 @@ export const SIGNAL_WEIGHTS: Record<keyof TrustComponents, number> = {
 };
 
 /**
+ * Decay milestone definition
+ */
+interface DecayMilestone {
+  days: number;
+  multiplier: number;
+}
+
+/**
+ * Stepped decay milestones
+ *
+ * Trust decays incrementally based on days since last activity.
+ * 182-day half-life ensures agents must demonstrate ongoing trustworthy behavior.
+ *
+ * @see stepped-decay-specification.md
+ */
+export const DECAY_MILESTONES: DecayMilestone[] = [
+  { days: 0, multiplier: 1.0 },
+  { days: 7, multiplier: 0.92 },
+  { days: 14, multiplier: 0.83 },
+  { days: 28, multiplier: 0.75 },
+  { days: 56, multiplier: 0.67 },
+  { days: 112, multiplier: 0.58 },
+  { days: 182, multiplier: 0.5 },
+];
+
+/**
  * Entity trust record
  */
 export interface TrustRecord {
@@ -70,7 +96,13 @@ export interface TrustRecord {
   components: TrustComponents;
   signals: TrustSignalType[];
   lastCalculatedAt: string;
+  lastActivityAt: string;
   history: TrustHistoryEntry[];
+  // Decay information
+  decayApplied: boolean;
+  decayMultiplier: number;
+  baseScore: TrustScore;
+  nextMilestone: { days: number; multiplier: number } | null;
 }
 
 /**
@@ -95,14 +127,16 @@ export interface TrustCalculation {
 
 /**
  * Trust Engine service with PostgreSQL persistence
+ *
+ * Uses stepped decay milestones (182-day half-life) for trust score degradation.
+ * @see DECAY_MILESTONES
  */
 export class TrustEngine {
   private db: Database | null = null;
-  private _decayRate: number;
   private initialized: boolean = false;
 
-  constructor(decayRate: number = 0.01) {
-    this._decayRate = decayRate;
+  constructor() {
+    // Decay is now handled via DECAY_MILESTONES (stepped decay)
   }
 
   /**
@@ -250,10 +284,32 @@ export class TrustEngine {
       .orderBy(desc(trustHistory.timestamp))
       .limit(100);
 
+    // Apply stepped decay based on inactivity
+    const lastActivityAt = record.lastActivityAt ?? record.lastCalculatedAt;
+    const daysSinceActivity = this.calculateInactiveDays(lastActivityAt);
+    const decayMultiplier = this.calculateDecayMultiplier(daysSinceActivity);
+    const baseScore = record.score;
+    const decayedScore = this.applyDecay(baseScore, daysSinceActivity);
+    const decayApplied = daysSinceActivity > 0;
+
+    // Recalculate level based on decayed score
+    const decayedLevel = this.scoreToLevel(decayedScore);
+
+    logger.debug(
+      {
+        entityId,
+        baseScore,
+        decayedScore,
+        daysSinceActivity,
+        decayMultiplier,
+      },
+      'Decay applied to trust score'
+    );
+
     return {
       entityId: record.entityId,
-      score: record.score,
-      level: parseInt(record.level) as TrustLevel,
+      score: decayedScore,
+      level: decayedLevel,
       components: {
         behavioral: record.behavioralScore,
         compliance: record.complianceScore,
@@ -271,12 +327,18 @@ export class TrustEngine {
         timestamp: s.timestamp.toISOString(),
       })),
       lastCalculatedAt: record.lastCalculatedAt.toISOString(),
+      lastActivityAt: lastActivityAt.toISOString(),
       history: history.map((h) => ({
         score: h.score,
         level: parseInt(h.level) as TrustLevel,
         reason: h.reason,
         timestamp: h.timestamp.toISOString(),
       })),
+      // Decay information
+      decayApplied,
+      decayMultiplier,
+      baseScore,
+      nextMilestone: this.getNextMilestone(daysSinceActivity),
     };
   }
 
@@ -310,7 +372,8 @@ export class TrustEngine {
       .limit(1);
 
     if (record.length === 0) {
-      // Create initial record
+      // Create initial record with lastActivityAt for decay tracking
+      const nowDate = new Date();
       const initialRecord: NewTrustRecord = {
         entityId: signal.entityId,
         score: 200,
@@ -320,11 +383,12 @@ export class TrustEngine {
         identityScore: 0.5,
         contextScore: 0.5,
         signalCount: 1,
-        lastCalculatedAt: new Date(),
+        lastCalculatedAt: nowDate,
+        lastActivityAt: nowDate,
       };
 
       await db.insert(trustRecords).values(initialRecord);
-      record = [{ ...initialRecord, id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date() }] as any;
+      record = [{ ...initialRecord, id: crypto.randomUUID(), createdAt: nowDate, updatedAt: nowDate, lastActivityAt: nowDate }] as any;
     }
 
     const currentRecord = record[0]!;
@@ -334,7 +398,8 @@ export class TrustEngine {
     // Recalculate
     const calculation = await this.calculate(signal.entityId);
 
-    // Update record
+    // Update record - reset decay clock with lastActivityAt
+    const now = new Date();
     await db
       .update(trustRecords)
       .set({
@@ -345,8 +410,9 @@ export class TrustEngine {
         identityScore: calculation.components.identity,
         contextScore: calculation.components.context,
         signalCount: sql`${trustRecords.signalCount} + 1`,
-        lastCalculatedAt: new Date(),
-        updatedAt: new Date(),
+        lastCalculatedAt: now,
+        lastActivityAt: now, // Reset decay clock on trust-positive activity
+        updatedAt: now,
       })
       .where(eq(trustRecords.entityId, signal.entityId));
 
@@ -398,6 +464,7 @@ export class TrustEngine {
       contextScore: 0.5,
       signalCount: 0,
       lastCalculatedAt: now,
+      lastActivityAt: now,
     };
 
     await db.insert(trustRecords).values(newRecord);
@@ -427,6 +494,7 @@ export class TrustEngine {
       },
       signals: [],
       lastCalculatedAt: now.toISOString(),
+      lastActivityAt: now.toISOString(),
       history: [
         {
           score,
@@ -435,6 +503,11 @@ export class TrustEngine {
           timestamp: now.toISOString(),
         },
       ],
+      // New entity has no decay
+      decayApplied: false,
+      decayMultiplier: 1.0,
+      baseScore: score,
+      nextMilestone: DECAY_MILESTONES[1] ?? null,
     };
   }
 
@@ -516,14 +589,75 @@ export class TrustEngine {
 
     return factors;
   }
+
+  /**
+   * Calculate decay multiplier based on days since last activity
+   *
+   * Uses stepped milestones with interpolation for smooth decay.
+   * 182-day half-life: after 182 days of inactivity, score is 50% of original.
+   */
+  private calculateDecayMultiplier(daysSinceLastActivity: number): number {
+    // Find the applicable milestone and next milestone
+    let applicableMilestone = DECAY_MILESTONES[0]!;
+    let nextMilestone: DecayMilestone | null = null;
+
+    for (let i = 0; i < DECAY_MILESTONES.length; i++) {
+      if (daysSinceLastActivity >= DECAY_MILESTONES[i]!.days) {
+        applicableMilestone = DECAY_MILESTONES[i]!;
+        nextMilestone = DECAY_MILESTONES[i + 1] ?? null;
+      }
+    }
+
+    // If beyond final milestone, use final multiplier
+    if (!nextMilestone) {
+      return applicableMilestone.multiplier;
+    }
+
+    // Interpolate between milestones for smooth decay
+    const daysIntoMilestone = daysSinceLastActivity - applicableMilestone.days;
+    const milestoneDuration = nextMilestone.days - applicableMilestone.days;
+    const progress = daysIntoMilestone / milestoneDuration;
+
+    const decayRange = applicableMilestone.multiplier - nextMilestone.multiplier;
+    return applicableMilestone.multiplier - decayRange * progress;
+  }
+
+  /**
+   * Apply decay to a base score
+   */
+  private applyDecay(baseScore: number, daysSinceLastActivity: number): number {
+    const multiplier = this.calculateDecayMultiplier(daysSinceLastActivity);
+    return Math.round(baseScore * multiplier);
+  }
+
+  /**
+   * Calculate days since last activity from a date
+   */
+  private calculateInactiveDays(lastActivityAt: Date): number {
+    const now = Date.now();
+    const lastActivity = lastActivityAt.getTime();
+    const msPerDay = 24 * 60 * 60 * 1000;
+    return Math.floor((now - lastActivity) / msPerDay);
+  }
+
+  /**
+   * Get the next decay milestone for an entity
+   */
+  private getNextMilestone(
+    daysSinceLastActivity: number
+  ): { days: number; multiplier: number } | null {
+    for (const milestone of DECAY_MILESTONES) {
+      if (milestone.days > daysSinceLastActivity) {
+        return milestone;
+      }
+    }
+    return null; // Already at or past final milestone
+  }
 }
 
 /**
  * Create a new Trust Engine instance
  */
-export function createTrustEngine(decayRate?: number): TrustEngine {
-  return new TrustEngine(decayRate);
+export function createTrustEngine(): TrustEngine {
+  return new TrustEngine();
 }
-
-// Re-export types
-export type { TrustRecord, TrustHistoryEntry, TrustCalculation };
