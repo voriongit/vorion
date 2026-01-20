@@ -72,27 +72,61 @@
 
 ---
 
+## Additional Migrations (Session 2)
+
+### Architecture Docs from S_A/orion-platform
+
+| File | Destination | Status |
+|------|-------------|--------|
+| `00_overview.md` | `docs/orion/` | ✅ Complete |
+| `01_architecture.md` | `docs/orion/` | ✅ Complete |
+| `02_boundaries.md` | `docs/orion/` | ✅ Complete |
+
+### Package.json Updates
+
+- Added `./common` export path for primitives module
+
+---
+
+## Audit Results
+
+### S_A/orion-platform - COMPLETE
+- **contracts/src/** - All 8 TS files reviewed; Axiom already has equivalent or newer versions
+- **docs/** - Architecture docs migrated; acceptance_packets directories are empty scaffolding
+- **Other directories** (agent-anchor, auryn, services, etc.) - Empty scaffolding, no implementation code
+
+### S_A/auryn-anchor-platform - SUPERSEDED
+- Earlier iteration of platform structure
+- No TypeScript files, just directory scaffolding
+- Superseded by orion-platform
+
+### BAI/bai-command-center - NOT VORION-RELATED
+- BanquetAI project workspace (separate product)
+- banquet-ai-agents is MCP agent framework, not Vorion
+
+### chunkstar - NOT FOUND
+- No chunkstar repository located on system
+
+---
+
+## Completed Tasks
+
+1. ✅ ERPL schemas migrated (evidence.ts, retention.ts, primitives.ts)
+2. ✅ Constitution docs migrated (5 files)
+3. ✅ BASIS specification migrated (8 files)
+4. ✅ Architecture docs migrated (3 files)
+5. ✅ Package exports updated for common/ module
+6. ✅ Build verified passing
+
+---
+
 ## Potential Remaining Items
-
-The following sources were mentioned in the original consolidation plan but may require further investigation:
-
-### To Investigate
-
-1. **chunkstar repo** - Check for any Vorion-related assets
-2. **BanquetAI repo** - Check for any Vorion-related assets
-3. **S_A/orion-platform** - Verify no other critical files remain:
-   - Additional TypeScript schemas?
-   - Configuration files?
-   - Test files?
-4. **Downloads folder** - Check for other Vorion documents
 
 ### Recommended Next Steps
 
-1. **Audit S_A/orion-platform** - List all files to ensure complete migration
-2. **Review chunkstar and BanquetAI** - Identify any cross-dependencies
-3. **Verify Build** - Run `npm run build` or `pnpm build` to ensure schema exports work
-4. **Update Package Exports** - Verify `package.json` exports new common/ module
-5. **Archive Original Sources** - Once verified, consider archiving S_A/orion-platform
+1. **Archive S_A/orion-platform** - Migration complete, can be archived
+2. **Archive S_A/auryn-anchor-platform** - Superseded, can be archived
+3. **Review Downloads folder** - Check for other Vorion documents periodically
 
 ---
 
