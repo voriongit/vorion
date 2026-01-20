@@ -335,9 +335,7 @@ export class PolicyEvaluator {
         break;
       case 'dayOfWeek':
         // 0 = Sunday, 6 = Saturday
-        fieldValue = parseInt(
-          now.toLocaleString('en-US', { weekday: 'numeric', timeZone: timezone })
-        ) - 1;
+        fieldValue = now.getDay();
         break;
       case 'date':
         fieldValue = now.toISOString().split('T')[0]!;

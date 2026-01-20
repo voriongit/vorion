@@ -188,19 +188,19 @@ const configSchema = z.object({
       default: z.object({
         limit: z.coerce.number().min(1).default(100),
         windowSeconds: z.coerce.number().min(1).default(60),
-      }),
+      }).default({}),
       highRisk: z.object({
         limit: z.coerce.number().min(1).default(10),
         windowSeconds: z.coerce.number().min(1).default(60),
-      }),
+      }).default({}),
       dataExport: z.object({
         limit: z.coerce.number().min(1).default(5),
         windowSeconds: z.coerce.number().min(1).default(60),
-      }),
+      }).default({}),
       adminAction: z.object({
         limit: z.coerce.number().min(1).default(20),
         windowSeconds: z.coerce.number().min(1).default(60),
-      }),
+      }).default({}),
     }).default({}),
     // Policy evaluation circuit breaker configuration (legacy - prefer circuitBreaker.policyEngine)
     policyCircuitBreaker: z.object({

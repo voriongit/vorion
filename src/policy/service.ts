@@ -271,7 +271,7 @@ export class PolicyService {
     // Validate definition
     const validation = validatePolicyDefinition(input.definition);
     if (!validation.valid) {
-      throw new PolicyValidationError('Invalid policy definition', validation.errors);
+      throw new PolicyValidationException('Invalid policy definition', validation.errors);
     }
 
     const checksum = generateChecksum(input.definition);
@@ -353,7 +353,7 @@ export class PolicyService {
     if (input.definition) {
       const validation = validatePolicyDefinition(input.definition);
       if (!validation.valid) {
-        throw new PolicyValidationError('Invalid policy definition', validation.errors);
+        throw new PolicyValidationException('Invalid policy definition', validation.errors);
       }
     }
 
@@ -383,7 +383,7 @@ export class PolicyService {
           version: newVersion,
           status: input.status ?? existing.status,
           updatedAt: new Date(),
-          publishedAt: input.status === 'published' ? new Date() : existing.publishedAt,
+          publishedAt: input.status === 'published' ? new Date() : (existing.publishedAt ? new Date(existing.publishedAt) : null),
         })
         .where(and(eq(policies.id, id), eq(policies.tenantId, tenantId)))
         .returning();
@@ -518,12 +518,12 @@ export class PolicyService {
 /**
  * Custom error for policy validation failures
  */
-export class PolicyValidationError extends Error {
-  public readonly errors: PolicyValidationError['errors'];
+export class PolicyValidationException extends Error {
+  public readonly errors: PolicyValidationError[];
 
-  constructor(message: string, errors: { path: string; message: string; code: string }[]) {
+  constructor(message: string, errors: PolicyValidationError[]) {
     super(message);
-    this.name = 'PolicyValidationError';
+    this.name = 'PolicyValidationException';
     this.errors = errors;
   }
 }

@@ -975,7 +975,7 @@ JWT token for authentication. The token must contain:
           },
           intentType: {
             type: 'string',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             description: 'Intent type classification',
           },
           context: {
@@ -997,20 +997,20 @@ JWT token for authentication. The token must contain:
           },
           trustSnapshot: {
             type: 'object',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             additionalProperties: true,
             description: 'Trust state snapshot at submission time',
           },
           trustLevel: {
             type: 'integer',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             minimum: 0,
             maximum: 4,
             description: 'Trust level (L0-L4)',
           },
           trustScore: {
             type: 'integer',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             minimum: 0,
             maximum: 1000,
             description: 'Trust score (0-1000)',
@@ -1028,12 +1028,12 @@ JWT token for authentication. The token must contain:
           deletedAt: {
             type: 'string',
             format: 'date-time',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             description: 'Soft delete timestamp (GDPR)',
           },
           cancellationReason: {
             type: 'string',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             description: 'Reason for cancellation if cancelled',
           },
         },
@@ -1103,12 +1103,12 @@ JWT token for authentication. The token must contain:
           },
           hash: {
             type: 'string',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             description: 'SHA-256 hash for tamper detection',
           },
           previousHash: {
             type: 'string',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             description: 'Previous event hash for chain integrity',
           },
         },
@@ -1161,7 +1161,7 @@ JWT token for authentication. The token must contain:
             type: 'object',
             properties: {
               stage: { type: 'string', const: 'trust-snapshot' },
-              result: { type: 'object', nullable: true },
+              result: { type: 'object' }, // nullable in 3.0
             },
           },
           {
@@ -1314,7 +1314,7 @@ JWT token for authentication. The token must contain:
           },
           resolution: {
             type: 'object',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             properties: {
               resolvedBy: { type: 'string' },
               resolvedAt: { type: 'string', format: 'date-time' },
@@ -1333,7 +1333,7 @@ JWT token for authentication. The token must contain:
           acknowledgedAt: {
             type: 'string',
             format: 'date-time',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             description: 'When the escalation was acknowledged',
           },
           slaBreached: {
@@ -1342,13 +1342,13 @@ JWT token for authentication. The token must contain:
           },
           context: {
             type: 'object',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             additionalProperties: true,
             description: 'Escalation context',
           },
           metadata: {
             type: 'object',
-            nullable: true,
+            // OpenAPI 3.1 uses type arrays for nullable
             additionalProperties: true,
             description: 'Escalation metadata',
           },

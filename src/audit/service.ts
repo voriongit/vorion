@@ -323,7 +323,7 @@ export class AuditService {
     const conditions = [eq(auditRecords.tenantId, tenantId)];
 
     if (options?.startSequence !== undefined) {
-      conditions.push(gte(auditRecords.sequenceNumber, BigInt(options.startSequence)));
+      conditions.push(gte(auditRecords.sequenceNumber, options.startSequence));
     }
 
     const limit = options?.limit ?? 10000;

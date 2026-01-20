@@ -109,26 +109,29 @@ const policyCircuitBreaker = getCircuitBreaker('policyEngine', (from: CircuitSta
 /**
  * Action priority map - lower number = more restrictive
  */
-const ACTION_PRIORITY: Record<ControlAction | PolicyAction, number> = {
+const ACTION_PRIORITY: Record<ControlAction, number> = {
   deny: 1,
   escalate: 2,
-  allow: 3,
+  limit: 3,
+  monitor: 4,
+  terminate: 5,
+  allow: 6,
 };
 
 /**
- * Convert policy action to control action
+ * Convert policy action interface to control action string
  */
 function policyActionToControlAction(action: PolicyAction): ControlAction {
-  return action as ControlAction; // They're the same values
+  return action.action;
 }
 
 /**
  * Determine the most restrictive action between rule and policy evaluations
- * Returns the more restrictive action (deny > escalate > allow)
+ * Returns the more restrictive action (deny > escalate > limit > monitor > terminate > allow)
  */
 function getMostRestrictiveAction(
   ruleAction: ControlAction,
-  policyAction?: PolicyAction | null
+  policyAction?: ControlAction | null
 ): ControlAction {
   if (!policyAction) {
     return ruleAction;
@@ -140,7 +143,7 @@ function getMostRestrictiveAction(
   // Return the action with lower priority number (more restrictive)
   return rulePriority <= policyPriority
     ? ruleAction
-    : policyActionToControlAction(policyAction);
+    : policyAction;
 }
 
 // Queue instances
@@ -800,22 +803,24 @@ export function registerIntentWorkers(service: IntentService): void {
         // Record both rule and policy evaluations
         await intentService.recordEvaluation(intent.id, intent.tenantId, {
           stage: 'decision',
-          ruleDecision: {
-            action: ruleDecision.action,
-            constraintsEvaluated: ruleDecision.constraintsEvaluated,
+          decision: {
+            ruleDecision: {
+              action: ruleDecision.action,
+              constraintsEvaluated: ruleDecision.constraintsEvaluated,
+            },
+            policyDecision: policyEvaluation
+              ? {
+                  action: policyEvaluation.finalAction,
+                  reason: policyEvaluation.reason,
+                  policiesEvaluated: policyEvaluation.policiesEvaluated.length,
+                  matchedPolicies: policyEvaluation.policiesEvaluated
+                    .filter((p) => p.matchedRules.length > 0)
+                    .map((p) => ({ policyId: p.policyId, action: p.action, reason: p.reason })),
+                }
+              : null,
+            finalAction,
+            policyOverride,
           },
-          policyDecision: policyEvaluation
-            ? {
-                action: policyEvaluation.finalAction,
-                reason: policyEvaluation.finalReason,
-                policiesEvaluated: policyEvaluation.policiesEvaluated.length,
-                matchedPolicies: policyEvaluation.policiesEvaluated
-                  .filter((p) => p.matchedRules.length > 0)
-                  .map((p) => ({ policyId: p.policyId, action: p.action, reason: p.reason })),
-              }
-            : null,
-          finalAction,
-          policyOverride,
         });
 
         const nextStatus =
@@ -835,7 +840,7 @@ export function registerIntentWorkers(service: IntentService): void {
             logger.warn({ error, intentId }, 'Failed to send webhook notification');
           });
         } else if (nextStatus === 'denied') {
-          const reason = policyEvaluation?.finalReason ?? 'Denied by policy';
+          const reason = policyEvaluation?.reason ?? 'Denied by policy';
           webhookService.notifyIntent('intent.denied', intentId, tenantId, { finalAction, reason }).catch((error) => {
             logger.warn({ error, intentId }, 'Failed to send webhook notification');
           });
