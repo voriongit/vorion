@@ -7,6 +7,9 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { getConfig } from './config.js';
+
+/** Database type for Drizzle ORM */
+export type Database = NodePgDatabase;
 import { createLogger } from './logger.js';
 import { withTimeout } from './timeout.js';
 import { InstrumentedPool } from './db-metrics.js';

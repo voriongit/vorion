@@ -34,7 +34,7 @@ import {
   getPolicyLoader,
   POLICY_STATUSES,
 } from '../policy/index.js';
-import { PolicyValidationError } from '../policy/service.js';
+import { PolicyValidationException } from '../policy/service.js';
 import type { PolicyStatus, PolicyDefinition } from '../policy/index.js';
 import {
   registerIntentWorkers,
@@ -1533,7 +1533,7 @@ export async function createServer(): Promise<FastifyInstance> {
 
           return reply.code(201).send(policy);
         } catch (error) {
-          if (error instanceof PolicyValidationError) {
+          if (error instanceof PolicyValidationException) {
             return reply.status(400).send({
               error: {
                 code: 'POLICY_VALIDATION_ERROR',
@@ -1638,7 +1638,7 @@ export async function createServer(): Promise<FastifyInstance> {
 
           return reply.send(policy);
         } catch (error) {
-          if (error instanceof PolicyValidationError) {
+          if (error instanceof PolicyValidationException) {
             return reply.status(400).send({
               error: {
                 code: 'POLICY_VALIDATION_ERROR',

@@ -6,7 +6,11 @@
  * @packageDocumentation
  */
 
+import { webcrypto } from 'node:crypto';
 import { createLogger } from './logger.js';
+
+// Re-export CryptoKey type for use in interfaces
+type CryptoKey = webcrypto.CryptoKey;
 
 const logger = createLogger({ component: 'crypto' });
 

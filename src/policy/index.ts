@@ -42,7 +42,7 @@ export {
 // Service
 export {
   PolicyService,
-  PolicyValidationError,
+  PolicyValidationException,
   createPolicyService,
   validatePolicyDefinition,
 } from './service.js';

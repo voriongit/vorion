@@ -34,13 +34,7 @@ import {
 declare module 'fastify' {
   interface FastifyRequest {
     jwtVerify<T = Record<string, unknown>>(): Promise<T>;
-    user?: {
-      tenantId?: string;
-      sub?: string;
-      roles?: string[];
-      groups?: string[];
-      [key: string]: unknown;
-    };
+    // Note: 'user' property is declared by @fastify/jwt
   }
 }
 
@@ -205,7 +199,8 @@ export async function registerIntentRoutes(
 
   // Helper to check if user has admin role (for audit query endpoint)
   function isAdmin(request: FastifyRequest): boolean {
-    const roles = request.user?.roles ?? [];
+    const user = request.user as { roles?: string[] } | undefined;
+    const roles = Array.isArray(user?.roles) ? user.roles : [];
     return roles.includes('admin') || roles.includes('compliance_officer');
   }
 

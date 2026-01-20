@@ -269,7 +269,7 @@ export class IntentService {
           { userId: options.userId, tenantId: options.tenantId, reason: consentValidation.reason },
           'Intent submission rejected: data processing consent not granted'
         );
-        recordIntentSubmission(options.tenantId, payload.intentType, 'consent_denied', options.trustLevel);
+        recordIntentSubmission(options.tenantId, payload.intentType, 'rejected', options.trustLevel);
         throw new ConsentRequiredError(
           options.userId,
           options.tenantId,
