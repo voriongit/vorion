@@ -36,3 +36,9 @@ export * from './canary-probe.js';
 
 // Pre-action gate types (ATSF v2.0)
 export * from './pre-action-gate.js';
+
+// Evidence types (ERPL)
+export * from './evidence.js';
+
+// Retention types (ERPL)
+export * from './retention.js';
