@@ -46,13 +46,29 @@ Trust scores change based on behavioral signals:
 
 ## Trust Decay
 
-Inactive agents experience trust decay to prevent stale high-trust entities:
+Inactive agents experience trust decay to prevent stale high-trust entities. The decay model uses a **182-day half-life** with stepped milestones—not continuous decay.
+
+### Decay Milestones
+
+| Days Inactive | Decay Factor | Score Impact |
+|---------------|--------------|--------------|
+| 0-6 | 100% | Grace period (no decay) |
+| 7 | ~93% | Early warning |
+| 14 | ~87% | Two-week checkpoint |
+| 28 | ~80% | One-month threshold |
+| 56 | ~70% | Two-month mark |
+| 112 | ~58% | Four-month drop |
+| 182 | 50% | Half-life reached |
+
+### Configuration
 
 | Configuration | Default | Enterprise |
 |---------------|---------|------------|
-| Half-life | 7 days | 14 days |
+| Half-life | 182 days | Configurable |
 | Minimum floor | 100 | Configurable |
 | Maintenance pause | Supported | Supported |
+
+**Activity Reset:** Any positive behavioral signal resets the decay clock to day 0.
 
 **Maintenance Status:** Organizations may pause decay during planned downtime by setting maintenance mode.
 
