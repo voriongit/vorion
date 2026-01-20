@@ -14,7 +14,9 @@ Vorion is an enterprise AI governance platform that enables organizations to dep
 
 - **Constraint-Based Governance** - Define what AI can and cannot do
 - **Trust-Based Autonomy** - Graduated autonomy levels based on behavioral trust
-- **Immutable Evidence** - Complete audit trail for every AI decision
+- **Immutable Evidence** - Cryptographic proof chain with optional Merkle tree aggregation
+- **Zero-Knowledge Audits** - Privacy-preserving trust verification via ZK proofs
+- **Stepped Trust Decay** - 182-day half-life with behavioral milestones
 - **Real-Time Enforcement** - Sub-millisecond policy evaluation
 
 ```
@@ -52,8 +54,10 @@ Vorion is an enterprise AI governance platform that enables organizations to dep
 | **INTENT** | Goal and context processing | In Development |
 | **ENFORCE** | Policy decision point | In Development |
 | **Cognigate** | Constrained execution runtime | In Development |
-| **PROOF** | Immutable evidence chain | In Development |
-| **Trust Engine** | Behavioral trust scoring | In Development |
+| **PROOF** | Immutable evidence chain with Merkle aggregation | In Development |
+| **Trust Engine** | Behavioral trust scoring with stepped decay | In Development |
+| **ZK Audit** | Zero-knowledge proof generation for privacy-preserving audits | Specified |
+| **Merkle Service** | Batch verification and external anchoring | Specified |
 
 ---
 
@@ -145,6 +149,10 @@ vorion/
 - [STPA Implementation Guide](docs/VORION_V1_FULL_APPROVAL_PDFS/STPA_IMPLEMENTATION_GUIDE.md)
 - [Platform Operations Runbook](docs/VORION_V1_FULL_APPROVAL_PDFS/PLATFORM_OPERATIONS_RUNBOOK.md)
 
+### Technical Specifications
+
+- [SPEC-001: ZK Audit & Merkle Tree Enhancement](docs/specs/SPEC-001-zk-audit-merkle-enhancement.md) - Zero-knowledge proofs, Merkle aggregation, stepped decay model
+
 ### Compliance & Security
 
 - [Security Whitepaper](docs/VORION_V1_FULL_APPROVAL_PDFS/SECURITY_WHITEPAPER_ENTERPRISE.md)
@@ -223,11 +231,55 @@ Vorion is built on **STPA (Systems-Theoretic Process Analysis)** principles:
 
 | Level | Score | Name | Autonomy |
 |-------|-------|------|----------|
-| L0 | 0-199 | Untrusted | Human approval required |
-| L1 | 200-399 | Provisional | Limited operations |
-| L2 | 400-599 | Trusted | Standard operations |
-| L3 | 600-799 | Verified | Extended operations |
-| L4 | 800-1000 | Privileged | Full autonomy |
+| L0 | 0-24 | Untrusted | Human approval required |
+| L1 | 25-49 | Provisional | Limited operations |
+| L2 | 50-74 | Trusted | Standard operations |
+| L3 | 75-89 | Verified | Extended operations |
+| L4 | 90-100 | Privileged | Full autonomy |
+
+### Trust Score Decay
+
+Trust scores decay over inactivity using a **stepped decay model** with 182-day half-life:
+
+| Days Inactive | Score Factor | Effect |
+|---------------|--------------|--------|
+| 0-6 | 100% | Grace period |
+| 7 | ~93% | Early warning |
+| 14 | ~87% | Two-week checkpoint |
+| 28 | ~80% | One-month threshold |
+| 56 | ~70% | Two-month mark |
+| 112 | ~58% | Four-month drop |
+| 182 | 50% | **Half-life reached** |
+
+Activity resets the decay clock. Positive signals can provide recovery bonuses.
+
+### Proof Chain & Audit System
+
+The PROOF component provides cryptographic evidence for every governance decision:
+
+**Baseline Security (Required):**
+- Linear hash-chain linking (tamper-evident)
+- Cryptographic signatures (Ed25519/ECDSA)
+- Per-entity chain isolation
+
+**Enhanced Security (Optional):**
+- **Merkle Tree Aggregation** - Batch verification, O(log n) proof verification
+- **External Anchoring** - Ethereum, Polygon, RFC 3161 Timestamp Authority
+- **Zero-Knowledge Proofs** - Privacy-preserving trust attestation
+
+**Audit Modes:**
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| Full | Complete proof chain export | Regulatory compliance |
+| Selective | Filtered, redacted disclosure | Partner due diligence |
+| ZK | Zero-knowledge claims only | Privacy-preserving verification |
+
+**ZK Claim Types:**
+- `score_gte_threshold` - Prove score meets minimum without revealing actual value
+- `trust_level_gte` - Prove trust level without revealing score
+- `decay_milestone_lte` - Prove recent activity without revealing exact dates
+- `chain_valid` - Prove proof chain integrity
 
 ### Security Model
 
@@ -235,6 +287,8 @@ Vorion is built on **STPA (Systems-Theoretic Process Analysis)** principles:
 - Defense in Depth
 - Cryptographic Integrity (SHA-256, Ed25519/ECDSA)
 - Immutable Audit Trail
+- Optional Merkle Tree Verification
+- Zero-Knowledge Proof Support (Groth16/Circom)
 
 ---
 
@@ -419,24 +473,29 @@ Vorion supports compliance with:
 ## Roadmap
 
 ### Phase 1: Foundation (Current)
-- [ ] Core component implementation
-- [ ] Basic rule engine (BASIS)
-- [ ] Intent processing
-- [ ] PROOF evidence system
+- [x] Core component implementation
+- [x] Basic rule engine (BASIS)
+- [x] Intent processing
+- [x] PROOF evidence system
+- [x] Trust Engine with stepped decay (182-day half-life)
 
-### Phase 2: Trust & Security
-- [ ] Trust Engine implementation
-- [ ] Advanced security controls
-- [ ] Anomaly detection
+### Phase 2: Trust & Security (In Progress)
+- [x] Trust Engine implementation
+- [x] Stepped decay milestones (7, 14, 28, 56, 112, 182 days)
+- [ ] Merkle tree aggregation for proof chain
+- [ ] External anchoring (Ethereum, TSA)
+- [ ] Zero-knowledge proof system (Circom/Groth16)
+- [ ] Tiered audit system (Full, Selective, ZK)
 
 ### Phase 3: Enterprise
 - [ ] Multi-tenant support
 - [ ] Advanced analytics
 - [ ] Enterprise integrations
+- [ ] ZK audit API endpoints
 
 ### Phase 4: Ecosystem
 - [ ] Partner SDK
-- [ ] Marketplace
+- [ ] Privacy-preserving trust credentials
 - [ ] Certification program
 
 ---

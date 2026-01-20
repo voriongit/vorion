@@ -482,6 +482,57 @@ tls_configuration:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Enhanced Security (Optional)
+
+Beyond the required linear hash chain, Vorion supports enhanced security features:
+
+#### Merkle Tree Aggregation
+
+For high-volume environments requiring batch verification:
+
+| Feature | Description |
+|---------|-------------|
+| Batch Windows | Configurable aggregation periods |
+| O(log n) Verification | Efficient proof verification |
+| External Anchoring | Ethereum, Polygon, RFC 3161 TSA |
+| Inclusion Proofs | Verify individual record membership |
+
+#### Zero-Knowledge Proofs (Circom/Groth16)
+
+Privacy-preserving trust attestation for sensitive verifications:
+
+| ZK Claim Type | Description |
+|---------------|-------------|
+| `score_gte_threshold` | Prove score meets minimum without revealing actual value |
+| `trust_level_gte` | Prove trust level without revealing exact score |
+| `decay_milestone_lte` | Prove recent activity without revealing exact dates |
+| `chain_valid` | Prove proof chain integrity |
+| `no_denials_since` | Prove clean record without revealing history details |
+
+#### Tiered Audit System
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Full** | Complete proof chain export | Regulatory compliance, legal discovery |
+| **Selective** | Filtered, redacted disclosure | Partner due diligence, incident review |
+| **ZK** | Zero-knowledge claims only | Privacy-preserving verification |
+
+### Trust Score Decay Model
+
+Vorion uses a **182-day half-life** with stepped decay milestones:
+
+| Days Inactive | Decay Factor | Score Impact |
+|---------------|--------------|--------------|
+| 0-6 | 100% | Grace period (no decay) |
+| 7 | ~93% | Early warning |
+| 14 | ~87% | Two-week checkpoint |
+| 28 | ~80% | One-month threshold |
+| 56 | ~70% | Two-month mark |
+| 112 | ~58% | Four-month drop |
+| 182 | 50% | Half-life reached |
+
+Activity resets the decay clock. This stepped approach provides predictable, transparent trust decay.
+
 ---
 
 ## 7. Network Security

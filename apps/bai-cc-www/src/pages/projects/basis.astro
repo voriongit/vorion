@@ -133,10 +133,10 @@ const trustLevels = [
             </p>
           </div>
           <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
-            <h3 class="font-semibold text-white mb-2">Decay Algorithms</h3>
+            <h3 class="font-semibold text-white mb-2">Stepped Trust Decay</h3>
             <p class="text-sm text-slate-400">
-              Trust scores decay over time without activity. Accelerated decay triggers after multiple failures.
-              Configurable decay rates and windows.
+              182-day half-life with stepped decay milestones at 7, 14, 28, 56, 112, and 182 days.
+              Predictable, behavior-driven decay with activity-based clock reset.
             </p>
           </div>
           <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
@@ -176,8 +176,37 @@ const trustLevels = [
           <a href="https://vorion.org/basis/proof" target="_blank" rel="noopener noreferrer" class="p-6 rounded-xl bg-slate-900/50 border border-slate-800 hover:border-vorion-500/50 transition-colors group">
             <div class="w-10 h-10 rounded-lg bg-vorion-500/20 flex items-center justify-center text-vorion-400 font-mono font-bold mb-3 group-hover:bg-vorion-500/30 transition-colors">3</div>
             <h3 class="font-semibold text-white mb-2">Proof</h3>
-            <p class="text-sm text-slate-400">Immutable audit trail with cryptographic hash chains for compliance.</p>
+            <p class="text-sm text-slate-400">Immutable audit trail with hash chains, optional Merkle aggregation, and ZK proofs for privacy-preserving verification.</p>
           </a>
+        </div>
+      </section>
+
+      <!-- Stepped Trust Decay -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-6">Stepped Trust Decay</h2>
+        <p class="text-slate-400 mb-6">
+          Trust scores decay at specific milestones, not continuously. This provides predictable, transparent
+          decay behavior with a 182-day half-life. Activity resets the decay clock.
+        </p>
+        <div class="rounded-xl bg-slate-900/50 border border-slate-800 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-800/50">
+              <tr>
+                <th class="px-4 py-3 text-left text-slate-300 font-medium">Days Inactive</th>
+                <th class="px-4 py-3 text-left text-slate-300 font-medium">Decay Factor</th>
+                <th class="px-4 py-3 text-left text-slate-300 font-medium">Score Example</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <tr><td class="px-4 py-3 text-slate-400">0-6</td><td class="px-4 py-3 text-emerald-400">100%</td><td class="px-4 py-3 text-slate-500">Grace period</td></tr>
+              <tr><td class="px-4 py-3 text-slate-400">7</td><td class="px-4 py-3 text-yellow-400">~93%</td><td class="px-4 py-3 text-slate-500">Early warning</td></tr>
+              <tr><td class="px-4 py-3 text-slate-400">14</td><td class="px-4 py-3 text-yellow-400">~87%</td><td class="px-4 py-3 text-slate-500">Two-week checkpoint</td></tr>
+              <tr><td class="px-4 py-3 text-slate-400">28</td><td class="px-4 py-3 text-orange-400">~80%</td><td class="px-4 py-3 text-slate-500">One-month threshold</td></tr>
+              <tr><td class="px-4 py-3 text-slate-400">56</td><td class="px-4 py-3 text-orange-400">~70%</td><td class="px-4 py-3 text-slate-500">Two-month mark</td></tr>
+              <tr><td class="px-4 py-3 text-slate-400">112</td><td class="px-4 py-3 text-red-400">~58%</td><td class="px-4 py-3 text-slate-500">Four-month drop</td></tr>
+              <tr><td class="px-4 py-3 text-slate-400 font-medium">182</td><td class="px-4 py-3 text-red-400 font-medium">50%</td><td class="px-4 py-3 text-slate-300 font-medium">Half-life reached</td></tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
