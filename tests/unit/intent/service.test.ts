@@ -89,6 +89,10 @@ const mockRepository = {
   cancelIntent: vi.fn(),
   softDelete: vi.fn(),
   verifyEventChain: vi.fn(),
+  // Transactional methods for atomic operations
+  updateStatusWithEvent: vi.fn(),
+  cancelIntentWithEvent: vi.fn(),
+  softDeleteWithEvent: vi.fn(),
 };
 
 describe('IntentService', () => {
@@ -408,18 +412,20 @@ describe('IntentService', () => {
       };
 
       mockRepository.findById.mockResolvedValue(currentIntent);
-      mockRepository.updateStatus.mockResolvedValue(updatedIntent);
+      // Use transactional method that handles status update + event atomically
+      mockRepository.updateStatusWithEvent.mockResolvedValue(updatedIntent);
 
       const intent = await service.updateStatus('intent-123', 'tenant-456', 'approved');
 
       expect(intent).toEqual(updatedIntent);
       expect(mockRepository.findById).toHaveBeenCalledWith('intent-123', 'tenant-456');
-      expect(mockRepository.updateStatus).toHaveBeenCalledWith('intent-123', 'tenant-456', 'approved');
-      expect(mockRepository.recordEvent).toHaveBeenCalledWith({
-        intentId: 'intent-123',
-        eventType: 'intent.approved',
-        payload: { status: 'approved', previousStatus: 'evaluating' },
-      });
+      expect(mockRepository.updateStatusWithEvent).toHaveBeenCalledWith(
+        'intent-123',
+        'tenant-456',
+        'approved',
+        'intent.approved',
+        { status: 'approved', previousStatus: 'evaluating' }
+      );
     });
 
     it('should throw StateMachineError for invalid transition', async () => {
@@ -449,8 +455,7 @@ describe('IntentService', () => {
       const intent = await service.updateStatus('nonexistent', 'tenant-456', 'approved');
 
       expect(intent).toBeNull();
-      expect(mockRepository.updateStatus).not.toHaveBeenCalled();
-      expect(mockRepository.recordEvent).not.toHaveBeenCalled();
+      expect(mockRepository.updateStatusWithEvent).not.toHaveBeenCalled();
     });
 
     it('should allow skipping validation with skipValidation option', async () => {
@@ -472,7 +477,7 @@ describe('IntentService', () => {
       };
 
       mockRepository.findById.mockResolvedValue(currentIntent);
-      mockRepository.updateStatus.mockResolvedValue(updatedIntent);
+      mockRepository.updateStatusWithEvent.mockResolvedValue(updatedIntent);
 
       // This would normally fail validation, but skipValidation allows it
       const intent = await service.updateStatus(
@@ -892,7 +897,8 @@ describe('Intent Cancellation', () => {
     };
 
     mockRepository.findById.mockResolvedValue(mockPendingIntent);
-    mockRepository.cancelIntent.mockResolvedValue(mockCancelledIntent);
+    // Use transactional method that handles cancel + evaluation + event atomically
+    mockRepository.cancelIntentWithEvent.mockResolvedValue(mockCancelledIntent);
 
     const result = await service.cancel('intent-123', {
       tenantId: 'tenant-456',
@@ -900,14 +906,16 @@ describe('Intent Cancellation', () => {
     });
 
     expect(result).toEqual(mockCancelledIntent);
-    expect(mockRepository.cancelIntent).toHaveBeenCalledWith(
+    expect(mockRepository.cancelIntentWithEvent).toHaveBeenCalledWith(
       'intent-123',
       'tenant-456',
-      'User requested'
+      'User requested',
+      expect.objectContaining({ stage: 'cancelled', reason: 'User requested' }),
+      expect.objectContaining({ reason: 'User requested' })
     );
   });
 
-  it('should record cancellation evaluation when cancelledBy is provided', async () => {
+  it('should include cancelledBy in transactional cancel when provided', async () => {
     const mockPendingIntent: Intent = {
       id: 'intent-123',
       tenantId: 'tenant-456',
@@ -927,7 +935,7 @@ describe('Intent Cancellation', () => {
     };
 
     mockRepository.findById.mockResolvedValue(mockPendingIntent);
-    mockRepository.cancelIntent.mockResolvedValue(mockCancelledIntent);
+    mockRepository.cancelIntentWithEvent.mockResolvedValue(mockCancelledIntent);
 
     await service.cancel('intent-123', {
       tenantId: 'tenant-456',
@@ -935,18 +943,24 @@ describe('Intent Cancellation', () => {
       cancelledBy: 'admin-user',
     });
 
-    expect(mockRepository.recordEvaluation).toHaveBeenCalledWith({
-      intentId: 'intent-123',
-      tenantId: 'tenant-456',
-      result: {
+    // Verify the transactional method receives correct evaluation payload with cancelledBy
+    expect(mockRepository.cancelIntentWithEvent).toHaveBeenCalledWith(
+      'intent-123',
+      'tenant-456',
+      'Admin override',
+      expect.objectContaining({
         stage: 'cancelled',
         reason: 'Admin override',
         cancelledBy: 'admin-user',
-      },
-    });
+      }),
+      expect.objectContaining({
+        reason: 'Admin override',
+        cancelledBy: 'admin-user',
+      })
+    );
   });
 
-  it('should record cancellation event', async () => {
+  it('should use transactional cancel that records event atomically', async () => {
     const mockPendingIntent: Intent = {
       id: 'intent-123',
       tenantId: 'tenant-456',
@@ -965,21 +979,15 @@ describe('Intent Cancellation', () => {
     };
 
     mockRepository.findById.mockResolvedValue(mockPendingIntent);
-    mockRepository.cancelIntent.mockResolvedValue(mockCancelledIntent);
+    mockRepository.cancelIntentWithEvent.mockResolvedValue(mockCancelledIntent);
 
     await service.cancel('intent-123', {
       tenantId: 'tenant-456',
       reason: 'User requested',
     });
 
-    expect(mockRepository.recordEvent).toHaveBeenCalledWith({
-      intentId: 'intent-123',
-      eventType: 'intent.cancelled',
-      payload: {
-        reason: 'User requested',
-        cancelledBy: undefined,
-      },
-    });
+    // Verify the transactional method is called (it handles evaluation + event recording internally)
+    expect(mockRepository.cancelIntentWithEvent).toHaveBeenCalled();
   });
 
   it('should return null when intent not found', async () => {
@@ -991,8 +999,7 @@ describe('Intent Cancellation', () => {
     });
 
     expect(result).toBeNull();
-    expect(mockRepository.cancelIntent).not.toHaveBeenCalled();
-    expect(mockRepository.recordEvent).not.toHaveBeenCalled();
+    expect(mockRepository.cancelIntentWithEvent).not.toHaveBeenCalled();
   });
 
   it('should throw error when intent is in non-cancellable state', async () => {
@@ -1042,15 +1049,16 @@ describe('Intent Soft Delete (GDPR)', () => {
       updatedAt: new Date().toISOString(),
     };
 
-    mockRepository.softDelete.mockResolvedValue(mockDeletedIntent);
+    // Use transactional method that handles delete + event atomically
+    mockRepository.softDeleteWithEvent.mockResolvedValue(mockDeletedIntent);
 
     const result = await service.delete('intent-123', 'tenant-456');
 
     expect(result).toEqual(mockDeletedIntent);
-    expect(mockRepository.softDelete).toHaveBeenCalledWith('intent-123', 'tenant-456');
+    expect(mockRepository.softDeleteWithEvent).toHaveBeenCalledWith('intent-123', 'tenant-456');
   });
 
-  it('should record deletion event', async () => {
+  it('should use transactional delete that records event atomically', async () => {
     const deletedAt = new Date().toISOString();
     const mockDeletedIntent: Intent = {
       id: 'intent-123',
@@ -1065,24 +1073,21 @@ describe('Intent Soft Delete (GDPR)', () => {
       updatedAt: new Date().toISOString(),
     };
 
-    mockRepository.softDelete.mockResolvedValue(mockDeletedIntent);
+    // Transactional method handles both delete and event recording atomically
+    mockRepository.softDeleteWithEvent.mockResolvedValue(mockDeletedIntent);
 
     await service.delete('intent-123', 'tenant-456');
 
-    expect(mockRepository.recordEvent).toHaveBeenCalledWith({
-      intentId: 'intent-123',
-      eventType: 'intent.deleted',
-      payload: { deletedAt },
-    });
+    // Verify the transactional method is called (it handles event recording internally)
+    expect(mockRepository.softDeleteWithEvent).toHaveBeenCalledWith('intent-123', 'tenant-456');
   });
 
   it('should return null when intent not found', async () => {
-    mockRepository.softDelete.mockResolvedValue(null);
+    mockRepository.softDeleteWithEvent.mockResolvedValue(null);
 
     const result = await service.delete('nonexistent', 'tenant-456');
 
     expect(result).toBeNull();
-    expect(mockRepository.recordEvent).not.toHaveBeenCalled();
   });
 });
 

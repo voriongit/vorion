@@ -58,6 +58,8 @@ export const intents = pgTable('intents', {
   deletedAtIdx: index('intents_deleted_at_idx').on(table.deletedAt),
   // Performance index for countActiveIntents() queries
   tenantStatusIdx: index('intents_tenant_status_idx').on(table.tenantId, table.status),
+  // Index for querying intents by entity (agent/user)
+  entityIdx: index('intents_entity_idx').on(table.entityId),
 }));
 
 export const intentEvents = pgTable('intent_events', {
@@ -79,6 +81,8 @@ export const intentEvents = pgTable('intent_events', {
     table.intentId,
     table.occurredAt
   ),
+  // Index for audit queries by event type
+  eventTypeIdx: index('intent_events_event_type_idx').on(table.eventType),
 }));
 
 export const intentEvaluations = pgTable('intent_evaluations', {
@@ -91,7 +95,15 @@ export const intentEvaluations = pgTable('intent_evaluations', {
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
+}, (table) => ({
+  // Index for querying evaluations by intent
+  intentIdx: index('intent_evaluations_intent_idx').on(table.intentId),
+  // Index for querying evaluations by intent ordered by time
+  intentCreatedIdx: index('intent_evaluations_intent_created_idx').on(
+    table.intentId,
+    table.createdAt
+  ),
+}));
 
 export const intentRelations = relations(intents, ({ many }) => ({
   events: many(intentEvents),

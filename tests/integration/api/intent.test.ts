@@ -202,6 +202,35 @@ vi.mock('../../../src/intent/repository.js', () => ({
       }
       return null;
     }),
+    // Transactional methods for atomic operations
+    updateStatusWithEvent: vi.fn(async (id: string, tenantId: string, status: string, _eventType: string, _eventPayload: any) => {
+      const intent = mockIntentData.get(id);
+      if (intent && intent.tenantId === tenantId) {
+        intent.status = status;
+        intent.updatedAt = new Date().toISOString();
+        return intent;
+      }
+      return null;
+    }),
+    cancelIntentWithEvent: vi.fn(async (id: string, tenantId: string, reason: string, _evaluationResult: any, _eventPayload: any) => {
+      const intent = mockIntentData.get(id);
+      if (intent && intent.tenantId === tenantId && ['pending', 'evaluating', 'escalated'].includes(intent.status)) {
+        intent.status = 'cancelled';
+        intent.cancellationReason = reason;
+        intent.updatedAt = new Date().toISOString();
+        return intent;
+      }
+      return null;
+    }),
+    softDeleteWithEvent: vi.fn(async (id: string, tenantId: string) => {
+      const intent = mockIntentData.get(id);
+      if (intent && intent.tenantId === tenantId && !intent.deletedAt) {
+        intent.deletedAt = new Date().toISOString();
+        intent.updatedAt = new Date().toISOString();
+        return intent;
+      }
+      return null;
+    }),
     softDelete: vi.fn(async (id: string, tenantId: string) => {
       const intent = mockIntentData.get(id);
       if (intent && intent.tenantId === tenantId && !intent.deletedAt) {

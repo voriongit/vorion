@@ -815,13 +815,14 @@ describe('WebhookService', () => {
 
       await service.notifyEscalation('escalation.created', mockEscalation);
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/webhook',
-        expect.objectContaining({
-          method: 'POST',
-          body: expect.any(String),
-        })
-      );
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const fetchCall = mockFetch.mock.calls[0];
+      const options = fetchCall[1];
+
+      // SSRF fix sends requests to resolved IP with Host header set to original hostname
+      expect(options.method).toBe('POST');
+      expect(options.body).toBeDefined();
+      expect(options.headers['Host']).toBe('api.example.com');
     });
 
     it('should include correct headers', async () => {
@@ -1185,10 +1186,9 @@ describe('WebhookService', () => {
 
       // Should only call webhook-1 (subscribed to escalation.created)
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://created.example.com/webhook',
-        expect.any(Object)
-      );
+      // SSRF fix sends to resolved IP with Host header set to original hostname
+      const fetchCall = mockFetch.mock.calls[0];
+      expect(fetchCall[1].headers['Host']).toBe('created.example.com');
     });
 
     it('should skip disabled webhooks', async () => {
@@ -1214,10 +1214,9 @@ describe('WebhookService', () => {
 
       // Should only call the enabled webhook
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://enabled.example.com/webhook',
-        expect.any(Object)
-      );
+      // SSRF fix sends to resolved IP with Host header set to original hostname
+      const fetchCall = mockFetch.mock.calls[0];
+      expect(fetchCall[1].headers['Host']).toBe('enabled.example.com');
     });
 
     it('should deliver to multiple matching webhooks', async () => {

@@ -37,12 +37,19 @@ const logger = createLogger({ component: 'trust-cache' });
 /**
  * Default cache TTL in milliseconds (5 minutes)
  */
-const DEFAULT_CACHE_TTL_MS = 300_000;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _DEFAULT_CACHE_TTL_MS = 300_000;
 
 /**
  * Default cache TTL in seconds (5 minutes) - for legacy functions
  */
 const CACHE_TTL_SECONDS = 300;
+
+/**
+ * Decision-time cache TTL in seconds (10 seconds)
+ * Used for trust checks at decision stage to ensure fresher data
+ */
+const DECISION_TIME_CACHE_TTL_SECONDS = 10;
 
 /**
  * Start early refresh checks in last 60 seconds of TTL (legacy)
@@ -83,7 +90,8 @@ const XFETCH_KEY_PREFIX = 'xfetch';
 /**
  * Default computation time estimate in ms (used when delta is unknown)
  */
-const DEFAULT_DELTA_MS = 50;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _DEFAULT_DELTA_MS = 50;
 
 // ============================================================================
 // XFetch Cache Entry Types
@@ -737,6 +745,101 @@ export function getInFlightTrustRefreshCount(): number {
  */
 export function clearInFlightTrustRefreshes(): void {
   inFlightTrustRefreshes.clear();
+}
+
+// ============================================================================
+// Decision-Time Cache Functions
+// ============================================================================
+
+/**
+ * Get a cached trust score for decision-time checks with shorter TTL.
+ *
+ * This function is specifically designed for trust checks at the decision stage.
+ * It uses a shorter TTL (10 seconds) compared to the standard cache (5 minutes)
+ * to ensure trust scores are fresher when making critical enforcement decisions.
+ *
+ * Returns null if the cached entry is older than the decision-time TTL,
+ * even if it's still valid in the standard cache.
+ *
+ * @param entityId - The entity ID to look up
+ * @param tenantId - The tenant ID for namespace isolation
+ * @returns The cached TrustRecord if fresh enough, or null if stale/missing
+ */
+export async function getDecisionTimeCachedTrustScore(
+  entityId: string,
+  tenantId: string
+): Promise<TrustRecord | null> {
+  const redis = getRedis();
+  const cacheKey = buildCacheKey(tenantId, entityId);
+
+  try {
+    const cached = await redis.get(cacheKey);
+
+    if (cached) {
+      const data: CachedTrustScore = JSON.parse(cached);
+      const now = Math.floor(Date.now() / 1000);
+      const age = now - data.cachedAt;
+
+      // For decision-time checks, use shorter TTL
+      if (age <= DECISION_TIME_CACHE_TTL_SECONDS) {
+        recordCacheHit();
+        trustCacheOperations.inc({ operation: 'decision_time_get', result: 'hit' });
+        logger.debug(
+          { entityId, tenantId, cacheKey, ageSeconds: age },
+          'Decision-time trust score cache hit'
+        );
+        return data.record;
+      }
+
+      // Cache exists but is too stale for decision-time use
+      trustCacheOperations.inc({ operation: 'decision_time_get', result: 'stale' });
+      logger.debug(
+        { entityId, tenantId, cacheKey, ageSeconds: age, maxAge: DECISION_TIME_CACHE_TTL_SECONDS },
+        'Decision-time trust score cache stale, will fetch fresh'
+      );
+      return null;
+    }
+
+    recordCacheMiss();
+    trustCacheOperations.inc({ operation: 'decision_time_get', result: 'miss' });
+    logger.debug({ entityId, tenantId, cacheKey }, 'Decision-time trust score cache miss');
+    return null;
+  } catch (error) {
+    recordCacheError('decision_time_get');
+    logger.warn(
+      { error, entityId, tenantId, cacheKey },
+      'Error retrieving decision-time cached trust score'
+    );
+    return null;
+  }
+}
+
+/**
+ * Get a cached trust score for decision-time with refresh capability.
+ *
+ * Combines decision-time caching with automatic refresh from the trust engine.
+ * Uses a shorter TTL for decision-time checks while still benefiting from
+ * cache infrastructure to avoid hammering the database.
+ *
+ * @param entityId - The entity ID to look up
+ * @param tenantId - The tenant ID for namespace isolation
+ * @param fetchFn - Function to fetch fresh data if cache is stale
+ * @returns The TrustRecord (cached if fresh, otherwise fetched)
+ */
+export async function getDecisionTimeTrustScoreWithRefresh(
+  entityId: string,
+  tenantId: string,
+  fetchFn: () => Promise<TrustRecord>
+): Promise<TrustRecord> {
+  // First check if we have a fresh enough cached value
+  const cachedScore = await getDecisionTimeCachedTrustScore(entityId, tenantId);
+  if (cachedScore) {
+    return cachedScore;
+  }
+
+  // Cache miss or stale - fetch fresh and cache it
+  const cacheKey = buildCacheKey(tenantId, entityId);
+  return fetchAndCacheTrust(cacheKey, entityId, tenantId, fetchFn);
 }
 
 // ============================================================================

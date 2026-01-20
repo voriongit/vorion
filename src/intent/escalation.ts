@@ -15,6 +15,10 @@ import { getDatabase } from '../common/db.js';
 import type { ID } from '../common/types.js';
 import { EscalationError, DatabaseError } from '../common/errors.js';
 import {
+  getCircuitBreaker,
+  type CircuitState,
+} from '../common/circuit-breaker.js';
+import {
   escalations,
   type EscalationRow,
   type NewEscalationRow,
@@ -26,6 +30,8 @@ import {
   escalationsPending,
   updateSlaBreachRate,
   updateEscalationApprovalRate,
+  recordCircuitBreakerStateChange,
+  recordCircuitBreakerExecution,
 } from './metrics.js';
 
 const logger = createLogger({ component: 'escalation' });
@@ -158,6 +164,9 @@ function mapRow(row: EscalationRow): EscalationRecord {
 
 /**
  * Escalation Service with PostgreSQL persistence and Redis caching
+ *
+ * Includes circuit breaker protection for database operations to prevent
+ * cascading failures when the database is unavailable or slow.
  */
 export class EscalationService {
   private config = getConfig();
@@ -166,6 +175,15 @@ export class EscalationService {
   private readonly cachePrefix = 'escalation:cache:';
   private readonly indexPrefix = 'escalation:idx:';
   private readonly cacheTtlSeconds = 300; // 5 minutes cache TTL
+
+  // Circuit breaker for database operations - protects against cascading failures
+  private dbCircuitBreaker = getCircuitBreaker('escalationDb', (from: CircuitState, to: CircuitState) => {
+    recordCircuitBreakerStateChange('escalation-db', from, to);
+    logger.info(
+      { circuitBreaker: 'escalation-db', from, to },
+      'Escalation database circuit breaker state changed'
+    );
+  });
 
   /**
    * Create a new escalation for an intent
@@ -219,6 +237,7 @@ export class EscalationService {
 
   /**
    * Get an escalation by ID
+   * Uses circuit breaker protection with cache fallback when database is unavailable
    */
   async get(id: ID, tenantId?: ID): Promise<EscalationRecord | null> {
     // Try cache first
@@ -232,17 +251,43 @@ export class EscalationService {
       return escalation;
     }
 
-    // Query database
-    const conditions = [eq(escalations.id, id)];
-    if (tenantId) {
-      conditions.push(eq(escalations.tenantId, tenantId));
+    // Check if circuit is open - if so, we can only return null since we have no cache
+    const isCircuitOpen = await this.dbCircuitBreaker.isOpen();
+    if (isCircuitOpen) {
+      recordCircuitBreakerExecution('escalation-db', 'rejected');
+      logger.warn(
+        { escalationId: id, circuitState: 'OPEN' },
+        'Escalation database circuit breaker is OPEN, no cached data available'
+      );
+      return null;
     }
 
-    const [row] = await this.db
-      .select()
-      .from(escalations)
-      .where(conditions.length > 1 ? and(...conditions) : conditions[0]);
+    // Query database through circuit breaker
+    const circuitResult = await this.dbCircuitBreaker.execute(async () => {
+      const conditions = [eq(escalations.id, id)];
+      if (tenantId) {
+        conditions.push(eq(escalations.tenantId, tenantId));
+      }
 
+      const [row] = await this.db
+        .select()
+        .from(escalations)
+        .where(conditions.length > 1 ? and(...conditions) : conditions[0]);
+
+      return row;
+    });
+
+    if (!circuitResult.success) {
+      recordCircuitBreakerExecution('escalation-db', circuitResult.circuitOpen ? 'rejected' : 'failure');
+      logger.warn(
+        { escalationId: id, error: circuitResult.error?.message },
+        'Failed to fetch escalation from database'
+      );
+      return null;
+    }
+
+    recordCircuitBreakerExecution('escalation-db', 'success');
+    const row = circuitResult.result;
     if (!row) return null;
 
     const escalation = mapRow(row);
@@ -260,69 +305,121 @@ export class EscalationService {
 
   /**
    * Get escalation by intent ID (most recent)
+   * Uses circuit breaker protection for database queries
    */
   async getByIntentId(intentId: ID, tenantId?: ID): Promise<EscalationRecord | null> {
-    const conditions = [eq(escalations.intentId, intentId)];
-    if (tenantId) {
-      conditions.push(eq(escalations.tenantId, tenantId));
+    // Check if circuit is open
+    const isCircuitOpen = await this.dbCircuitBreaker.isOpen();
+    if (isCircuitOpen) {
+      recordCircuitBreakerExecution('escalation-db', 'rejected');
+      logger.warn(
+        { intentId, circuitState: 'OPEN' },
+        'Escalation database circuit breaker is OPEN, cannot fetch by intent ID'
+      );
+      return null;
     }
 
-    const [row] = await this.db
-      .select()
-      .from(escalations)
-      .where(conditions.length > 1 ? and(...conditions) : conditions[0])
-      .orderBy(desc(escalations.createdAt))
-      .limit(1);
+    const circuitResult = await this.dbCircuitBreaker.execute(async () => {
+      const conditions = [eq(escalations.intentId, intentId)];
+      if (tenantId) {
+        conditions.push(eq(escalations.tenantId, tenantId));
+      }
 
+      const [row] = await this.db
+        .select()
+        .from(escalations)
+        .where(conditions.length > 1 ? and(...conditions) : conditions[0])
+        .orderBy(desc(escalations.createdAt))
+        .limit(1);
+
+      return row;
+    });
+
+    if (!circuitResult.success) {
+      recordCircuitBreakerExecution('escalation-db', circuitResult.circuitOpen ? 'rejected' : 'failure');
+      logger.warn(
+        { intentId, error: circuitResult.error?.message },
+        'Failed to fetch escalation by intent ID from database'
+      );
+      return null;
+    }
+
+    recordCircuitBreakerExecution('escalation-db', 'success');
+    const row = circuitResult.result;
     if (!row) return null;
     return mapRow(row);
   }
 
   /**
    * List escalations with filters
+   * Uses circuit breaker protection for database queries
    */
   async list(filters: ListEscalationFilters): Promise<EscalationRecord[]> {
     const { tenantId, status, intentId, escalatedTo, limit = 50, cursor } = filters;
-    const conditions = [eq(escalations.tenantId, tenantId)];
 
-    if (status) {
-      if (Array.isArray(status)) {
-        conditions.push(inArray(escalations.status, status));
-      } else {
-        conditions.push(eq(escalations.status, status));
+    // Check if circuit is open
+    const isCircuitOpen = await this.dbCircuitBreaker.isOpen();
+    if (isCircuitOpen) {
+      recordCircuitBreakerExecution('escalation-db', 'rejected');
+      logger.warn(
+        { tenantId, circuitState: 'OPEN' },
+        'Escalation database circuit breaker is OPEN, returning empty list'
+      );
+      return [];
+    }
+
+    const circuitResult = await this.dbCircuitBreaker.execute(async () => {
+      const conditions = [eq(escalations.tenantId, tenantId)];
+
+      if (status) {
+        if (Array.isArray(status)) {
+          conditions.push(inArray(escalations.status, status));
+        } else {
+          conditions.push(eq(escalations.status, status));
+        }
       }
-    }
 
-    if (intentId) {
-      conditions.push(eq(escalations.intentId, intentId));
-    }
+      if (intentId) {
+        conditions.push(eq(escalations.intentId, intentId));
+      }
 
-    if (escalatedTo) {
-      conditions.push(eq(escalations.escalatedTo, escalatedTo));
-    }
+      if (escalatedTo) {
+        conditions.push(eq(escalations.escalatedTo, escalatedTo));
+      }
 
-    // Cursor-based pagination
-    if (cursor) {
-      const [cursorEsc] = await this.db
-        .select({ createdAt: escalations.createdAt })
+      // Cursor-based pagination
+      if (cursor) {
+        const [cursorEsc] = await this.db
+          .select({ createdAt: escalations.createdAt })
+          .from(escalations)
+          .where(eq(escalations.id, cursor));
+
+        if (cursorEsc?.createdAt) {
+          conditions.push(lt(escalations.createdAt, cursorEsc.createdAt));
+        }
+      }
+
+      const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0];
+
+      return this.db
+        .select()
         .from(escalations)
-        .where(eq(escalations.id, cursor));
+        .where(whereClause)
+        .orderBy(desc(escalations.createdAt))
+        .limit(Math.min(limit, 100));
+    });
 
-      if (cursorEsc?.createdAt) {
-        conditions.push(lt(escalations.createdAt, cursorEsc.createdAt));
-      }
+    if (!circuitResult.success) {
+      recordCircuitBreakerExecution('escalation-db', circuitResult.circuitOpen ? 'rejected' : 'failure');
+      logger.warn(
+        { tenantId, error: circuitResult.error?.message },
+        'Failed to list escalations from database'
+      );
+      return [];
     }
 
-    const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0];
-
-    const rows = await this.db
-      .select()
-      .from(escalations)
-      .where(whereClause)
-      .orderBy(desc(escalations.createdAt))
-      .limit(Math.min(limit, 100));
-
-    return rows.map(mapRow);
+    recordCircuitBreakerExecution('escalation-db', 'success');
+    return (circuitResult.result ?? []).map(mapRow);
   }
 
   /**
@@ -704,4 +801,59 @@ export class EscalationService {
  */
 export function createEscalationService(): EscalationService {
   return new EscalationService();
+}
+
+// Global circuit breaker instance for status/control functions
+// Note: Each EscalationService instance creates its own circuit breaker reference,
+// but they all point to the same underlying circuit breaker in the registry
+const globalEscalationDbCircuitBreaker = getCircuitBreaker('escalationDb', (from: CircuitState, to: CircuitState) => {
+  recordCircuitBreakerStateChange('escalation-db', from, to);
+  logger.info(
+    { circuitBreaker: 'escalation-db', from, to },
+    'Escalation database circuit breaker state changed'
+  );
+});
+
+/**
+ * Get the escalation database circuit breaker status
+ * Useful for health checks and monitoring
+ */
+export async function getEscalationDbCircuitBreakerStatus(): Promise<{
+  name: string;
+  state: CircuitState;
+  failureCount: number;
+  failureThreshold: number;
+  resetTimeoutMs: number;
+  lastFailureTime: Date | null;
+  openedAt: Date | null;
+  timeUntilReset: number | null;
+}> {
+  return globalEscalationDbCircuitBreaker.getStatus();
+}
+
+/**
+ * Force the escalation database circuit breaker to open state
+ * Useful for manual intervention during database incidents
+ */
+export async function forceEscalationDbCircuitBreakerOpen(): Promise<void> {
+  await globalEscalationDbCircuitBreaker.forceOpen();
+  logger.warn({}, 'Escalation database circuit breaker forcibly opened');
+}
+
+/**
+ * Force the escalation database circuit breaker to closed state
+ * Useful for recovery after manual intervention
+ */
+export async function forceEscalationDbCircuitBreakerClose(): Promise<void> {
+  await globalEscalationDbCircuitBreaker.forceClose();
+  logger.info({}, 'Escalation database circuit breaker forcibly closed');
+}
+
+/**
+ * Reset the escalation database circuit breaker state
+ * Clears all failure counts and state
+ */
+export async function resetEscalationDbCircuitBreaker(): Promise<void> {
+  await globalEscalationDbCircuitBreaker.reset();
+  logger.info({}, 'Escalation database circuit breaker reset');
 }

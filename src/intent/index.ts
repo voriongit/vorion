@@ -36,7 +36,7 @@ import {
   type IntentEventRecord,
   type PaginatedResult,
 } from './repository.js';
-import { enqueueIntentSubmission } from './queues.js';
+import { enqueueIntentSubmission, enqueueIntentSubmissionsBatch } from './queues.js';
 import {
   ConsentService,
   ConsentRequiredError,
@@ -52,6 +52,7 @@ import {
   recordTrustGateBypass,
   recordDeduplication,
   recordIntentContextSize,
+  recordBatchOperation,
 } from './metrics.js';
 import {
   traceDedupeCheck,
@@ -185,6 +186,35 @@ export interface BulkIntentResult {
     succeeded: number;
     /** Number of failed intents */
     failed: number;
+  };
+}
+
+/**
+ * Result of true batch intent submission (atomic operation)
+ */
+export interface BulkBatchResult {
+  /** Successfully created intents (all or none in atomic mode) */
+  intents: Intent[];
+  /** Validation failures (pre-transaction) */
+  validationErrors: Array<{
+    index: number;
+    input: IntentSubmission;
+    error: string;
+  }>;
+  /** Summary statistics */
+  stats: {
+    /** Total number of intents in the request */
+    total: number;
+    /** Number of intents that passed validation */
+    validated: number;
+    /** Number of successfully created intents */
+    created: number;
+    /** Number of intents enqueued for processing */
+    enqueued: number;
+    /** Whether the operation was atomic (all-or-nothing) */
+    atomic: boolean;
+    /** Duration of the batch operation in milliseconds */
+    durationMs: number;
   };
 }
 
@@ -418,19 +448,22 @@ export class IntentService {
       }
     }
 
-    const intent = await this.repository.updateStatus(id, tenantId, status);
+    // Get event type from state machine
+    const eventType = getTransitionEvent(fromStatus, status) ?? 'intent.status.changed';
+
+    // Use atomic transaction to update status and record event together
+    // This prevents inconsistent state if event recording fails after status update
+    const intent = await this.repository.updateStatusWithEvent(
+      id,
+      tenantId,
+      status,
+      eventType,
+      { status, previousStatus: fromStatus }
+    );
+
     if (intent) {
-      // Record status transition metric
+      // Record status transition metric (outside transaction - metrics are non-critical)
       recordStatusTransition(tenantId, fromStatus, status);
-
-      // Get event type from state machine
-      const eventType = getTransitionEvent(fromStatus, status) ?? 'intent.status.changed';
-
-      await this.repository.recordEvent({
-        intentId: intent.id,
-        eventType,
-        payload: { status, previousStatus: fromStatus },
-      });
       logger.info({ intentId: intent.id, status, previousStatus: fromStatus }, 'Intent status updated');
     }
     return intent;
@@ -454,33 +487,29 @@ export class IntentService {
       );
     }
 
-    const intent = await this.repository.cancelIntent(
+    // Build evaluation and event payloads
+    const evaluationPayload: EvaluationPayload = options.cancelledBy
+      ? { stage: 'cancelled', reason: options.reason, cancelledBy: options.cancelledBy }
+      : { stage: 'cancelled', reason: options.reason };
+
+    const eventPayload = {
+      reason: options.reason,
+      cancelledBy: options.cancelledBy,
+    };
+
+    // Use atomic transaction to cancel intent, record evaluation, and record event together
+    // This prevents inconsistent state if any operation fails after partial completion
+    const intent = await this.repository.cancelIntentWithEvent(
       id,
       options.tenantId,
-      options.reason
+      options.reason,
+      evaluationPayload as Record<string, unknown>,
+      eventPayload
     );
 
     if (intent) {
-      // Record status transition metric
+      // Record status transition metric (outside transaction - metrics are non-critical)
       recordStatusTransition(options.tenantId, previousStatus ?? 'pending', 'cancelled');
-
-      const evaluationPayload: EvaluationPayload = options.cancelledBy
-        ? { stage: 'cancelled', reason: options.reason, cancelledBy: options.cancelledBy }
-        : { stage: 'cancelled', reason: options.reason };
-      await this.repository.recordEvaluation({
-        intentId: intent.id,
-        tenantId: options.tenantId,
-        result: evaluationPayload,
-      });
-
-      await this.repository.recordEvent({
-        intentId: intent.id,
-        eventType: 'intent.cancelled',
-        payload: {
-          reason: options.reason,
-          cancelledBy: options.cancelledBy,
-        },
-      });
 
       logger.info(
         { intentId: intent.id, reason: options.reason },
@@ -495,14 +524,11 @@ export class IntentService {
    * Soft delete an intent (GDPR compliant)
    */
   async delete(id: ID, tenantId: ID): Promise<Intent | null> {
-    const intent = await this.repository.softDelete(id, tenantId);
+    // Use atomic transaction to soft delete intent and record event together
+    // This prevents inconsistent state if event recording fails after deletion
+    const intent = await this.repository.softDeleteWithEvent(id, tenantId);
 
     if (intent) {
-      await this.repository.recordEvent({
-        intentId: intent.id,
-        eventType: 'intent.deleted',
-        payload: { deletedAt: intent.deletedAt },
-      });
       logger.info({ intentId: intent.id }, 'Intent soft deleted');
     }
 
@@ -617,6 +643,319 @@ export class IntentService {
     );
 
     return results;
+  }
+
+  /**
+   * Submit multiple intents in a true batch operation with database transaction.
+   *
+   * This method provides significantly better performance than submitBulk by:
+   * 1. Validating all intents upfront (fail-fast)
+   * 2. Using batch database insert in a single transaction (atomic)
+   * 3. Creating all initial events in a single batch
+   * 4. Enqueueing all to the intake queue in batch
+   *
+   * The operation is atomic - either all intents are created or none are.
+   * Validation errors are collected and returned without creating any intents.
+   *
+   * @param submissions - Array of intent submissions to process
+   * @param options - Batch submission options including tenantId
+   * @returns BulkBatchResult with created intents, validation errors, and stats
+   *
+   * @example
+   * ```typescript
+   * const result = await intentService.submitBulkBatch(
+   *   [
+   *     { entityId: 'uuid1', goal: 'Goal 1', context: {} },
+   *     { entityId: 'uuid2', goal: 'Goal 2', context: {} },
+   *   ],
+   *   { tenantId: 'tenant-1' }
+   * );
+   * // result.stats.created === 2 (if all passed validation)
+   * // result.stats.atomic === true
+   * ```
+   */
+  async submitBulkBatch(
+    submissions: IntentSubmission[],
+    options: {
+      tenantId: ID;
+      trustSnapshot?: Record<string, unknown> | null;
+      trustLevel?: TrustLevel;
+      bypassTrustGate?: boolean;
+      userId?: ID;
+      bypassConsentCheck?: boolean;
+      /** Namespace for queue routing */
+      namespace?: string;
+    }
+  ): Promise<BulkBatchResult> {
+    const startTime = Date.now();
+
+    const result: BulkBatchResult = {
+      intents: [],
+      validationErrors: [],
+      stats: {
+        total: submissions.length,
+        validated: 0,
+        created: 0,
+        enqueued: 0,
+        atomic: true,
+        durationMs: 0,
+      },
+    };
+
+    if (submissions.length === 0) {
+      result.stats.durationMs = Date.now() - startTime;
+      return result;
+    }
+
+    logger.info(
+      { tenantId: options.tenantId, count: submissions.length },
+      'Starting batch intent submission'
+    );
+
+    // Phase 1: Validate all intents upfront
+    const validationStart = Date.now();
+    const validatedIntents: Array<{
+      index: number;
+      submission: IntentSubmission;
+      dedupeHash: string;
+    }> = [];
+
+    for (let i = 0; i < submissions.length; i++) {
+      const submission = submissions[i];
+      if (!submission) continue;
+
+      try {
+        // Check context size
+        const contextBytes = Buffer.byteLength(
+          JSON.stringify(submission.context ?? {}),
+          'utf8'
+        );
+        recordIntentContextSize(options.tenantId, submission.intentType, contextBytes);
+
+        // Consent validation (GDPR/SOC2 compliance)
+        if (!options.bypassConsentCheck && options.userId) {
+          const consentValidation = await this.validateDataProcessingConsent(
+            options.userId,
+            options.tenantId
+          );
+
+          if (!consentValidation.valid) {
+            throw new ConsentRequiredError(
+              options.userId,
+              options.tenantId,
+              'data_processing',
+              consentValidation.reason
+            );
+          }
+        }
+
+        // Trust gate validation
+        if (!options.bypassTrustGate) {
+          this.validateTrustGate(submission.intentType, options.trustLevel);
+        }
+
+        // Compute dedupe hash
+        const dedupeHash = this.computeDedupeHash(options.tenantId, submission);
+
+        // Check for duplicates in database
+        const existing = await this.repository.findByDedupeHash(
+          dedupeHash,
+          options.tenantId
+        );
+        if (existing) {
+          throw new VorionError(
+            `Duplicate intent detected (existing ID: ${existing.id})`,
+            'INTENT_DUPLICATE'
+          );
+        }
+
+        validatedIntents.push({
+          index: i,
+          submission,
+          dedupeHash,
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        result.validationErrors.push({
+          index: i,
+          input: submission,
+          error: errorMessage,
+        });
+      }
+    }
+
+    const validationDuration = (Date.now() - validationStart) / 1000;
+    result.stats.validated = validatedIntents.length;
+
+    // Record validation phase metrics
+    recordBatchOperation(
+      options.tenantId,
+      'validate',
+      result.validationErrors.length === 0 ? 'success' : 'partial',
+      submissions.length,
+      validationDuration
+    );
+
+    // If all validations failed, return early
+    if (validatedIntents.length === 0) {
+      logger.warn(
+        { tenantId: options.tenantId, total: submissions.length, errors: result.validationErrors.length },
+        'Batch submission failed: all intents failed validation'
+      );
+      result.stats.durationMs = Date.now() - startTime;
+      recordBatchOperation(
+        options.tenantId,
+        'submit',
+        'failure',
+        submissions.length,
+        result.stats.durationMs / 1000
+      );
+      return result;
+    }
+
+    // Phase 2: Batch insert with transaction
+    const insertStart = Date.now();
+    try {
+      // Prepare intent data for batch insert
+      const intentsWithEvents = validatedIntents.map(({ submission, dedupeHash }) => ({
+        intentData: {
+          tenantId: options.tenantId,
+          entityId: submission.entityId,
+          goal: submission.goal,
+          intentType: submission.intentType ?? null,
+          priority: submission.priority,
+          status: 'pending' as const,
+          trustSnapshot: options.trustSnapshot ?? null,
+          context: this.redactStructure(submission.context, 'context'),
+          metadata: this.redactStructure(submission.metadata ?? {}, 'metadata'),
+          dedupeHash,
+        },
+        eventData: {
+          eventType: 'intent.submitted',
+          payload: {
+            goal: submission.goal,
+            intentType: submission.intentType,
+            priority: submission.priority,
+            trustLevel: options.trustLevel,
+            batchSubmission: true,
+          },
+        },
+      }));
+
+      // Atomic batch insert with events
+      const createdIntents = await this.repository.createIntentsBatchWithEvents(
+        intentsWithEvents
+      );
+
+      result.intents = createdIntents;
+      result.stats.created = createdIntents.length;
+
+      // Record success metrics for each intent
+      for (const intent of createdIntents) {
+        recordIntentSubmission(options.tenantId, intent.intentType, 'success', options.trustLevel);
+        recordStatusTransition(options.tenantId, 'new', 'pending');
+      }
+
+      logger.info(
+        { tenantId: options.tenantId, created: createdIntents.length },
+        'Batch intent insert completed'
+      );
+    } catch (error) {
+      // Transaction failed - no intents were created
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(
+        { tenantId: options.tenantId, error: errorMessage },
+        'Batch intent insert failed'
+      );
+
+      // Mark all validated intents as failed
+      for (const { index, submission } of validatedIntents) {
+        result.validationErrors.push({
+          index,
+          input: submission,
+          error: `Transaction failed: ${errorMessage}`,
+        });
+        recordIntentSubmission(options.tenantId, submission.intentType, 'error', options.trustLevel);
+      }
+
+      result.stats.durationMs = Date.now() - startTime;
+      recordBatchOperation(
+        options.tenantId,
+        'submit',
+        'failure',
+        submissions.length,
+        result.stats.durationMs / 1000
+      );
+      return result;
+    }
+
+    const insertDuration = (Date.now() - insertStart) / 1000;
+
+    // Phase 3: Batch enqueue to processing queue
+    const enqueueStart = Date.now();
+    try {
+      await enqueueIntentSubmissionsBatch(result.intents, {
+        namespace: this.resolveNamespace(options.namespace),
+      });
+      result.stats.enqueued = result.intents.length;
+
+      const enqueueDuration = (Date.now() - enqueueStart) / 1000;
+      recordBatchOperation(
+        options.tenantId,
+        'enqueue',
+        'success',
+        result.intents.length,
+        enqueueDuration
+      );
+
+      logger.info(
+        { tenantId: options.tenantId, enqueued: result.stats.enqueued },
+        'Batch intent enqueue completed'
+      );
+    } catch (error) {
+      // Enqueue failed but intents were created - partial success
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(
+        { tenantId: options.tenantId, error: errorMessage },
+        'Batch intent enqueue failed'
+      );
+      recordError('BATCH_ENQUEUE_FAILED', 'intent-service');
+    }
+
+    // Calculate final metrics
+    result.stats.durationMs = Date.now() - startTime;
+    const totalDuration = result.stats.durationMs / 1000;
+
+    // Determine overall result
+    const overallResult = result.validationErrors.length === 0 && result.stats.created === submissions.length
+      ? 'success'
+      : result.stats.created > 0
+        ? 'partial'
+        : 'failure';
+
+    recordBatchOperation(
+      options.tenantId,
+      'submit',
+      overallResult,
+      submissions.length,
+      totalDuration
+    );
+
+    logger.info(
+      {
+        tenantId: options.tenantId,
+        total: result.stats.total,
+        validated: result.stats.validated,
+        created: result.stats.created,
+        enqueued: result.stats.enqueued,
+        validationErrors: result.validationErrors.length,
+        durationMs: result.stats.durationMs,
+        throughput: result.stats.created / totalDuration,
+      },
+      'Batch intent submission completed'
+    );
+
+    return result;
   }
 
   async updateTrustMetadata(

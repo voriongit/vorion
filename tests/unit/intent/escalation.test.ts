@@ -17,7 +17,9 @@ vi.mock('../../../src/common/config.js', () => ({
   })),
 }));
 
-const mockRedis = {
+// Mock Redis - hoisted mock definition to avoid initialization issues
+// Store mock reference in a way that works with vitest hoisting
+const mockRedis = vi.hoisted(() => ({
   set: vi.fn().mockResolvedValue('OK'),
   get: vi.fn().mockResolvedValue(null),
   del: vi.fn().mockResolvedValue(1),
@@ -30,7 +32,7 @@ const mockRedis = {
   zrem: vi.fn().mockResolvedValue(1),
   zrangebyscore: vi.fn().mockResolvedValue([]),
   ttl: vi.fn().mockResolvedValue(3600),
-};
+}));
 
 vi.mock('../../../src/common/redis.js', () => ({
   getRedis: vi.fn(() => mockRedis),
@@ -87,14 +89,24 @@ vi.mock('../../../src/common/db.js', () => ({
   getDatabase: vi.fn(() => mockDb),
 }));
 
-vi.mock('../../../src/intent/metrics.js', () => ({
-  escalationsCreated: { inc: vi.fn() },
-  escalationResolutions: { inc: vi.fn() },
-  escalationPendingDuration: { observe: vi.fn() },
-  escalationsPending: { inc: vi.fn(), dec: vi.fn() },
-  updateSlaBreachRate: vi.fn(),
-  updateEscalationApprovalRate: vi.fn(),
-}));
+vi.mock('../../../src/intent/metrics.js', () => {
+  const mockRegistry = {
+    registerMetric: vi.fn(),
+    getSingleMetricAsString: vi.fn().mockResolvedValue(''),
+    contentType: 'text/plain',
+  };
+  return {
+    escalationsCreated: { inc: vi.fn() },
+    escalationResolutions: { inc: vi.fn() },
+    escalationPendingDuration: { observe: vi.fn() },
+    escalationsPending: { inc: vi.fn(), dec: vi.fn() },
+    updateSlaBreachRate: vi.fn(),
+    updateEscalationApprovalRate: vi.fn(),
+    recordCircuitBreakerExecution: vi.fn(),
+    recordCircuitBreakerStateChange: vi.fn(),
+    intentRegistry: mockRegistry,
+  };
+});
 
 describe('EscalationService', () => {
   let service: EscalationService;

@@ -15,6 +15,7 @@ import { getDatabase } from '../common/db.js';
 import type { ID } from '../common/types.js';
 import { ValidationError, NotFoundError } from '../common/errors.js';
 import { encrypt, decrypt, type EncryptedEnvelope } from '../common/encryption.js';
+import { getTraceContext, injectTraceToHeaders } from '../common/trace.js';
 import type { EscalationRecord } from './escalation.js';
 import {
   webhookDeliveries,
@@ -27,7 +28,109 @@ import {
   webhookDeliveriesSkippedTotal,
   webhookCircuitBreakerTransitions,
   recordWebhookDelivery,
+  intentRegistry,
 } from './metrics.js';
+import { Histogram, Counter } from 'prom-client';
+
+// =============================================================================
+// Parallel Webhook Delivery Metrics
+// =============================================================================
+
+/**
+ * Webhook batch delivery duration histogram
+ */
+const webhookBatchDeliveryDuration = new Histogram({
+  name: 'vorion_webhook_batch_delivery_duration_seconds',
+  help: 'Time to deliver webhooks to all subscriptions for an event',
+  labelNames: ['tenant_id', 'event_type'] as const,
+  buckets: [0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30],
+  registers: [intentRegistry],
+});
+
+/**
+ * Webhook batch size histogram
+ */
+const webhookBatchSize = new Histogram({
+  name: 'vorion_webhook_batch_size',
+  help: 'Number of webhooks in a batch delivery',
+  labelNames: ['tenant_id'] as const,
+  buckets: [1, 2, 5, 10, 20, 50, 100],
+  registers: [intentRegistry],
+});
+
+/**
+ * Webhook parallel delivery concurrency usage
+ */
+const webhookConcurrencyUsage = new Histogram({
+  name: 'vorion_webhook_concurrency_usage',
+  help: 'Number of concurrent webhook deliveries in a batch',
+  labelNames: ['tenant_id'] as const,
+  buckets: [1, 2, 3, 5, 10],
+  registers: [intentRegistry],
+});
+
+/**
+ * Webhook batch delivery results counter
+ */
+const webhookBatchResults = new Counter({
+  name: 'vorion_webhook_batch_results_total',
+  help: 'Results of webhook batch deliveries',
+  labelNames: ['tenant_id', 'event_type', 'result'] as const, // result: all_success, partial_success, all_failed
+  registers: [intentRegistry],
+});
+
+// =============================================================================
+// Concurrency Limiter
+// =============================================================================
+
+/**
+ * Maximum concurrent webhook deliveries per batch.
+ * Prevents overwhelming the system or target servers.
+ */
+const DEFAULT_WEBHOOK_CONCURRENCY = 10;
+
+/**
+ * Simple semaphore-based concurrency limiter for parallel operations.
+ * Implements a p-limit style pattern without external dependencies.
+ */
+class ConcurrencyLimiter {
+  private running = 0;
+  private queue: Array<() => void> = [];
+
+  constructor(private readonly limit: number) {}
+
+  /**
+   * Execute a function with concurrency limiting.
+   * If at capacity, waits for a slot to become available.
+   */
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    // Wait for a slot if at capacity
+    if (this.running >= this.limit) {
+      await new Promise<void>((resolve) => {
+        this.queue.push(resolve);
+      });
+    }
+
+    this.running++;
+    try {
+      return await fn();
+    } finally {
+      this.running--;
+      // Release next waiting task if any
+      const next = this.queue.shift();
+      if (next) {
+        next();
+      }
+    }
+  }
+
+  /**
+   * Get current number of running tasks
+   */
+  get currentRunning(): number {
+    return this.running;
+  }
+}
 import {
   traceWebhookDeliver,
   recordWebhookResult,
@@ -1089,22 +1192,56 @@ export class WebhookService {
   /**
    * Deliver webhooks to all registered endpoints for a tenant.
    *
+   * Uses parallel delivery with controlled concurrency (max 10 concurrent)
+   * to improve performance while preventing overwhelming target servers.
+   *
    * Creates persistent delivery records before attempting delivery,
    * updating them with success/failure status after each attempt.
    * Includes circuit breaker check to skip consistently failing webhooks.
+   *
+   * Uses Promise.allSettled to ensure failures of one webhook don't affect others.
    */
   private async deliverToTenant(
     tenantId: ID,
     eventType: WebhookEventType,
     payload: WebhookPayload
   ): Promise<WebhookDeliveryResult[]> {
+    const startTime = Date.now();
     const webhooks = await this.getWebhooks(tenantId);
-    const results: WebhookDeliveryResult[] = [];
     const deliveryRepo = this.getDeliveryRepository();
 
-    for (const { id: webhookId, config } of webhooks) {
-      if (!config.enabled) continue;
-      if (!config.events.includes(eventType)) continue;
+    // Filter to only enabled webhooks subscribed to this event type
+    const eligibleWebhooks = webhooks.filter(
+      ({ config }) => config.enabled && config.events.includes(eventType)
+    );
+
+    // Record batch size metric
+    webhookBatchSize.observe({ tenant_id: tenantId }, eligibleWebhooks.length);
+
+    if (eligibleWebhooks.length === 0) {
+      return [];
+    }
+
+    // Create concurrency limiter for parallel delivery
+    const concurrencyLimit = Math.min(DEFAULT_WEBHOOK_CONCURRENCY, eligibleWebhooks.length);
+    const limiter = new ConcurrencyLimiter(concurrencyLimit);
+
+    // Track max concurrency reached for metrics
+    let maxConcurrency = 0;
+
+    /**
+     * Deliver to a single webhook subscription with all necessary setup.
+     * This function is called in parallel with concurrency limiting.
+     */
+    const deliverToSubscription = async (
+      webhookId: string,
+      config: WebhookConfig
+    ): Promise<WebhookDeliveryResult> => {
+      // Track concurrency usage
+      const currentConcurrency = limiter.currentRunning;
+      if (currentConcurrency > maxConcurrency) {
+        maxConcurrency = currentConcurrency;
+      }
 
       // Create persistent delivery record before attempting delivery
       let deliveryRecord: WebhookDelivery | null = null;
@@ -1133,7 +1270,6 @@ export class WebhookService {
           attempts: 0,
           skippedByCircuitBreaker: true,
         };
-        results.push(skippedResult);
 
         // Update delivery record with skipped status
         if (deliveryRecord) {
@@ -1150,7 +1286,7 @@ export class WebhookService {
         }
 
         await this.storeDeliveryResult(tenantId, webhookId, payload.id, skippedResult);
-        continue;
+        return skippedResult;
       }
 
       // Attempt delivery with retry logic
@@ -1162,11 +1298,78 @@ export class WebhookService {
         circuitData,
         deliveryRecord?.id ?? null
       );
-      results.push(result);
 
       // Store delivery result in Redis (legacy - for backwards compatibility)
       await this.storeDeliveryResult(tenantId, webhookId, payload.id, result);
+
+      return result;
+    };
+
+    // Execute all deliveries in parallel with concurrency limiting
+    // Promise.allSettled ensures failures don't affect other webhooks
+    const deliveryPromises = eligibleWebhooks.map(({ id: webhookId, config }) =>
+      limiter.run(() => deliverToSubscription(webhookId, config))
+    );
+
+    const settledResults = await Promise.allSettled(deliveryPromises);
+
+    // Extract results from settled promises
+    const results: WebhookDeliveryResult[] = settledResults.map((settled, index) => {
+      if (settled.status === 'fulfilled') {
+        return settled.value;
+      } else {
+        // This shouldn't happen since deliverToSubscription catches errors,
+        // but handle it defensively
+        const webhookId = eligibleWebhooks[index]?.id ?? 'unknown';
+        const errorMessage = settled.reason instanceof Error
+          ? settled.reason.message
+          : 'Unknown delivery error';
+
+        logger.error(
+          { webhookId, tenantId, eventType, error: errorMessage },
+          'Unexpected error in parallel webhook delivery'
+        );
+
+        return {
+          success: false,
+          error: errorMessage,
+          attempts: 0,
+        } as WebhookDeliveryResult;
+      }
+    });
+
+    // Record batch delivery metrics
+    const durationSeconds = (Date.now() - startTime) / 1000;
+    webhookBatchDeliveryDuration.observe(
+      { tenant_id: tenantId, event_type: eventType },
+      durationSeconds
+    );
+    webhookConcurrencyUsage.observe({ tenant_id: tenantId }, maxConcurrency);
+
+    // Record batch result type
+    const successCount = results.filter(r => r.success).length;
+    let batchResult: 'all_success' | 'partial_success' | 'all_failed';
+    if (successCount === results.length) {
+      batchResult = 'all_success';
+    } else if (successCount > 0) {
+      batchResult = 'partial_success';
+    } else {
+      batchResult = 'all_failed';
     }
+    webhookBatchResults.inc({ tenant_id: tenantId, event_type: eventType, result: batchResult });
+
+    logger.info(
+      {
+        tenantId,
+        eventType,
+        totalWebhooks: eligibleWebhooks.length,
+        successCount,
+        failedCount: results.length - successCount,
+        durationMs: Date.now() - startTime,
+        maxConcurrency,
+      },
+      'Parallel webhook batch delivery completed'
+    );
 
     return results;
   }
@@ -1344,7 +1547,14 @@ export class WebhookService {
   /**
    * Send HTTP request to webhook URL
    *
-   * Performs DNS pinning check to detect DNS rebinding attacks.
+   * SSRF Protection Strategy:
+   * 1. Resolve DNS and validate the IP is not private/internal
+   * 2. Make HTTP request directly to the validated IP (not the hostname)
+   * 3. Set Host header to original hostname for proper routing
+   *
+   * This prevents TOCTOU (Time-of-Check-Time-of-Use) attacks where DNS could
+   * resolve to a different IP between validation and the actual fetch() call.
+   *
    * Timeout is configurable via VORION_WEBHOOK_TIMEOUT_MS environment variable.
    * Default: 10000ms, Min: 1000ms, Max: 60000ms
    */
@@ -1355,6 +1565,7 @@ export class WebhookService {
     storedIp?: string
   ): Promise<Response> {
     const webhookConfig = getWebhookConfig();
+    const parsedUrl = new URL(url);
 
     // DNS Pinning: Check IP consistency unless explicitly allowed to change
     // This is the primary defense against DNS rebinding attacks
@@ -1398,6 +1609,24 @@ export class WebhookService {
       });
     }
 
+    // Get the validated IP address to make the request directly to it
+    // This prevents TOCTOU attacks where DNS could resolve differently
+    // between our validation and the actual fetch() call
+    const validatedIp = runtimeValidation.resolvedIP;
+
+    // Build the URL with the validated IP instead of the hostname
+    // Preserve the original port, path, and query string
+    let targetUrl: string;
+    if (validatedIp && validatedIp !== parsedUrl.hostname) {
+      // Replace hostname with validated IP for the actual request
+      const ipUrl = new URL(url);
+      ipUrl.hostname = validatedIp;
+      targetUrl = ipUrl.toString();
+    } else {
+      // URL already uses an IP address or no IP resolved (shouldn't happen)
+      targetUrl = url;
+    }
+
     const body = JSON.stringify(payload);
     const timestamp = Math.floor(Date.now() / 1000);
     const headers: Record<string, string> = {
@@ -1405,6 +1634,10 @@ export class WebhookService {
       'User-Agent': 'Vorion-Webhook/1.0',
       'X-Webhook-Event': payload.eventType,
       'X-Webhook-Delivery': payload.id,
+      // Set Host header to original hostname for proper routing
+      // This ensures the target server routes the request correctly
+      // even though we're connecting to the IP directly
+      'Host': parsedUrl.host,
     };
 
     // Add HMAC signature if secret is configured
@@ -1415,13 +1648,23 @@ export class WebhookService {
       headers[SIGNATURE_TIMESTAMP_HEADER] = String(timestamp);
     }
 
+    // Add W3C Trace Context headers for distributed tracing
+    // This propagates trace context to webhook recipients
+    const traceContext = getTraceContext();
+    const headersWithTrace = injectTraceToHeaders(headers, traceContext);
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), webhookConfig.timeoutMs);
 
     try {
-      return await fetch(url, {
+      logger.debug(
+        { targetUrl, originalUrl: url, validatedIp, host: parsedUrl.host },
+        'Sending webhook request to validated IP'
+      );
+
+      return await fetch(targetUrl, {
         method: 'POST',
-        headers,
+        headers: headersWithTrace,
         body,
         signal: controller.signal,
       });

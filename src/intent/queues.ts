@@ -2,7 +2,7 @@ import { Queue, Worker, QueueEvents, JobsOptions, Job } from 'bullmq';
 import { randomUUID } from 'node:crypto';
 import type { Intent, TrustLevel, ControlAction } from '../common/types.js';
 import type { EvaluationResult } from '../basis/types.js';
-import type { PolicyAction } from '../policy/types.js';
+// PolicyAction interface is imported via MultiPolicyEvaluationResult from policy/index.js
 import { TrustEngine } from '../trust-engine/index.js';
 import { RuleEvaluator } from '../basis/evaluator.js';
 import { createEnforcementService } from '../enforce/index.js';
@@ -26,7 +26,10 @@ import {
   recordPolicyOverride,
   recordCircuitBreakerStateChange,
   recordCircuitBreakerExecution,
-  updateCircuitBreakerFailures,
+  recordExecution,
+  updateExecutionsInProgress,
+  recordTrustDrift,
+  recordDecisionTimeTrustFetch,
 } from './metrics.js';
 import {
   getCircuitBreaker,
@@ -41,17 +44,25 @@ import {
 import {
   createAuditService,
   createAuditHelper,
-  type AuditService,
 } from '../audit/index.js';
 import { createWebhookService } from './webhooks.js';
 import {
   getCachedTrustScore,
   cacheTrustScore,
+  getDecisionTimeTrustScoreWithRefresh,
 } from '../common/trust-cache.js';
 import {
   tracePolicyEvaluate,
   recordPolicyEvaluationResult,
 } from './tracing.js';
+import { createProofService } from '../proof/index.js';
+import {
+  createGateway,
+  type ExecutionContext,
+  type ExecutionResult,
+  type ResourceLimits,
+} from '../cognigate/index.js';
+import type { Decision, TrustScore } from '../common/types.js';
 
 const logger = createLogger({ component: 'intent-queue' });
 
@@ -59,6 +70,7 @@ const queueNames = {
   intake: 'intent:intake',
   evaluate: 'intent:evaluate',
   decision: 'intent:decision',
+  execute: 'intent:execute',
   deadLetter: 'intent:dead-letter',
 };
 
@@ -95,6 +107,21 @@ const enforcementService = createEnforcementService({ defaultAction: 'deny' });
 const auditService = createAuditService();
 const auditHelper = createAuditHelper(auditService);
 const webhookService = createWebhookService();
+const proofService = createProofService();
+
+// Cognigate gateway for intent execution - initialized lazily with config
+let cognigateGateway: ReturnType<typeof createGateway> | null = null;
+function getCognigateGateway() {
+  if (!cognigateGateway) {
+    const config = getConfig();
+    cognigateGateway = createGateway({
+      maxMemoryMb: config.cognigate.maxMemoryMb,
+      maxCpuPercent: config.cognigate.maxCpuPercent,
+      timeoutMs: config.cognigate.timeout,
+    });
+  }
+  return cognigateGateway;
+}
 
 // Policy evaluation circuit breaker - prevents cascading failures when policy engine is unhealthy
 // Uses per-service circuit breaker configuration from the registry
@@ -106,29 +133,96 @@ const policyCircuitBreaker = getCircuitBreaker('policyEngine', (from: CircuitSta
   );
 });
 
-/**
- * Action priority map - lower number = more restrictive
- */
-const ACTION_PRIORITY: Record<ControlAction | PolicyAction, number> = {
-  deny: 1,
-  escalate: 2,
-  allow: 3,
+// Trust Engine circuit breaker - prevents cascading failures when trust service is unavailable
+// Falls back to cached scores or default trust level when circuit is open
+const trustCircuitBreaker = getCircuitBreaker('trustEngine', (from: CircuitState, to: CircuitState) => {
+  recordCircuitBreakerStateChange('trust-engine', from, to);
+  logger.info(
+    { circuitBreaker: 'trust-engine', from, to },
+    'Trust Engine circuit breaker state changed'
+  );
+});
+
+// Default trust score used when trust engine is unavailable and no cached score exists
+const DEFAULT_TRUST_SCORE = {
+  score: 0,
+  level: 0 as const,
+  components: {},
 };
 
 /**
- * Convert policy action to control action
+ * Fetch trust score with circuit breaker protection
+ * Falls back to cached score or default when trust engine is unavailable
  */
-function policyActionToControlAction(action: PolicyAction): ControlAction {
-  return action as ControlAction; // They're the same values
+async function fetchTrustScoreWithCircuitBreaker(
+  entityId: string,
+  tenantId: string,
+  jobLogger: ReturnType<typeof createTracedLogger>
+): Promise<{ score: number; level: number; components: Record<string, unknown> } | null> {
+  // Always check cache first
+  const cachedScore = await getCachedTrustScore(entityId, tenantId);
+
+  // Check if circuit is open
+  const isCircuitOpen = await trustCircuitBreaker.isOpen();
+  if (isCircuitOpen) {
+    recordCircuitBreakerExecution('trust-engine', 'rejected');
+    jobLogger.warn(
+      { entityId, circuitState: 'OPEN', usedCachedScore: !!cachedScore },
+      'Trust Engine circuit breaker is OPEN, using cached score or default'
+    );
+    // Return cached score if available, otherwise return default
+    return cachedScore ?? DEFAULT_TRUST_SCORE;
+  }
+
+  // Execute trust engine call through circuit breaker
+  const circuitResult = await trustCircuitBreaker.execute(async () => {
+    return trustEngine.getScore(entityId);
+  });
+
+  if (circuitResult.success && circuitResult.result) {
+    recordCircuitBreakerExecution('trust-engine', 'success');
+    // Cache the fresh result
+    await cacheTrustScore(entityId, tenantId, circuitResult.result);
+    return circuitResult.result;
+  } else if (circuitResult.circuitOpen) {
+    // Circuit opened during execution
+    recordCircuitBreakerExecution('trust-engine', 'rejected');
+    jobLogger.warn(
+      { entityId, usedCachedScore: !!cachedScore },
+      'Trust Engine circuit breaker opened during call, using cached score or default'
+    );
+    return cachedScore ?? DEFAULT_TRUST_SCORE;
+  } else {
+    // Execution failed
+    recordCircuitBreakerExecution('trust-engine', 'failure');
+    jobLogger.warn(
+      { entityId, error: circuitResult.error?.message, usedCachedScore: !!cachedScore },
+      'Trust Engine call failed, using cached score or default'
+    );
+    return cachedScore ?? DEFAULT_TRUST_SCORE;
+  }
 }
 
 /**
+ * Action priority map - lower number = more restrictive
+ * All ControlAction values must be included
+ */
+const ACTION_PRIORITY: Record<ControlAction, number> = {
+  terminate: 0,
+  deny: 1,
+  escalate: 2,
+  limit: 3,
+  monitor: 4,
+  allow: 5,
+};
+
+/**
  * Determine the most restrictive action between rule and policy evaluations
- * Returns the more restrictive action (deny > escalate > allow)
+ * Returns the more restrictive action (terminate > deny > escalate > limit > monitor > allow)
  */
 function getMostRestrictiveAction(
   ruleAction: ControlAction,
-  policyAction?: PolicyAction | null
+  policyAction?: ControlAction | null
 ): ControlAction {
   if (!policyAction) {
     return ruleAction;
@@ -138,9 +232,7 @@ function getMostRestrictiveAction(
   const policyPriority = ACTION_PRIORITY[policyAction];
 
   // Return the action with lower priority number (more restrictive)
-  return rulePriority <= policyPriority
-    ? ruleAction
-    : policyActionToControlAction(policyAction);
+  return rulePriority <= policyPriority ? ruleAction : policyAction;
 }
 
 // Queue instances
@@ -159,6 +251,11 @@ export const intentDecisionQueue = new Queue(queueNames.decision, {
   defaultJobOptions: getJobOptions(),
 });
 
+export const intentExecuteQueue = new Queue(queueNames.execute, {
+  connection: connection(),
+  defaultJobOptions: getJobOptions(),
+});
+
 export const deadLetterQueue = new Queue(queueNames.deadLetter, {
   connection: connection(),
   defaultJobOptions: {
@@ -170,7 +267,7 @@ export const deadLetterQueue = new Queue(queueNames.deadLetter, {
 // Queue event listeners for monitoring
 const queueEvents: QueueEvents[] = [];
 
-[queueNames.intake, queueNames.evaluate, queueNames.decision].forEach((name) => {
+[queueNames.intake, queueNames.evaluate, queueNames.decision, queueNames.execute].forEach((name) => {
   const events = new QueueEvents(name, { connection: connection() });
   queueEvents.push(events);
 
@@ -190,7 +287,43 @@ let intentService: IntentService | null = null;
 let isShuttingDown = false;
 
 /**
- * Move a failed job to the dead letter queue after max retries
+ * Dead letter queue job data structure for comprehensive debugging
+ */
+export interface DeadLetterJobData {
+  /** Original queue name where the job failed */
+  originalQueue: string;
+  /** Original job ID */
+  jobId: string | undefined;
+  /** Original job data */
+  jobData: Record<string, unknown>;
+  /** Error details */
+  error: {
+    message: string;
+    stack?: string;
+    name?: string;
+  };
+  /** Number of retry attempts made */
+  attemptsMade: number;
+  /** Timestamp when the job was first created */
+  createdAt: string;
+  /** Timestamp when the job first failed */
+  firstFailedAt?: string;
+  /** Timestamp when the job was moved to DLQ (after exhausting retries) */
+  movedToDlqAt: string;
+  /** Intent ID if available */
+  intentId?: string;
+  /** Tenant ID if available */
+  tenantId?: string;
+  /** Trace context for distributed tracing */
+  traceContext?: {
+    traceId?: string;
+    spanId?: string;
+  };
+}
+
+/**
+ * Move a failed job to the dead letter queue after max retries.
+ * Includes comprehensive metadata for debugging and reprocessing.
  */
 async function moveToDeadLetterQueue(
   job: Job,
@@ -198,19 +331,49 @@ async function moveToDeadLetterQueue(
   stage: string
 ): Promise<void> {
   try {
-    await deadLetterQueue.add('failed-intent', {
+    const jobData = job.data as Record<string, unknown>;
+    const traceContext = extractTraceFromJobData(jobData);
+    const now = new Date().toISOString();
+
+    const dlqJobData: DeadLetterJobData = {
       originalQueue: stage,
       jobId: job.id,
-      jobData: job.data,
+      jobData,
       error: {
         message: error.message,
         stack: error.stack,
+        name: error.name,
       },
       attemptsMade: job.attemptsMade,
-      failedAt: new Date().toISOString(),
+      createdAt: job.timestamp ? new Date(job.timestamp).toISOString() : now,
+      firstFailedAt: job.failedReason ? now : undefined,
+      movedToDlqAt: now,
+      intentId: jobData.intentId as string | undefined,
+      tenantId: jobData.tenantId as string | undefined,
+      traceContext: traceContext ? {
+        traceId: traceContext.traceId,
+        spanId: traceContext.spanId,
+      } : undefined,
+    };
+
+    await deadLetterQueue.add('failed-intent', dlqJobData, {
+      // Keep DLQ jobs indefinitely for manual inspection
+      removeOnComplete: false,
+      removeOnFail: false,
     });
+
+    // Update DLQ size metric immediately after adding
+    const dlqCount = await deadLetterQueue.getJobCounts('waiting');
+    dlqSize.set(dlqCount.waiting ?? 0);
+
     logger.info(
-      { jobId: job.id, stage },
+      {
+        jobId: job.id,
+        stage,
+        intentId: dlqJobData.intentId,
+        attemptsMade: job.attemptsMade,
+        errorMessage: error.message,
+      },
       'Moved failed job to dead letter queue'
     );
   } catch (dlqError) {
@@ -286,6 +449,45 @@ export async function enqueueIntentSubmission(
   );
 }
 
+/**
+ * Batch enqueue multiple intents for processing.
+ *
+ * Uses BullMQ's addBulk for efficient batch queue insertion.
+ * All jobs share the same trace context for distributed tracing.
+ *
+ * @param intents - Array of intents to enqueue
+ * @param options - Optional namespace and trace context
+ */
+export async function enqueueIntentSubmissionsBatch(
+  intents: Intent[],
+  options?: { namespace?: string; traceContext?: TraceContext }
+): Promise<void> {
+  if (intents.length === 0) {
+    return;
+  }
+
+  // Get or create shared trace context for the batch
+  const traceContext = options?.traceContext ?? getTraceContext() ?? createTraceContext();
+
+  // Prepare all job data
+  const jobs = intents.map((intent) => ({
+    name: 'intent.submitted',
+    data: addTraceToJobData({
+      intentId: intent.id,
+      tenantId: intent.tenantId,
+      namespace: options?.namespace,
+    }, traceContext),
+  }));
+
+  // Bulk add all jobs at once
+  await intentIntakeQueue.addBulk(jobs);
+
+  logger.debug(
+    { count: intents.length, traceId: traceContext.traceId },
+    'Batch of intents enqueued for processing'
+  );
+}
+
 export function registerIntentWorkers(service: IntentService): void {
   if (workersStarted) return;
   workersStarted = true;
@@ -326,16 +528,13 @@ export function registerIntentWorkers(service: IntentService): void {
             return;
           }
 
-          // Check cache first, then fall back to trust engine
-          let trustRecord = await getCachedTrustScore(intent.entityId, tenantId);
-          if (!trustRecord) {
-            // Cache miss - fetch from trust engine
-            trustRecord = await trustEngine.getScore(intent.entityId) ?? null;
-            // Cache the result for future lookups
-            if (trustRecord) {
-              await cacheTrustScore(intent.entityId, tenantId, trustRecord);
-            }
-          }
+          // Fetch trust score with circuit breaker protection
+          // Falls back to cached score or default when trust engine is unavailable
+          const trustRecord = await fetchTrustScoreWithCircuitBreaker(
+            intent.entityId,
+            tenantId,
+            jobLogger
+          );
           const trustSnapshot = trustRecord
             ? {
                 score: trustRecord.score,
@@ -613,7 +812,9 @@ export function registerIntentWorkers(service: IntentService): void {
                     { intentId: intent.id, error: circuitResult.error },
                     'Policy evaluation failed (circuit breaker tracked), continuing with rules only'
                   );
-                  return { evaluation: null, error: circuitResult.error };
+                  return circuitResult.error
+                    ? { evaluation: null, error: circuitResult.error }
+                    : { evaluation: null };
                 }
               }
             );
@@ -715,45 +916,102 @@ export function registerIntentWorkers(service: IntentService): void {
           return;
         }
 
-        // Re-validate trust at decision stage if configured
-        if (config.intent.revalidateTrustAtDecision) {
-          const currentTrust = await trustEngine.getScore(intent.entityId);
-          const currentLevel = currentTrust?.level ?? 0;
-          const requiredLevel = intentService.getRequiredTrustLevel(intent.intentType);
+        // ALWAYS fetch live trust score at decision time for trust gate validation
+        // This ensures trust gates use current trust state, not stale snapshots
+        const trustFetchStart = Date.now();
+        const currentTrust = await getDecisionTimeTrustScoreWithRefresh(
+          intent.entityId,
+          tenantId,
+          () => trustEngine.getScore(intent.entityId).then(r => r!)
+        );
+        const trustFetchDuration = (Date.now() - trustFetchStart) / 1000;
 
-          // Record the trust gate check
-          await intentService.recordEvaluation(intent.id, intent.tenantId, {
-            stage: 'trust-gate',
-            passed: currentLevel >= requiredLevel,
-            requiredLevel,
-            actualLevel: currentLevel,
-          });
+        // Record trust fetch metrics
+        const trustSource = trustFetchDuration < 0.005 ? 'cache' : 'engine';
+        recordDecisionTimeTrustFetch(tenantId, trustSource, trustFetchDuration);
 
-          if (currentLevel < requiredLevel) {
-            logger.warn(
-              { intentId, requiredLevel, currentLevel },
-              'Trust level degraded below requirement at decision stage'
-            );
-            await intentService.updateStatus(intent.id, intent.tenantId, 'denied', 'evaluating');
-            recordJobResult('decision', 'success', (Date.now() - startTime) / 1000);
-            return;
-          }
+        const currentLevel = currentTrust?.level ?? 0;
+        const currentScore = currentTrust?.score ?? 0;
+        const snapshotScore = intent.trustScore ?? 0;
+        const snapshotLevel = intent.trustLevel ?? 0;
+        const requiredLevel = intentService.getRequiredTrustLevel(intent.intentType);
 
-          // Update trust metadata if changed
-          if (currentTrust && currentTrust.level !== intent.trustLevel) {
-            await intentService.updateTrustMetadata(
-              intent.id,
-              intent.tenantId,
-              {
-                score: currentTrust.score,
-                level: currentTrust.level,
-                components: currentTrust.components,
-                revalidatedAt: new Date().toISOString(),
-              },
-              currentTrust.level,
-              currentTrust.score
-            );
-          }
+        // Calculate and log trust drift between intake snapshot and decision time
+        const trustDrift = snapshotScore - currentScore;
+        const significantDrift = Math.abs(trustDrift) >= 20; // 20 point threshold
+
+        // Record trust drift metrics for monitoring
+        recordTrustDrift(
+          tenantId,
+          intent.intentType,
+          snapshotScore,
+          currentScore,
+          snapshotLevel,
+          currentLevel
+        );
+
+        if (significantDrift) {
+          logger.info(
+            {
+              intentId,
+              entityId: intent.entityId,
+              snapshotScore,
+              currentScore,
+              drift: trustDrift,
+              snapshotLevel,
+              currentLevel,
+              levelChange: snapshotLevel !== currentLevel,
+            },
+            trustDrift > 0
+              ? 'Trust degradation detected at decision time'
+              : 'Trust improvement detected at decision time'
+          );
+        }
+
+        // Record the trust gate check
+        // Note: Trust drift metrics are captured via recordTrustDrift() above
+        // and detailed drift info is stored in trust metadata update
+        await intentService.recordEvaluation(intent.id, intent.tenantId, {
+          stage: 'trust-gate',
+          passed: currentLevel >= requiredLevel,
+          requiredLevel,
+          actualLevel: currentLevel,
+        });
+
+        if (currentLevel < requiredLevel) {
+          logger.warn(
+            {
+              intentId,
+              requiredLevel,
+              currentLevel,
+              snapshotLevel,
+              trustDrift,
+              degradedBelowRequirement: snapshotLevel >= requiredLevel,
+            },
+            'Trust level below requirement at decision stage'
+          );
+          await intentService.updateStatus(intent.id, intent.tenantId, 'denied', 'evaluating');
+          recordJobResult('decision', 'success', (Date.now() - startTime) / 1000);
+          return;
+        }
+
+        // Update trust metadata if score or level changed
+        if (currentTrust && (currentTrust.level !== intent.trustLevel || currentTrust.score !== intent.trustScore)) {
+          await intentService.updateTrustMetadata(
+            intent.id,
+            intent.tenantId,
+            {
+              score: currentTrust.score,
+              level: currentTrust.level,
+              components: currentTrust.components,
+              revalidatedAt: new Date().toISOString(),
+              snapshotScore,
+              snapshotLevel,
+              drift: trustDrift,
+            },
+            currentTrust.level,
+            currentTrust.score
+          );
         }
 
         // Get rule-based enforcement decision
@@ -800,22 +1058,24 @@ export function registerIntentWorkers(service: IntentService): void {
         // Record both rule and policy evaluations
         await intentService.recordEvaluation(intent.id, intent.tenantId, {
           stage: 'decision',
-          ruleDecision: {
-            action: ruleDecision.action,
-            constraintsEvaluated: ruleDecision.constraintsEvaluated,
+          decision: {
+            ruleDecision: {
+              action: ruleDecision.action,
+              constraintsEvaluated: ruleDecision.constraintsEvaluated,
+            },
+            policyDecision: policyEvaluation
+              ? {
+                  action: policyEvaluation.finalAction,
+                  reason: policyEvaluation.reason,
+                  policiesEvaluated: policyEvaluation.policiesEvaluated.length,
+                  matchedPolicies: policyEvaluation.policiesEvaluated
+                    .filter((p) => p.matchedRules.length > 0)
+                    .map((p) => ({ policyId: p.policyId, action: p.action, reason: p.reason })),
+                }
+              : null,
+            finalAction,
+            policyOverride,
           },
-          policyDecision: policyEvaluation
-            ? {
-                action: policyEvaluation.finalAction,
-                reason: policyEvaluation.finalReason,
-                policiesEvaluated: policyEvaluation.policiesEvaluated.length,
-                matchedPolicies: policyEvaluation.policiesEvaluated
-                  .filter((p) => p.matchedRules.length > 0)
-                  .map((p) => ({ policyId: p.policyId, action: p.action, reason: p.reason })),
-              }
-            : null,
-          finalAction,
-          policyOverride,
         });
 
         const nextStatus =
@@ -829,13 +1089,59 @@ export function registerIntentWorkers(service: IntentService): void {
 
         await intentService.updateStatus(intent.id, intent.tenantId, nextStatus, 'evaluating');
 
+        // Record proof of the decision (fire and forget)
+        // Build a proper Decision object for the proof system
+        const proofDecision = {
+          intentId: intent.id,
+          action: finalAction,
+          constraintsEvaluated: ruleDecision.constraintsEvaluated ?? [],
+          trustScore: intent.trustScore ?? 0,
+          trustLevel: (intent.trustLevel ?? 0) as TrustLevel,
+          decidedAt: new Date().toISOString(),
+        };
+        proofService.create({
+          intent,
+          decision: proofDecision,
+          inputs: {
+            evaluation,
+            policyEvaluation: policyEvaluation ?? null,
+            policyOverride,
+            reason: policyEvaluation?.reason ?? undefined,
+          },
+          outputs: {
+            nextStatus,
+            ruleAction: ruleDecision.action,
+            policyAction: policyEvaluation?.finalAction ?? null,
+            finalAction,
+          },
+        }).catch((error) => {
+          logger.warn({ error, intentId: intent.id }, 'Failed to record decision proof');
+        });
+
         // Trigger webhook notifications for approved/denied statuses (fire and forget)
         if (nextStatus === 'approved') {
           webhookService.notifyIntent('intent.approved', intentId, tenantId, { finalAction, policyOverride }).catch((error) => {
             logger.warn({ error, intentId }, 'Failed to send webhook notification');
           });
+
+          // Enqueue to execution queue for Cognigate processing
+          // Extract or create trace context for propagation
+          const traceContext = extractTraceFromJobData(job.data) ?? createTraceContext();
+          const executeJobData = addTraceToJobData({
+            intentId: intent.id,
+            tenantId: intent.tenantId,
+            decisionData: {
+              action: finalAction,
+              constraintsEvaluated: ruleDecision.constraintsEvaluated ?? [],
+              reason: policyEvaluation?.reason ?? undefined,
+              policyOverride,
+            },
+          }, traceContext);
+
+          await intentExecuteQueue.add('intent.execute', executeJobData);
+          logger.debug({ intentId, traceId: traceContext.traceId }, 'Intent enqueued for execution');
         } else if (nextStatus === 'denied') {
-          const reason = policyEvaluation?.finalReason ?? 'Denied by policy';
+          const reason = policyEvaluation?.reason ?? 'Denied by policy';
           webhookService.notifyIntent('intent.denied', intentId, tenantId, { finalAction, reason }).catch((error) => {
             logger.warn({ error, intentId }, 'Failed to send webhook notification');
           });
@@ -902,6 +1208,257 @@ export function registerIntentWorkers(service: IntentService): void {
 
   workers.push(decisionWorker);
 
+  // Execution Worker - processes approved intents through Cognigate
+  const executeWorker = new Worker(
+    queueNames.execute,
+    async (job) => {
+      const startTime = Date.now();
+      if (!intentService || isShuttingDown) return;
+
+      // Extract trace context from job data or create new one
+      const traceContext = extractTraceFromJobData(job.data) ?? createTraceContext();
+
+      return runWithTraceContext(traceContext, async () => {
+        const { intentId, tenantId, decisionData, resourceLimits: jobResourceLimits } = job.data as {
+          intentId: string;
+          tenantId: string;
+          decisionData: {
+            action: string;
+            constraintsEvaluated: unknown[];
+            reason?: string;
+            policyOverride?: boolean;
+          };
+          resourceLimits?: Partial<ResourceLimits>;
+        };
+
+        const jobLogger = createTracedLogger(
+          { component: 'execute-worker', jobId: job.id },
+          traceContext.traceId,
+          traceContext.spanId
+        );
+
+        // Track execution in progress
+        updateExecutionsInProgress(tenantId, 1);
+
+        try {
+          const intent = await intentService!.get(intentId, tenantId);
+          if (!intent) {
+            jobLogger.warn({ intentId }, 'Intent no longer exists');
+            updateExecutionsInProgress(tenantId, -1);
+            return;
+          }
+
+          // Verify intent is still in approved status
+          if (intent.status !== 'approved') {
+            jobLogger.warn(
+              { intentId, currentStatus: intent.status },
+              'Intent is no longer approved, skipping execution'
+            );
+            updateExecutionsInProgress(tenantId, -1);
+            return;
+          }
+
+          // Update status to executing
+          await intentService!.updateStatus(intent.id, intent.tenantId, 'executing', 'approved');
+
+          // Build the Decision object for Cognigate
+          const decision: Decision = {
+            intentId: intent.id,
+            action: decisionData.action as 'allow',
+            constraintsEvaluated: (decisionData.constraintsEvaluated ?? []) as Decision['constraintsEvaluated'],
+            trustScore: (intent.trustScore ?? 0) as TrustScore,
+            trustLevel: (intent.trustLevel ?? 0) as TrustLevel,
+            decidedAt: new Date().toISOString(),
+          };
+
+          // Build resource limits from config and job data
+          const gateway = getCognigateGateway();
+          const resourceLimits: ResourceLimits = {
+            maxMemoryMb: jobResourceLimits?.maxMemoryMb ?? config.cognigate.maxMemoryMb,
+            maxCpuPercent: jobResourceLimits?.maxCpuPercent ?? config.cognigate.maxCpuPercent,
+            timeoutMs: jobResourceLimits?.timeoutMs ?? config.cognigate.timeout,
+            ...(jobResourceLimits?.maxNetworkRequests !== undefined && { maxNetworkRequests: jobResourceLimits.maxNetworkRequests }),
+            ...(jobResourceLimits?.maxFileSystemOps !== undefined && { maxFileSystemOps: jobResourceLimits.maxFileSystemOps }),
+          };
+
+          // Build execution context
+          const executionContext: ExecutionContext = {
+            intent,
+            decision,
+            resourceLimits,
+          };
+
+          jobLogger.info(
+            { intentId, intentType: intent.intentType },
+            'Starting intent execution through Cognigate'
+          );
+
+          // Execute through Cognigate
+          let executionResult: ExecutionResult;
+          try {
+            executionResult = await gateway.execute(executionContext);
+          } catch (execError) {
+            // Handle execution timeout or catastrophic failure
+            const errorMessage = execError instanceof Error ? execError.message : 'Unknown execution error';
+            jobLogger.error(
+              { intentId, error: errorMessage },
+              'Cognigate execution threw an error'
+            );
+
+            executionResult = {
+              intentId: intent.id,
+              success: false,
+              outputs: {},
+              resourceUsage: {
+                memoryPeakMb: 0,
+                cpuTimeMs: 0,
+                wallTimeMs: Date.now() - startTime,
+                networkRequests: 0,
+                fileSystemOps: 0,
+              },
+              startedAt: new Date(startTime).toISOString(),
+              completedAt: new Date().toISOString(),
+              error: errorMessage,
+            };
+          }
+
+          const executionDurationSeconds = (Date.now() - startTime) / 1000;
+
+          // Record execution evaluation (using 'decision' stage with execution data in the decision field)
+          await intentService!.recordEvaluation(intent.id, intent.tenantId, {
+            stage: 'decision' as const,
+            decision: {
+              execution: {
+                success: executionResult.success,
+                outputs: executionResult.outputs,
+                resourceUsage: executionResult.resourceUsage,
+                startedAt: executionResult.startedAt,
+                completedAt: executionResult.completedAt,
+                error: executionResult.error,
+              },
+            },
+          });
+
+          // Determine result type for metrics
+          const resultType = executionResult.success
+            ? 'success'
+            : executionResult.error?.includes('timeout')
+              ? 'timeout'
+              : executionResult.error?.includes('not allowed')
+                ? 'blocked'
+                : 'failure';
+
+          // Record execution metrics
+          recordExecution(
+            tenantId,
+            intent.intentType,
+            resultType,
+            executionDurationSeconds,
+            executionResult.resourceUsage.memoryPeakMb
+          );
+
+          // Update intent status based on execution result
+          if (executionResult.success) {
+            await intentService!.updateStatus(intent.id, intent.tenantId, 'completed', 'executing');
+
+            // Trigger webhook for completion
+            webhookService.notifyIntent('intent.completed', intentId, tenantId, {
+              outputs: executionResult.outputs,
+              resourceUsage: executionResult.resourceUsage,
+            }).catch((error) => {
+              jobLogger.warn({ error, intentId }, 'Failed to send completion webhook');
+            });
+
+            // Record audit event for successful execution
+            auditHelper.recordIntentEvent(
+              tenantId,
+              'intent.completed',
+              intentId,
+              { type: 'service', id: 'cognigate' },
+              {
+                outcome: 'success',
+                stateChange: {
+                  before: { status: 'executing' },
+                  after: { status: 'completed' },
+                },
+                metadata: {
+                  durationMs: executionResult.resourceUsage.wallTimeMs,
+                  memoryPeakMb: executionResult.resourceUsage.memoryPeakMb,
+                  cpuTimeMs: executionResult.resourceUsage.cpuTimeMs,
+                },
+              }
+            ).catch((auditError) => {
+              jobLogger.warn({ error: auditError }, 'Failed to record execution audit event');
+            });
+
+            jobLogger.info(
+              { intentId, durationMs: executionResult.resourceUsage.wallTimeMs },
+              'Intent execution completed successfully'
+            );
+          } else {
+            await intentService!.updateStatus(intent.id, intent.tenantId, 'failed', 'executing');
+
+            // Note: No webhook for execution failure - 'intent.failed' is not a supported webhook event type
+            // Failed executions are recorded in audit logs and metrics for observability
+
+            // Record audit event for failed execution
+            auditHelper.recordIntentEvent(
+              tenantId,
+              'intent.failed',
+              intentId,
+              { type: 'service', id: 'cognigate' },
+              {
+                outcome: 'failure',
+                reason: executionResult.error ?? 'Execution failed',
+                stateChange: {
+                  before: { status: 'executing' },
+                  after: { status: 'failed' },
+                },
+                metadata: {
+                  durationMs: executionResult.resourceUsage.wallTimeMs,
+                  errorType: resultType,
+                },
+              }
+            ).catch((auditError) => {
+              jobLogger.warn({ error: auditError }, 'Failed to record execution failure audit event');
+            });
+
+            jobLogger.error(
+              { intentId, error: executionResult.error },
+              'Intent execution failed'
+            );
+          }
+
+          updateExecutionsInProgress(tenantId, -1);
+          recordJobResult('execute', 'success', executionDurationSeconds);
+        } catch (error) {
+          updateExecutionsInProgress(tenantId, -1);
+          recordJobResult('execute', 'failure', (Date.now() - startTime) / 1000);
+          throw error;
+        }
+      });
+    },
+    {
+      connection: connection(),
+      concurrency: Math.min(concurrency, config.cognigate.maxConcurrent), // Respect Cognigate concurrency limit
+      lockDuration: config.cognigate.timeout + 10000, // Execution timeout + buffer
+      stalledInterval: config.cognigate.timeout + 15000,
+    }
+  );
+
+  executeWorker.on('failed', async (job, error) => {
+    if (!job) return;
+    const { intentId, tenantId } = job.data as { intentId: string; tenantId: string };
+    logger.error({ jobId: job.id, intentId, error: error.message }, 'Intent execution job failed');
+
+    if (job.attemptsMade >= config.intent.maxRetries) {
+      await moveToDeadLetterQueue(job, error, 'execute');
+      await markIntentFailed(intentId, tenantId, error);
+    }
+  });
+
+  workers.push(executeWorker);
+
   logger.info(
     { concurrency, lockDuration, maxRetries: config.intent.maxRetries },
     'Intent workers registered'
@@ -963,13 +1520,15 @@ export async function getQueueHealth(): Promise<{
   intake: { waiting: number; active: number; failed: number };
   evaluate: { waiting: number; active: number; failed: number };
   decision: { waiting: number; active: number; failed: number };
+  execute: { waiting: number; active: number; failed: number };
   deadLetter: { count: number };
 }> {
-  const [intakeCounts, evaluateCounts, decisionCounts, dlqCount] =
+  const [intakeCounts, evaluateCounts, decisionCounts, executeCounts, dlqCount] =
     await Promise.all([
       intentIntakeQueue.getJobCounts('waiting', 'active', 'failed'),
       intentEvaluateQueue.getJobCounts('waiting', 'active', 'failed'),
       intentDecisionQueue.getJobCounts('waiting', 'active', 'failed'),
+      intentExecuteQueue.getJobCounts('waiting', 'active', 'failed'),
       deadLetterQueue.getJobCounts('waiting'),
     ]);
 
@@ -977,6 +1536,7 @@ export async function getQueueHealth(): Promise<{
   updateQueueGauges('intake', intakeCounts.waiting ?? 0, intakeCounts.active ?? 0);
   updateQueueGauges('evaluate', evaluateCounts.waiting ?? 0, evaluateCounts.active ?? 0);
   updateQueueGauges('decision', decisionCounts.waiting ?? 0, decisionCounts.active ?? 0);
+  updateQueueGauges('execute', executeCounts.waiting ?? 0, executeCounts.active ?? 0);
   dlqSize.set(dlqCount.waiting ?? 0);
 
   return {
@@ -995,6 +1555,11 @@ export async function getQueueHealth(): Promise<{
       active: decisionCounts.active ?? 0,
       failed: decisionCounts.failed ?? 0,
     },
+    execute: {
+      waiting: executeCounts.waiting ?? 0,
+      active: executeCounts.active ?? 0,
+      failed: executeCounts.failed ?? 0,
+    },
     deadLetter: {
       count: dlqCount.waiting ?? 0,
     },
@@ -1011,10 +1576,8 @@ export async function retryDeadLetterJob(jobId: string): Promise<boolean> {
     return false;
   }
 
-  const { originalQueue, jobData } = job.data as {
-    originalQueue: string;
-    jobData: Record<string, unknown>;
-  };
+  const dlqData = job.data as DeadLetterJobData;
+  const { originalQueue, jobData } = dlqData;
 
   // Re-enqueue to original queue
   const targetQueue =
@@ -1022,13 +1585,105 @@ export async function retryDeadLetterJob(jobId: string): Promise<boolean> {
       ? intentIntakeQueue
       : originalQueue === 'evaluate'
         ? intentEvaluateQueue
-        : intentDecisionQueue;
+        : originalQueue === 'execute'
+          ? intentExecuteQueue
+          : intentDecisionQueue;
 
   await targetQueue.add('retry', jobData);
   await job.remove();
 
-  logger.info({ jobId, originalQueue }, 'Dead letter job retried');
+  // Update DLQ size metric after removal
+  const dlqCount = await deadLetterQueue.getJobCounts('waiting');
+  dlqSize.set(dlqCount.waiting ?? 0);
+
+  logger.info({ jobId, originalQueue, intentId: dlqData.intentId }, 'Dead letter job retried');
   return true;
+}
+
+/**
+ * Get dead letter queue jobs with pagination
+ */
+export async function getDeadLetterJobs(
+  limit: number = 50,
+  offset: number = 0
+): Promise<{
+  jobs: Array<{
+    id: string;
+    data: DeadLetterJobData;
+    addedAt: Date;
+  }>;
+  total: number;
+}> {
+  const jobs = await deadLetterQueue.getJobs(['waiting'], offset, offset + limit - 1);
+  const counts = await deadLetterQueue.getJobCounts('waiting');
+
+  return {
+    jobs: jobs.map((job) => ({
+      id: job.id ?? 'unknown',
+      data: job.data as DeadLetterJobData,
+      addedAt: new Date(job.timestamp),
+    })),
+    total: counts.waiting ?? 0,
+  };
+}
+
+/**
+ * Get dead letter queue jobs filtered by original queue
+ */
+export async function getDeadLetterJobsByQueue(
+  originalQueue: string,
+  limit: number = 50
+): Promise<Array<{
+  id: string;
+  data: DeadLetterJobData;
+  addedAt: Date;
+}>> {
+  // Get more jobs than limit since we're filtering
+  const jobs = await deadLetterQueue.getJobs(['waiting'], 0, limit * 3);
+
+  return jobs
+    .filter((job) => {
+      const data = job.data as DeadLetterJobData;
+      return data.originalQueue === originalQueue;
+    })
+    .slice(0, limit)
+    .map((job) => ({
+      id: job.id ?? 'unknown',
+      data: job.data as DeadLetterJobData,
+      addedAt: new Date(job.timestamp),
+    }));
+}
+
+/**
+ * Purge old dead letter queue jobs
+ * @param olderThanDays - Remove DLQ jobs older than this many days
+ * @returns Number of jobs removed
+ */
+export async function purgeOldDeadLetterJobs(olderThanDays: number): Promise<number> {
+  const cutoffTime = Date.now() - (olderThanDays * 24 * 60 * 60 * 1000);
+  const jobs = await deadLetterQueue.getJobs(['waiting']);
+
+  let removedCount = 0;
+  for (const job of jobs) {
+    const data = job.data as DeadLetterJobData;
+    const movedAt = new Date(data.movedToDlqAt).getTime();
+
+    if (movedAt < cutoffTime) {
+      await job.remove();
+      removedCount++;
+    }
+  }
+
+  // Update DLQ size metric after purge
+  const dlqCount = await deadLetterQueue.getJobCounts('waiting');
+  dlqSize.set(dlqCount.waiting ?? 0);
+
+  logger.info(
+    { removedCount, olderThanDays },
+    'Purged old dead letter queue jobs'
+  );
+
+  return removedCount;
 }
 
 /**
@@ -1073,4 +1728,48 @@ export async function forcePolicyCircuitBreakerClose(): Promise<void> {
 export async function resetPolicyCircuitBreaker(): Promise<void> {
   await policyCircuitBreaker.reset();
   logger.info({}, 'Policy circuit breaker reset');
+}
+
+/**
+ * Get the trust engine circuit breaker status
+ * Useful for health checks and monitoring
+ */
+export async function getTrustCircuitBreakerStatus(): Promise<{
+  name: string;
+  state: CircuitState;
+  failureCount: number;
+  failureThreshold: number;
+  resetTimeoutMs: number;
+  lastFailureTime: Date | null;
+  openedAt: Date | null;
+  timeUntilReset: number | null;
+}> {
+  return trustCircuitBreaker.getStatus();
+}
+
+/**
+ * Force the trust engine circuit breaker to open state
+ * Useful for manual intervention during incidents
+ */
+export async function forceTrustCircuitBreakerOpen(): Promise<void> {
+  await trustCircuitBreaker.forceOpen();
+  logger.warn({}, 'Trust engine circuit breaker forcibly opened');
+}
+
+/**
+ * Force the trust engine circuit breaker to closed state
+ * Useful for recovery after manual intervention
+ */
+export async function forceTrustCircuitBreakerClose(): Promise<void> {
+  await trustCircuitBreaker.forceClose();
+  logger.info({}, 'Trust engine circuit breaker forcibly closed');
+}
+
+/**
+ * Reset the trust engine circuit breaker state
+ * Clears all failure counts and state
+ */
+export async function resetTrustCircuitBreaker(): Promise<void> {
+  await trustCircuitBreaker.reset();
+  logger.info({}, 'Trust engine circuit breaker reset');
 }

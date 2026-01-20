@@ -236,6 +236,98 @@ export class IntentRepository {
     return rows.map(mapRow);
   }
 
+  /**
+   * Create multiple intents with their initial events in a single transaction.
+   *
+   * This method provides atomicity for bulk inserts - either all intents
+   * and events are created, or none are. This is the recommended method
+   * for enterprise batch operations where audit trail is required.
+   *
+   * @param intentsWithEvents - Array of intent data with corresponding event data
+   * @returns Array of created intents
+   */
+  async createIntentsBatchWithEvents(
+    intentsWithEvents: Array<{
+      intentData: NewIntentRow;
+      eventData: Omit<NewIntentEventRow, 'intentId'>;
+    }>
+  ): Promise<Intent[]> {
+    if (intentsWithEvents.length === 0) {
+      return [];
+    }
+
+    return await this.db.transaction(async (tx) => {
+      // Prepare encrypted intent data
+      const encryptedIntents = intentsWithEvents.map(({ intentData }) => ({
+        ...intentData,
+        context: encryptIfEnabled(intentData.context as Record<string, unknown>),
+        metadata: encryptIfEnabled((intentData.metadata ?? {}) as Record<string, unknown>),
+      }));
+
+      // Batch insert all intents
+      const intentRows = await tx.insert(intents).values(encryptedIntents).returning();
+
+      // Prepare event data with intent IDs and hashes
+      const eventRows = intentRows.map((intentRow, index) => {
+        const eventData = intentsWithEvents[index]?.eventData;
+        if (!eventData) {
+          throw new Error(`Missing event data for intent at index ${index}`);
+        }
+
+        const eventPayload = {
+          ...eventData,
+          intentId: intentRow.id,
+        };
+        const eventHash = computeHash(JSON.stringify(eventPayload));
+
+        return {
+          ...eventPayload,
+          hash: eventHash,
+          previousHash: null, // First event in chain
+        };
+      });
+
+      // Batch insert all events
+      await tx.insert(intentEvents).values(eventRows);
+
+      return intentRows.map(mapRow);
+    });
+  }
+
+  /**
+   * Record multiple events in a single batch operation.
+   *
+   * Note: This does NOT chain hashes across events - each event
+   * gets its own independent hash. For scenarios requiring event
+   * chain integrity, use recordEvent() individually.
+   *
+   * @param events - Array of events to record
+   */
+  async recordEventsBatch(events: NewIntentEventRow[]): Promise<void> {
+    if (events.length === 0) {
+      return;
+    }
+
+    // Compute hashes for all events (without chaining)
+    const eventsWithHashes = events.map((event) => {
+      const eventData = JSON.stringify({
+        intentId: event.intentId,
+        eventType: event.eventType,
+        payload: event.payload,
+        occurredAt: new Date().toISOString(),
+      });
+      const hash = computeHash(eventData);
+
+      return {
+        ...event,
+        hash,
+        previousHash: null, // Independent hashes for batch
+      };
+    });
+
+    await this.db.insert(intentEvents).values(eventsWithHashes);
+  }
+
   async findById(id: ID, tenantId: ID): Promise<Intent | null> {
     const [row] = await this.db
       .select()
@@ -350,6 +442,193 @@ export class IntentRepository {
       .returning();
 
     return row ? mapRow(row) : null;
+  }
+
+  /**
+   * Update status and record event atomically within a transaction.
+   * Ensures data integrity: either both operations succeed or neither does.
+   */
+  async updateStatusWithEvent(
+    id: ID,
+    tenantId: ID,
+    status: IntentStatus,
+    eventType: string,
+    eventPayload: Record<string, unknown>
+  ): Promise<Intent | null> {
+    return await this.db.transaction(async (tx) => {
+      // Update the intent status
+      const [row] = await tx
+        .update(intents)
+        .set({ status, updatedAt: new Date() })
+        .where(
+          and(
+            eq(intents.id, id),
+            eq(intents.tenantId, tenantId),
+            isNull(intents.deletedAt)
+          )
+        )
+        .returning();
+
+      if (!row) return null;
+
+      // Record the event with hash chain integrity (within same transaction)
+      const [lastEvent] = await tx
+        .select({ hash: intentEvents.hash })
+        .from(intentEvents)
+        .where(eq(intentEvents.intentId, id))
+        .orderBy(desc(intentEvents.occurredAt))
+        .limit(1)
+        .for('update');
+
+      const previousHash = lastEvent?.hash ?? '0'.repeat(64);
+      const eventData = JSON.stringify({
+        intentId: id,
+        eventType,
+        payload: eventPayload,
+        occurredAt: new Date().toISOString(),
+      });
+      const hash = computeChainedHash(eventData, previousHash);
+
+      await tx.insert(intentEvents).values({
+        intentId: id,
+        eventType,
+        payload: eventPayload,
+        hash,
+        previousHash,
+      });
+
+      return mapRow(row);
+    });
+  }
+
+  /**
+   * Cancel an intent and record evaluation + event atomically within a transaction.
+   * Ensures data integrity: either all operations succeed or none do.
+   */
+  async cancelIntentWithEvent(
+    id: ID,
+    tenantId: ID,
+    reason: string,
+    evaluationResult: Record<string, unknown>,
+    eventPayload: Record<string, unknown>
+  ): Promise<Intent | null> {
+    return await this.db.transaction(async (tx) => {
+      // Update the intent to cancelled status
+      const [row] = await tx
+        .update(intents)
+        .set({
+          status: 'cancelled',
+          cancellationReason: reason,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(intents.id, id),
+            eq(intents.tenantId, tenantId),
+            isNull(intents.deletedAt),
+            // Can only cancel pending, evaluating, or escalated intents
+            inArray(intents.status, ['pending', 'evaluating', 'escalated'])
+          )
+        )
+        .returning();
+
+      if (!row) return null;
+
+      // Record evaluation
+      await tx.insert(intentEvaluations).values({
+        intentId: id,
+        tenantId,
+        result: evaluationResult,
+      });
+
+      // Record the event with hash chain integrity
+      const [lastEvent] = await tx
+        .select({ hash: intentEvents.hash })
+        .from(intentEvents)
+        .where(eq(intentEvents.intentId, id))
+        .orderBy(desc(intentEvents.occurredAt))
+        .limit(1)
+        .for('update');
+
+      const previousHash = lastEvent?.hash ?? '0'.repeat(64);
+      const eventData = JSON.stringify({
+        intentId: id,
+        eventType: 'intent.cancelled',
+        payload: eventPayload,
+        occurredAt: new Date().toISOString(),
+      });
+      const hash = computeChainedHash(eventData, previousHash);
+
+      await tx.insert(intentEvents).values({
+        intentId: id,
+        eventType: 'intent.cancelled',
+        payload: eventPayload,
+        hash,
+        previousHash,
+      });
+
+      return mapRow(row);
+    });
+  }
+
+  /**
+   * Soft delete an intent and record event atomically within a transaction.
+   * Ensures data integrity: either both operations succeed or neither does.
+   */
+  async softDeleteWithEvent(id: ID, tenantId: ID): Promise<Intent | null> {
+    return await this.db.transaction(async (tx) => {
+      const deletedAt = new Date();
+
+      // Soft delete the intent
+      const [row] = await tx
+        .update(intents)
+        .set({
+          deletedAt,
+          updatedAt: new Date(),
+          // Clear sensitive data but keep audit trail
+          context: {},
+          metadata: {},
+        })
+        .where(
+          and(
+            eq(intents.id, id),
+            eq(intents.tenantId, tenantId),
+            isNull(intents.deletedAt)
+          )
+        )
+        .returning();
+
+      if (!row) return null;
+
+      // Record the event with hash chain integrity
+      const [lastEvent] = await tx
+        .select({ hash: intentEvents.hash })
+        .from(intentEvents)
+        .where(eq(intentEvents.intentId, id))
+        .orderBy(desc(intentEvents.occurredAt))
+        .limit(1)
+        .for('update');
+
+      const previousHash = lastEvent?.hash ?? '0'.repeat(64);
+      const eventPayload = { deletedAt: deletedAt.toISOString() };
+      const eventData = JSON.stringify({
+        intentId: id,
+        eventType: 'intent.deleted',
+        payload: eventPayload,
+        occurredAt: new Date().toISOString(),
+      });
+      const hash = computeChainedHash(eventData, previousHash);
+
+      await tx.insert(intentEvents).values({
+        intentId: id,
+        eventType: 'intent.deleted',
+        payload: eventPayload,
+        hash,
+        previousHash,
+      });
+
+      return mapRow(row);
+    });
   }
 
   /**
@@ -476,30 +755,36 @@ export class IntentRepository {
   }
 
   /**
-   * Record event with cryptographic hash for tamper detection
+   * Record event with cryptographic hash for tamper detection.
+   * Uses a transaction with row-level locking to prevent TOCTOU race conditions
+   * when multiple concurrent events try to chain to the same previous hash.
    */
   async recordEvent(event: NewIntentEventRow): Promise<void> {
-    // Get the last event for this intent to chain hashes
-    const [lastEvent] = await this.db
-      .select({ hash: intentEvents.hash })
-      .from(intentEvents)
-      .where(eq(intentEvents.intentId, event.intentId))
-      .orderBy(desc(intentEvents.occurredAt))
-      .limit(1);
+    await this.db.transaction(async (tx) => {
+      // Use FOR UPDATE to lock the last event row, preventing concurrent reads
+      // from seeing the same "last hash" before either insert completes
+      const [lastEvent] = await tx
+        .select({ hash: intentEvents.hash })
+        .from(intentEvents)
+        .where(eq(intentEvents.intentId, event.intentId))
+        .orderBy(desc(intentEvents.occurredAt))
+        .limit(1)
+        .for('update');
 
-    const previousHash = lastEvent?.hash ?? '0'.repeat(64);
-    const eventData = JSON.stringify({
-      intentId: event.intentId,
-      eventType: event.eventType,
-      payload: event.payload,
-      occurredAt: new Date().toISOString(),
-    });
-    const hash = computeChainedHash(eventData, previousHash);
+      const previousHash = lastEvent?.hash ?? '0'.repeat(64);
+      const eventData = JSON.stringify({
+        intentId: event.intentId,
+        eventType: event.eventType,
+        payload: event.payload,
+        occurredAt: new Date().toISOString(),
+      });
+      const hash = computeChainedHash(eventData, previousHash);
 
-    await this.db.insert(intentEvents).values({
-      ...event,
-      hash,
-      previousHash,
+      await tx.insert(intentEvents).values({
+        ...event,
+        hash,
+        previousHash,
+      });
     });
   }
 
@@ -551,55 +836,130 @@ export class IntentRepository {
   }
 
   /**
-   * Verify event chain integrity
+   * Configuration for event chain verification
    */
-  async verifyEventChain(intentId: ID): Promise<{
+  static readonly EVENT_CHAIN_VERIFICATION_BATCH_SIZE = 100;
+  static readonly EVENT_CHAIN_VERIFICATION_MAX_EVENTS = 10000;
+
+  /**
+   * Verify event chain integrity with pagination to prevent memory exhaustion.
+   *
+   * This method loads events in batches and verifies the hash chain incrementally,
+   * returning early on the first invalid hash. This prevents memory exhaustion
+   * for intents with thousands of events.
+   *
+   * @param intentId - The intent ID to verify events for
+   * @param options - Optional configuration
+   * @param options.batchSize - Number of events to load per batch (default: 100)
+   * @param options.maxEvents - Maximum events to verify before stopping (default: 10000)
+   * @returns Verification result with validity status and any error details
+   */
+  async verifyEventChain(
+    intentId: ID,
+    options?: {
+      batchSize?: number;
+      maxEvents?: number;
+    }
+  ): Promise<{
     valid: boolean;
     invalidAt?: number;
     error?: string;
+    eventsVerified?: number;
+    truncated?: boolean;
   }> {
-    const events = await this.db
-      .select()
-      .from(intentEvents)
-      .where(eq(intentEvents.intentId, intentId))
-      .orderBy(intentEvents.occurredAt);
+    const batchSize = options?.batchSize ?? IntentRepository.EVENT_CHAIN_VERIFICATION_BATCH_SIZE;
+    const maxEvents = options?.maxEvents ?? IntentRepository.EVENT_CHAIN_VERIFICATION_MAX_EVENTS;
 
     let previousHash = '0'.repeat(64);
+    let offset = 0;
+    let totalEventsVerified = 0;
+    let hasMoreEvents = true;
 
-    for (let i = 0; i < events.length; i++) {
-      const event = events[i];
-      if (!event) continue;
-
-      // Verify previous hash link
-      if (event.previousHash !== previousHash) {
+    while (hasMoreEvents) {
+      // Check if we've hit the max events limit
+      if (totalEventsVerified >= maxEvents) {
         return {
-          valid: false,
-          invalidAt: i,
-          error: `Chain broken at event ${i}: expected previousHash ${previousHash}, got ${event.previousHash}`,
+          valid: true,
+          eventsVerified: totalEventsVerified,
+          truncated: true,
+          error: `Verification stopped after ${maxEvents} events (limit reached). Chain valid up to this point.`,
         };
       }
 
-      // Verify event hash
-      const eventData = JSON.stringify({
-        intentId: event.intentId,
-        eventType: event.eventType,
-        payload: event.payload,
-        occurredAt: event.occurredAt?.toISOString(),
-      });
-      const expectedHash = computeChainedHash(eventData, previousHash);
+      // Calculate how many events to fetch in this batch
+      const remainingAllowed = maxEvents - totalEventsVerified;
+      const currentBatchSize = Math.min(batchSize, remainingAllowed);
 
-      if (event.hash !== expectedHash) {
-        return {
-          valid: false,
-          invalidAt: i,
-          error: `Hash mismatch at event ${i}: content may have been tampered`,
-        };
+      // Fetch a batch of events
+      const events = await this.db
+        .select()
+        .from(intentEvents)
+        .where(eq(intentEvents.intentId, intentId))
+        .orderBy(intentEvents.occurredAt)
+        .limit(currentBatchSize + 1) // Fetch one extra to detect if there are more
+        .offset(offset);
+
+      // Check if there are more events after this batch
+      hasMoreEvents = events.length > currentBatchSize;
+      const eventsToProcess = hasMoreEvents ? events.slice(0, currentBatchSize) : events;
+
+      // If no events in first batch, return valid (empty chain is valid)
+      if (eventsToProcess.length === 0 && offset === 0) {
+        return { valid: true, eventsVerified: 0 };
       }
 
-      previousHash = event.hash ?? previousHash;
+      // If no more events to process, we're done
+      if (eventsToProcess.length === 0) {
+        break;
+      }
+
+      // Verify each event in the batch
+      for (let i = 0; i < eventsToProcess.length; i++) {
+        const event = eventsToProcess[i];
+        if (!event) continue;
+
+        const globalIndex = offset + i;
+
+        // Verify previous hash link
+        if (event.previousHash !== previousHash) {
+          return {
+            valid: false,
+            invalidAt: globalIndex,
+            eventsVerified: globalIndex,
+            error: `Chain broken at event ${globalIndex}: expected previousHash ${previousHash}, got ${event.previousHash}`,
+          };
+        }
+
+        // Verify event hash
+        const eventData = JSON.stringify({
+          intentId: event.intentId,
+          eventType: event.eventType,
+          payload: event.payload,
+          occurredAt: event.occurredAt?.toISOString(),
+        });
+        const expectedHash = computeChainedHash(eventData, previousHash);
+
+        if (event.hash !== expectedHash) {
+          return {
+            valid: false,
+            invalidAt: globalIndex,
+            eventsVerified: globalIndex,
+            error: `Hash mismatch at event ${globalIndex}: content may have been tampered`,
+          };
+        }
+
+        previousHash = event.hash ?? previousHash;
+        totalEventsVerified++;
+      }
+
+      // Move to next batch
+      offset += eventsToProcess.length;
     }
 
-    return { valid: true };
+    return {
+      valid: true,
+      eventsVerified: totalEventsVerified,
+    };
   }
 
   async updateTrustMetadata(

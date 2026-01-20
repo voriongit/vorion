@@ -91,16 +91,25 @@ vi.mock('../../../src/common/db.js', () => ({
   checkDatabaseHealth: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
-vi.mock('../../../src/intent/metrics.js', () => ({
-  recordIntentSubmission: vi.fn(),
-  recordTrustGateEvaluation: vi.fn(),
-  recordStatusTransition: vi.fn(),
-  recordError: vi.fn(),
-  recordLockContention: vi.fn(),
-  recordTrustGateBypass: vi.fn(),
-  recordDeduplication: vi.fn(),
-  recordIntentContextSize: vi.fn(),
-}));
+vi.mock('../../../src/intent/metrics.js', () => {
+  // Create a mock registry that Histogram can use
+  const mockRegistry = {
+    registerMetric: vi.fn(),
+    getSingleMetricAsString: vi.fn().mockResolvedValue(''),
+    contentType: 'text/plain',
+  };
+  return {
+    recordIntentSubmission: vi.fn(),
+    recordTrustGateEvaluation: vi.fn(),
+    recordStatusTransition: vi.fn(),
+    recordError: vi.fn(),
+    recordLockContention: vi.fn(),
+    recordTrustGateBypass: vi.fn(),
+    recordDeduplication: vi.fn(),
+    recordIntentContextSize: vi.fn(),
+    intentRegistry: mockRegistry,
+  };
+});
 
 vi.mock('../../../src/common/logger.js', () => ({
   createLogger: vi.fn(() => ({

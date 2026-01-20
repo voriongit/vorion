@@ -84,6 +84,50 @@ export const trustLevelAtSubmission = new Histogram({
   registers: [intentRegistry],
 });
 
+/**
+ * Trust drift at decision time - measures difference between intake snapshot and live score
+ * Positive values indicate trust degradation (live < snapshot)
+ * Negative values indicate trust improvement (live > snapshot)
+ */
+export const trustDriftAtDecision = new Histogram({
+  name: 'vorion_trust_drift_at_decision',
+  help: 'Trust score drift between intake snapshot and decision-time live score (positive = degradation)',
+  labelNames: ['tenant_id', 'intent_type'] as const,
+  buckets: [-100, -50, -20, -10, 0, 10, 20, 50, 100, 200, 500],
+  registers: [intentRegistry],
+});
+
+/**
+ * Trust degradation events - counts significant trust drops at decision time
+ */
+export const trustDegradationEventsTotal = new Counter({
+  name: 'vorion_trust_degradation_events_total',
+  help: 'Total trust degradation events detected at decision time',
+  labelNames: ['tenant_id', 'intent_type', 'severity'] as const, // severity: minor, moderate, severe
+  registers: [intentRegistry],
+});
+
+/**
+ * Trust level changes between intake and decision
+ */
+export const trustLevelChangeAtDecision = new Counter({
+  name: 'vorion_trust_level_change_at_decision_total',
+  help: 'Trust level changes detected between intake snapshot and decision time',
+  labelNames: ['tenant_id', 'intent_type', 'direction'] as const, // direction: improved, degraded, unchanged
+  registers: [intentRegistry],
+});
+
+/**
+ * Decision-time trust fetch latency
+ */
+export const decisionTimeTrustFetchDuration = new Histogram({
+  name: 'vorion_decision_time_trust_fetch_duration_seconds',
+  help: 'Time to fetch live trust score at decision time',
+  labelNames: ['tenant_id', 'source'] as const, // source: cache, engine
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+  registers: [intentRegistry],
+});
+
 // ============================================================================
 // Queue Metrics
 // ============================================================================
@@ -619,6 +663,52 @@ export const serviceCircuitBreakerHalfOpenAttempts = new Gauge({
 });
 
 // ============================================================================
+// Cognigate Execution Metrics
+// ============================================================================
+
+/**
+ * Execution attempts total
+ */
+export const executionsTotal = new Counter({
+  name: 'vorion_executions_total',
+  help: 'Total execution attempts through Cognigate',
+  labelNames: ['tenant_id', 'intent_type', 'result'] as const, // result: success, failure, blocked, timeout
+  registers: [intentRegistry],
+});
+
+/**
+ * Execution duration histogram
+ */
+export const executionDuration = new Histogram({
+  name: 'vorion_execution_duration_seconds',
+  help: 'Time to execute intents through Cognigate',
+  labelNames: ['tenant_id', 'intent_type'] as const,
+  buckets: [0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300],
+  registers: [intentRegistry],
+});
+
+/**
+ * Execution resource usage - memory peak
+ */
+export const executionMemoryPeak = new Histogram({
+  name: 'vorion_execution_memory_peak_mb',
+  help: 'Peak memory usage during execution in MB',
+  labelNames: ['tenant_id', 'intent_type'] as const,
+  buckets: [16, 32, 64, 128, 256, 512, 1024, 2048],
+  registers: [intentRegistry],
+});
+
+/**
+ * Current executions in progress (gauge)
+ */
+export const executionsInProgress = new Gauge({
+  name: 'vorion_executions_in_progress',
+  help: 'Number of executions currently in progress',
+  labelNames: ['tenant_id'] as const,
+  registers: [intentRegistry],
+});
+
+// ============================================================================
 // Error Metrics
 // ============================================================================
 
@@ -629,6 +719,53 @@ export const errorsTotal = new Counter({
   name: 'vorion_intent_errors_total',
   help: 'Total errors in intent processing',
   labelNames: ['error_code', 'component'] as const,
+  registers: [intentRegistry],
+});
+
+// ============================================================================
+// Batch Operation Metrics
+// ============================================================================
+
+/**
+ * Batch operations total
+ */
+export const batchOperationsTotal = new Counter({
+  name: 'vorion_batch_operations_total',
+  help: 'Total batch operations',
+  labelNames: ['tenant_id', 'operation', 'result'] as const, // operation: submit, result: success, partial, failure
+  registers: [intentRegistry],
+});
+
+/**
+ * Batch operation size (number of items)
+ */
+export const batchOperationSize = new Histogram({
+  name: 'vorion_batch_operation_size',
+  help: 'Number of items in batch operations',
+  labelNames: ['tenant_id', 'operation'] as const,
+  buckets: [1, 5, 10, 20, 50, 100],
+  registers: [intentRegistry],
+});
+
+/**
+ * Batch operation duration
+ */
+export const batchOperationDuration = new Histogram({
+  name: 'vorion_batch_operation_duration_seconds',
+  help: 'Duration of batch operations',
+  labelNames: ['tenant_id', 'operation'] as const,
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  registers: [intentRegistry],
+});
+
+/**
+ * Batch operation items per second
+ */
+export const batchOperationThroughput = new Histogram({
+  name: 'vorion_batch_operation_throughput',
+  help: 'Items processed per second in batch operations',
+  labelNames: ['tenant_id', 'operation'] as const,
+  buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000],
   registers: [intentRegistry],
 });
 
@@ -742,6 +879,93 @@ export function recordTrustGateEvaluation(
     intent_type: intentType ?? 'default',
     result,
   });
+}
+
+/**
+ * Severity thresholds for trust degradation (in score points)
+ */
+const TRUST_DEGRADATION_THRESHOLDS = {
+  minor: 20, // 20-49 point drop
+  moderate: 50, // 50-99 point drop
+  severe: 100, // 100+ point drop
+};
+
+/**
+ * Record trust drift metrics at decision time
+ *
+ * @param tenantId - Tenant identifier
+ * @param intentType - Type of intent
+ * @param snapshotScore - Trust score captured at intake
+ * @param liveScore - Trust score fetched at decision time
+ * @param snapshotLevel - Trust level at intake
+ * @param liveLevel - Trust level at decision time
+ */
+export function recordTrustDrift(
+  tenantId: string,
+  intentType: string | null | undefined,
+  snapshotScore: number,
+  liveScore: number,
+  snapshotLevel: number,
+  liveLevel: number
+): void {
+  const drift = snapshotScore - liveScore; // positive = degradation
+  const type = intentType ?? 'default';
+
+  // Record the drift histogram
+  trustDriftAtDecision.observe(
+    { tenant_id: tenantId, intent_type: type },
+    drift
+  );
+
+  // Record level change direction
+  let direction: 'improved' | 'degraded' | 'unchanged';
+  if (liveLevel > snapshotLevel) {
+    direction = 'improved';
+  } else if (liveLevel < snapshotLevel) {
+    direction = 'degraded';
+  } else {
+    direction = 'unchanged';
+  }
+  trustLevelChangeAtDecision.inc({
+    tenant_id: tenantId,
+    intent_type: type,
+    direction,
+  });
+
+  // Record degradation event if significant
+  if (drift >= TRUST_DEGRADATION_THRESHOLDS.severe) {
+    trustDegradationEventsTotal.inc({
+      tenant_id: tenantId,
+      intent_type: type,
+      severity: 'severe',
+    });
+  } else if (drift >= TRUST_DEGRADATION_THRESHOLDS.moderate) {
+    trustDegradationEventsTotal.inc({
+      tenant_id: tenantId,
+      intent_type: type,
+      severity: 'moderate',
+    });
+  } else if (drift >= TRUST_DEGRADATION_THRESHOLDS.minor) {
+    trustDegradationEventsTotal.inc({
+      tenant_id: tenantId,
+      intent_type: type,
+      severity: 'minor',
+    });
+  }
+}
+
+/**
+ * Record decision-time trust fetch duration
+ */
+export function recordDecisionTimeTrustFetch(
+  tenantId: string,
+  source: 'cache' | 'engine',
+  durationSeconds: number
+): void {
+  decisionTimeTrustFetchDuration.observe(
+    { tenant_id: tenantId, source },
+    durationSeconds
+  );
 }
 
 /**
@@ -1105,6 +1329,46 @@ export function recordServiceCircuitBreakerStateChange(
   }
 }
 
+// ============================================================================
+// Batch Operation Metrics Helper Functions
+// ============================================================================
+
+/**
+ * Record a batch operation with timing and throughput metrics
+ */
+export function recordBatchOperation(
+  tenantId: string,
+  operation: 'submit' | 'validate' | 'enqueue',
+  result: 'success' | 'partial' | 'failure',
+  itemCount: number,
+  durationSeconds: number
+): void {
+  batchOperationsTotal.inc({
+    tenant_id: tenantId,
+    operation,
+    result,
+  });
+
+  batchOperationSize.observe(
+    { tenant_id: tenantId, operation },
+    itemCount
+  );
+
+  batchOperationDuration.observe(
+    { tenant_id: tenantId, operation },
+    durationSeconds
+  );
+
+  // Calculate and record throughput (items per second)
+  if (durationSeconds > 0) {
+    const throughput = itemCount / durationSeconds;
+    batchOperationThroughput.observe(
+      { tenant_id: tenantId, operation },
+      throughput
+    );
+  }
+}
+
 /**
  * Get all metrics as Prometheus text format
  */
@@ -1117,4 +1381,42 @@ export async function getMetrics(): Promise<string> {
  */
 export function getMetricsContentType(): string {
   return intentRegistry.contentType;
+}
+
+// ============================================================================
+// Execution Metrics Helper Functions
+// ============================================================================
+
+/**
+ * Record execution attempt result
+ */
+export function recordExecution(
+  tenantId: string,
+  intentType: string | null | undefined,
+  result: 'success' | 'failure' | 'blocked' | 'timeout',
+  durationSeconds: number,
+  memoryPeakMb?: number
+): void {
+  executionsTotal.inc({
+    tenant_id: tenantId,
+    intent_type: intentType ?? 'default',
+    result,
+  });
+  executionDuration.observe(
+    { tenant_id: tenantId, intent_type: intentType ?? 'default' },
+    durationSeconds
+  );
+  if (memoryPeakMb !== undefined && memoryPeakMb > 0) {
+    executionMemoryPeak.observe(
+      { tenant_id: tenantId, intent_type: intentType ?? 'default' },
+      memoryPeakMb
+    );
+  }
+}
+
+/**
+ * Update executions in progress gauge
+ */
+export function updateExecutionsInProgress(tenantId: string, delta: number): void {
+  executionsInProgress.inc({ tenant_id: tenantId }, delta);
 }

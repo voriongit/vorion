@@ -9,6 +9,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { createLogger } from '../common/logger.js';
 import { getConfig } from '../common/config.js';
+import { createTokenRevocationService, validateJti } from '../common/token-revocation.js';
 
 const logger = createLogger({ component: 'auth' });
 
@@ -28,6 +29,7 @@ export interface AuthContext {
 interface JwtPayload {
   sub: string; // userId
   tid: string; // tenantId
+  jti?: string; // JWT ID for revocation tracking
   roles?: string[];
   permissions?: string[];
   iat?: number;
@@ -161,6 +163,77 @@ export async function authenticate(
       },
     });
     return;
+  }
+
+  // Check token revocation
+  try {
+    const revocationService = createTokenRevocationService();
+
+    // Check if specific token has been revoked (by jti)
+    const jtiValidation = validateJti(payload, config);
+    if (!jtiValidation.valid) {
+      reply.status(401).send({
+        error: {
+          code: 'INVALID_TOKEN',
+          message: jtiValidation.error ?? 'Invalid token',
+        },
+      });
+      return;
+    }
+
+    if (jtiValidation.jti) {
+      const isTokenRevoked = await revocationService.isRevoked(jtiValidation.jti);
+      if (isTokenRevoked) {
+        logger.warn(
+          { jti: jtiValidation.jti, userId: payload.sub, requestId: request.id },
+          'Revoked token used'
+        );
+        reply.status(401).send({
+          error: {
+            code: 'TOKEN_REVOKED',
+            message: 'Token has been revoked',
+          },
+        });
+        return;
+      }
+    }
+
+    // Check if user's tokens have been revoked (by iat)
+    if (payload.iat) {
+      const issuedAt = new Date(payload.iat * 1000);
+      const isUserRevoked = await revocationService.isUserTokenRevoked(payload.sub, issuedAt);
+      if (isUserRevoked) {
+        logger.warn(
+          { userId: payload.sub, issuedAt: issuedAt.toISOString(), requestId: request.id },
+          'User token revoked (issued before revocation timestamp)'
+        );
+        reply.status(401).send({
+          error: {
+            code: 'TOKEN_REVOKED',
+            message: 'Token has been revoked',
+          },
+        });
+        return;
+      }
+    }
+  } catch (error) {
+    // Handle revocation check errors based on environment
+    if (config.env === 'production') {
+      logger.error({ error, requestId: request.id }, 'Token revocation check failed');
+      reply.status(401).send({
+        error: {
+          code: 'TOKEN_VERIFICATION_FAILED',
+          message: 'Unable to verify token status',
+        },
+      });
+      return;
+    } else {
+      // In development, log warning but allow through
+      logger.warn(
+        { error, requestId: request.id },
+        'Token revocation check failed (allowing in dev)'
+      );
+    }
   }
 
   // Set auth context
