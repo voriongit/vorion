@@ -37,15 +37,15 @@ export enum ObservationTier {
 }
 
 /**
- * Trust ceiling values for each observation tier
+ * Trust ceiling values for each observation tier (0-1000 scale)
  * Updated per ATSF v2.0 Red Team Assessment findings
  */
 export const OBSERVATION_CEILINGS: Record<ObservationTier, number> = {
-  [ObservationTier.BLACK_BOX]: 60,
-  [ObservationTier.GRAY_BOX]: 75,
-  [ObservationTier.WHITE_BOX]: 90,     // Reduced from 95 (sleeper agent risk)
-  [ObservationTier.ATTESTED_BOX]: 95,  // Reduced from 100 (TEE side-channel risk)
-  [ObservationTier.VERIFIED_BOX]: 100, // New: requires full verification stack
+  [ObservationTier.BLACK_BOX]: 600,
+  [ObservationTier.GRAY_BOX]: 750,
+  [ObservationTier.WHITE_BOX]: 900,     // Reduced from 950 (sleeper agent risk)
+  [ObservationTier.ATTESTED_BOX]: 950,  // Reduced from 1000 (TEE side-channel risk)
+  [ObservationTier.VERIFIED_BOX]: 1000, // New: requires full verification stack
 };
 
 /**

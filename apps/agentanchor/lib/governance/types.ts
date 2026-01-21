@@ -3,11 +3,26 @@
  */
 
 // =============================================================================
-// Trust System
+// Trust System - Canonical Types (aligned with @vorion/contracts)
 // =============================================================================
 
+/**
+ * Canonical TrustBand aligned with @vorion/contracts
+ * Uses 6-band T0-T5 system based on 0-100 score scale
+ */
+export type TrustBand =
+  | 'T0_UNTRUSTED'      // 0-20: No autonomy
+  | 'T1_SUPERVISED'     // 21-40: Full human oversight
+  | 'T2_CONSTRAINED'    // 41-55: Limited autonomy
+  | 'T3_TRUSTED'        // 56-70: Moderate autonomy
+  | 'T4_AUTONOMOUS'     // 71-85: High autonomy
+  | 'T5_MISSION_CRITICAL'; // 86-100: Full autonomy
+
+/**
+ * @deprecated Use TrustBand instead. Legacy tier names for backwards compatibility.
+ */
 export type TrustTier =
-  | 'untrusted'    // 0-199
+  | 'untrusted'    // 0-199 (legacy 0-1000 scale)
   | 'provisional'  // 200-399
   | 'established'  // 400-599
   | 'trusted'      // 600-799
@@ -15,13 +30,34 @@ export type TrustTier =
   | 'certified';   // 900-1000
 
 export interface TrustContext {
+  /** Current trust score (canonical 0-100 scale) */
   score: number;
+  /** Canonical trust band */
+  band: TrustBand;
+  /** @deprecated Use band instead */
   tier: TrustTier;
   lastActivity: Date;
   decayApplied: boolean;
-  effectiveScore: number; // After decay calculation
+  /** Score after decay calculation (canonical 0-100 scale) */
+  effectiveScore: number;
 }
 
+/**
+ * Canonical trust band thresholds aligned with @vorion/contracts
+ * Uses 0-100 scale per ATSF v2.0
+ */
+export const TRUST_BAND_THRESHOLDS: Record<TrustBand, { min: number; max: number }> = {
+  T0_UNTRUSTED: { min: 0, max: 20 },
+  T1_SUPERVISED: { min: 21, max: 40 },
+  T2_CONSTRAINED: { min: 41, max: 55 },
+  T3_TRUSTED: { min: 56, max: 70 },
+  T4_AUTONOMOUS: { min: 71, max: 85 },
+  T5_MISSION_CRITICAL: { min: 86, max: 100 },
+};
+
+/**
+ * @deprecated Use TRUST_BAND_THRESHOLDS instead. Legacy tier thresholds (0-1000 scale).
+ */
 export const TRUST_TIER_THRESHOLDS: Record<TrustTier, { min: number; max: number }> = {
   untrusted: { min: 0, max: 199 },
   provisional: { min: 200, max: 399 },
@@ -31,10 +67,26 @@ export const TRUST_TIER_THRESHOLDS: Record<TrustTier, { min: number; max: number
   certified: { min: 900, max: 1000 },
 };
 
+/**
+ * Maps legacy TrustTier to canonical TrustBand
+ */
+export const LEGACY_GOVERNANCE_TIER_TO_BAND: Record<TrustTier, TrustBand> = {
+  untrusted: 'T0_UNTRUSTED',
+  provisional: 'T1_SUPERVISED',
+  established: 'T2_CONSTRAINED',
+  trusted: 'T3_TRUSTED',
+  verified: 'T4_AUTONOMOUS',
+  certified: 'T5_MISSION_CRITICAL',
+};
+
 // =============================================================================
-// Risk Assessment
+// Risk Assessment - Canonical Types (aligned with @vorion/contracts)
 // =============================================================================
 
+/**
+ * Canonical RiskLevel - string union type
+ * Aligned with @vorion/contracts governance patterns
+ */
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
 export interface RiskAssessment {
@@ -44,11 +96,37 @@ export interface RiskAssessment {
   escalateTo: 'council' | 'human' | null;
 }
 
+/**
+ * Canonical risk autonomy requirements using 0-100 score scale
+ * Aligned with TRUST_BAND_THRESHOLDS
+ */
 export const RISK_AUTONOMY_REQUIREMENTS: Record<RiskLevel, number> = {
-  low: 0,        // Any trust level
-  medium: 400,   // Established+
-  high: 600,     // Trusted+
-  critical: 900, // Certified only (with human oversight)
+  low: 0,        // Any trust level (T0+)
+  medium: 41,    // T2_CONSTRAINED+
+  high: 56,      // T3_TRUSTED+
+  critical: 86,  // T5_MISSION_CRITICAL only (with human oversight)
+};
+
+/**
+ * @deprecated Use RISK_AUTONOMY_REQUIREMENTS instead. Legacy thresholds (0-1000 scale).
+ */
+export const LEGACY_RISK_AUTONOMY_REQUIREMENTS: Record<RiskLevel, number> = {
+  low: 0,
+  medium: 400,
+  high: 600,
+  critical: 900,
+};
+
+/**
+ * Maps canonical TrustBand to maximum allowed RiskLevel
+ */
+export const BAND_TO_MAX_RISK: Record<TrustBand, RiskLevel> = {
+  T0_UNTRUSTED: 'low',
+  T1_SUPERVISED: 'low',
+  T2_CONSTRAINED: 'medium',
+  T3_TRUSTED: 'high',
+  T4_AUTONOMOUS: 'high',
+  T5_MISSION_CRITICAL: 'critical',
 };
 
 // =============================================================================
@@ -109,7 +187,10 @@ export interface Capability {
   name: string;
   description: string;
   riskLevel: RiskLevel;
-  requiredTrustTier: TrustTier;
+  /** Required canonical trust band */
+  requiredTrustBand: TrustBand;
+  /** @deprecated Use requiredTrustBand instead */
+  requiredTrustTier?: TrustTier;
   toolDefinition?: ToolDefinition;
 }
 

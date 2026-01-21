@@ -1,6 +1,10 @@
 /**
  * Common types used throughout Vorion
  *
+ * These types provide backwards compatibility with legacy code.
+ * For new code, prefer using canonical types from @vorion/contracts.
+ *
+ * @see {@link @vorion/contracts} for canonical type definitions
  * @packageDocumentation
  */
 
@@ -17,12 +21,16 @@ export type Timestamp = string;
 /**
  * Trust level (L0-L5)
  *
- * - L0: Untrusted (0-166)
- * - L1: Observed (167-332)
- * - L2: Limited (333-499)
- * - L3: Standard (500-665)
- * - L4: Trusted (666-832)
- * - L5: Certified (833-1000)
+ * Legacy trust level representation using numeric values 0-5.
+ * Maps to canonical TrustBand enum from @vorion/contracts:
+ * - L0/T0: Untrusted (0-20)
+ * - L1/T1: Supervised (21-40)
+ * - L2/T2: Constrained (41-55)
+ * - L3/T3: Trusted (56-70)
+ * - L4/T4: Autonomous (71-85)
+ * - L5/T5: Mission Critical (86-100)
+ *
+ * @see {@link @vorion/contracts!TrustBand} for canonical enum
  */
 export type TrustLevel = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -38,6 +46,10 @@ export type EntityType = 'agent' | 'user' | 'service' | 'system';
 
 /**
  * Intent status
+ *
+ * Represents the lifecycle states of an intent through the governance pipeline.
+ *
+ * @see {@link @vorion/contracts!Intent} for canonical intent definition
  */
 export type IntentStatus =
   | 'pending'
@@ -47,7 +59,8 @@ export type IntentStatus =
   | 'escalated'
   | 'executing'
   | 'completed'
-  | 'failed';
+  | 'failed'
+  | 'cancelled';
 
 /**
  * Control action types
@@ -187,19 +200,31 @@ export interface Proof {
 
 /**
  * Trust signal for scoring
+ *
+ * Represents evidence that affects trust score calculation.
+ * Maps to canonical TrustEvidence from @vorion/contracts.
+ *
+ * @see {@link @vorion/contracts!TrustEvidence} for canonical evidence type
  */
 export interface TrustSignal {
   id: ID;
   entityId: ID;
   type: string;
   value: number;
-  source: string;
+  /** Source of the signal (optional for backwards compatibility) */
+  source?: string;
   timestamp: Timestamp;
-  metadata: Record<string, unknown>;
+  /** Additional metadata (optional for backwards compatibility) */
+  metadata?: Record<string, unknown>;
 }
 
 /**
- * Trust score breakdown
+ * Trust score breakdown (Legacy 4-dimension model)
+ *
+ * @deprecated Prefer using canonical 5-dimension TrustDimensions from @vorion/contracts
+ * which includes: CT (Capability), BT (Behavioral), GT (Governance), XT (Contextual), AC (Assurance)
+ *
+ * @see {@link @vorion/contracts!TrustDimensions} for canonical 5-dimension model
  */
 export interface TrustComponents {
   behavioral: number;
@@ -207,6 +232,15 @@ export interface TrustComponents {
   identity: number;
   context: number;
 }
+
+/**
+ * Risk level for operations
+ *
+ * Maps to canonical RiskProfile from @vorion/contracts.
+ *
+ * @see {@link @vorion/contracts!RiskProfile} for canonical risk levels
+ */
+export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
 /**
  * Error types

@@ -7,6 +7,23 @@
 
 export type AgentStatus = 'draft' | 'training' | 'active' | 'suspended' | 'archived'
 export type MaintenanceFlag = 'author' | 'delegated' | 'platform' | 'none'
+
+/**
+ * Canonical TrustBand aligned with @vorion/contracts
+ * Uses 6-band T0-T5 system based on 0-100 score scale
+ */
+export type TrustBand =
+  | 'T0_UNTRUSTED'      // 0-20: No autonomy
+  | 'T1_SUPERVISED'     // 21-40: Full human oversight
+  | 'T2_CONSTRAINED'    // 41-55: Limited autonomy
+  | 'T3_TRUSTED'        // 56-70: Moderate autonomy
+  | 'T4_AUTONOMOUS'     // 71-85: High autonomy
+  | 'T5_MISSION_CRITICAL' // 86-100: Full autonomy
+
+/**
+ * @deprecated Use TrustBand instead. Legacy tier names for backwards compatibility.
+ * Will be removed in next major version.
+ */
 export type TrustTier = 'untrusted' | 'novice' | 'proven' | 'trusted' | 'elite' | 'legendary'
 
 export interface Agent {
@@ -200,6 +217,23 @@ export interface AgentListResponse {
 // Constants
 // ============================================================================
 
+/**
+ * Canonical trust band thresholds aligned with @vorion/contracts
+ * Uses 0-100 scale with asymmetric band widths per ATSF v2.0
+ */
+export const TRUST_BANDS: Record<TrustBand, { min: number; max: number; label: string; color: string }> = {
+  T0_UNTRUSTED: { min: 0, max: 20, label: 'Untrusted', color: 'gray' },
+  T1_SUPERVISED: { min: 21, max: 40, label: 'Supervised', color: 'yellow' },
+  T2_CONSTRAINED: { min: 41, max: 55, label: 'Constrained', color: 'orange' },
+  T3_TRUSTED: { min: 56, max: 70, label: 'Trusted', color: 'blue' },
+  T4_AUTONOMOUS: { min: 71, max: 85, label: 'Autonomous', color: 'green' },
+  T5_MISSION_CRITICAL: { min: 86, max: 100, label: 'Mission Critical', color: 'purple' },
+}
+
+/**
+ * @deprecated Use TRUST_BANDS instead. Legacy tier definitions for backwards compatibility.
+ * Note: These use 0-1000 scale, new TRUST_BANDS use 0-100 scale.
+ */
 export const TRUST_TIERS: Record<TrustTier, { min: number; max: number; label: string; color: string }> = {
   untrusted: { min: 0, max: 199, label: 'Untrusted', color: 'gray' },
   novice: { min: 200, max: 399, label: 'Novice', color: 'yellow' },
@@ -207,6 +241,30 @@ export const TRUST_TIERS: Record<TrustTier, { min: number; max: number; label: s
   trusted: { min: 600, max: 799, label: 'Trusted', color: 'green' },
   elite: { min: 800, max: 899, label: 'Elite', color: 'purple' },
   legendary: { min: 900, max: 1000, label: 'Legendary', color: 'gold' },
+}
+
+/**
+ * Maps legacy TrustTier names to canonical TrustBand values
+ */
+export const LEGACY_TIER_TO_BAND: Record<TrustTier, TrustBand> = {
+  untrusted: 'T0_UNTRUSTED',
+  novice: 'T1_SUPERVISED',
+  proven: 'T2_CONSTRAINED',
+  trusted: 'T3_TRUSTED',
+  elite: 'T4_AUTONOMOUS',
+  legendary: 'T5_MISSION_CRITICAL',
+}
+
+/**
+ * Maps canonical TrustBand values to legacy TrustTier names
+ */
+export const BAND_TO_LEGACY_TIER: Record<TrustBand, TrustTier> = {
+  T0_UNTRUSTED: 'untrusted',
+  T1_SUPERVISED: 'novice',
+  T2_CONSTRAINED: 'proven',
+  T3_TRUSTED: 'trusted',
+  T4_AUTONOMOUS: 'elite',
+  T5_MISSION_CRITICAL: 'legendary',
 }
 
 export const SPECIALIZATIONS = [
@@ -262,6 +320,23 @@ export const STATUS_LABELS: Record<AgentStatus, { label: string; color: string }
 // Utility Functions
 // ============================================================================
 
+/**
+ * Get canonical TrustBand from a 0-100 score
+ * Aligned with @vorion/contracts band thresholds
+ */
+export function getTrustBandFromScore(score: number): TrustBand {
+  if (score <= 20) return 'T0_UNTRUSTED'
+  if (score <= 40) return 'T1_SUPERVISED'
+  if (score <= 55) return 'T2_CONSTRAINED'
+  if (score <= 70) return 'T3_TRUSTED'
+  if (score <= 85) return 'T4_AUTONOMOUS'
+  return 'T5_MISSION_CRITICAL'
+}
+
+/**
+ * @deprecated Use getTrustBandFromScore instead.
+ * Get legacy TrustTier from a 0-1000 score (legacy scale)
+ */
 export function getTrustTierFromScore(score: number): TrustTier {
   if (score < 200) return 'untrusted'
   if (score < 400) return 'novice'
@@ -269,6 +344,20 @@ export function getTrustTierFromScore(score: number): TrustTier {
   if (score < 800) return 'trusted'
   if (score < 900) return 'elite'
   return 'legendary'
+}
+
+/**
+ * Convert legacy 0-1000 score to canonical 0-100 score
+ */
+export function convertLegacyScore(legacyScore: number): number {
+  return Math.round(legacyScore / 10)
+}
+
+/**
+ * Convert canonical 0-100 score to legacy 0-1000 score
+ */
+export function convertToLegacyScore(canonicalScore: number): number {
+  return canonicalScore * 10
 }
 
 export function getNextCertificationLevel(current: number): number {

@@ -1,5 +1,11 @@
 /**
  * Bot Trust System - TypeScript Type Definitions
+ *
+ * CANONICAL ALIGNMENT NOTE:
+ * This module aligns with @vorion/contracts canonical types:
+ * - TrustScore: 0-100 scale (not 300-1000)
+ * - RiskLevel: 'low' | 'medium' | 'high' | 'critical' string union
+ * - AutonomyLevel: Maps to TrustBand T0-T5
  */
 
 export enum DecisionType {
@@ -9,6 +15,9 @@ export enum DecisionType {
   ESCALATE = 'escalate',
 }
 
+/**
+ * Canonical RiskLevel enum aligned with @vorion/contracts
+ */
 export enum RiskLevel {
   LOW = 'low',
   MEDIUM = 'medium',
@@ -16,12 +25,27 @@ export enum RiskLevel {
   CRITICAL = 'critical',
 }
 
+/**
+ * Canonical RiskLevel as string union type for type narrowing
+ */
+export type RiskLevelString = 'low' | 'medium' | 'high' | 'critical';
+
 export enum UserResponse {
   APPROVED = 'approved',
   REJECTED = 'rejected',
   MODIFIED = 'modified',
 }
 
+/**
+ * AutonomyLevel enum - maps to canonical TrustBand T0-T5
+ *
+ * Mapping:
+ * - LEVEL_1 (ASK_LEARN) -> T0_UNTRUSTED, T1_SUPERVISED
+ * - LEVEL_2 (SUGGEST) -> T1_SUPERVISED, T2_CONSTRAINED
+ * - LEVEL_3 (EXECUTE_REVIEW) -> T2_CONSTRAINED, T3_TRUSTED
+ * - LEVEL_4 (AUTONOMOUS_EXCEPTIONS) -> T4_AUTONOMOUS
+ * - LEVEL_5 (FULLY_AUTONOMOUS) -> T5_MISSION_CRITICAL
+ */
 export enum AutonomyLevel {
   LEVEL_1_ASK_LEARN = 1,
   LEVEL_2_SUGGEST = 2,
@@ -29,6 +53,40 @@ export enum AutonomyLevel {
   LEVEL_4_AUTONOMOUS_EXCEPTIONS = 4,
   LEVEL_5_FULLY_AUTONOMOUS = 5,
 }
+
+/**
+ * Canonical TrustBand for reference (aligned with @vorion/contracts)
+ */
+export type TrustBand =
+  | 'T0_UNTRUSTED'
+  | 'T1_SUPERVISED'
+  | 'T2_CONSTRAINED'
+  | 'T3_TRUSTED'
+  | 'T4_AUTONOMOUS'
+  | 'T5_MISSION_CRITICAL';
+
+/**
+ * Maps AutonomyLevel to canonical TrustBand
+ */
+export const AUTONOMY_TO_TRUST_BAND: Record<AutonomyLevel, TrustBand> = {
+  [AutonomyLevel.LEVEL_1_ASK_LEARN]: 'T0_UNTRUSTED',
+  [AutonomyLevel.LEVEL_2_SUGGEST]: 'T1_SUPERVISED',
+  [AutonomyLevel.LEVEL_3_EXECUTE_REVIEW]: 'T2_CONSTRAINED',
+  [AutonomyLevel.LEVEL_4_AUTONOMOUS_EXCEPTIONS]: 'T4_AUTONOMOUS',
+  [AutonomyLevel.LEVEL_5_FULLY_AUTONOMOUS]: 'T5_MISSION_CRITICAL',
+};
+
+/**
+ * Maps canonical TrustBand to AutonomyLevel
+ */
+export const TRUST_BAND_TO_AUTONOMY: Record<TrustBand, AutonomyLevel> = {
+  T0_UNTRUSTED: AutonomyLevel.LEVEL_1_ASK_LEARN,
+  T1_SUPERVISED: AutonomyLevel.LEVEL_2_SUGGEST,
+  T2_CONSTRAINED: AutonomyLevel.LEVEL_3_EXECUTE_REVIEW,
+  T3_TRUSTED: AutonomyLevel.LEVEL_3_EXECUTE_REVIEW,
+  T4_AUTONOMOUS: AutonomyLevel.LEVEL_4_AUTONOMOUS_EXCEPTIONS,
+  T5_MISSION_CRITICAL: AutonomyLevel.LEVEL_5_FULLY_AUTONOMOUS,
+};
 
 export interface BotDecision {
   id: string;
@@ -60,16 +118,56 @@ export interface ApprovalRate {
   };
 }
 
+/**
+ * TrustScore aligned with @vorion/contracts
+ *
+ * CANONICAL RANGE: 0-100 (not 300-1000)
+ * - Score represents composite trust from multiple dimensions
+ * - Components map to TrustDimensions in @vorion/contracts
+ */
 export interface TrustScore {
-  score: number; // 300-1000
+  /**
+   * Composite trust score
+   * @range 0-100 (canonical scale)
+   * @deprecated 300-1000 range - use 0-100 scale
+   */
+  score: number;
+  /**
+   * Trust dimension components (each 0-100)
+   * Maps to canonical TrustDimensions:
+   * - decision_accuracy -> CT (Capability Trust)
+   * - ethics_compliance -> GT (Governance Trust)
+   * - training_success -> BT (Behavioral Trust)
+   * - operational_stability -> XT (Contextual Trust)
+   * - peer_reviews -> AC (Assurance Confidence)
+   */
   components: {
-    decision_accuracy: number; // 0-100
-    ethics_compliance: number; // 0-100
-    training_success: number; // 0-100
-    operational_stability: number; // 0-100
-    peer_reviews: number; // 0-100
+    decision_accuracy: number;   // 0-100 -> CT
+    ethics_compliance: number;   // 0-100 -> GT
+    training_success: number;    // 0-100 -> BT
+    operational_stability: number; // 0-100 -> XT
+    peer_reviews: number;        // 0-100 -> AC
   };
   calculated_at: Date;
+}
+
+/**
+ * Convert legacy 300-1000 score to canonical 0-100 scale
+ */
+export function convertLegacyTrustScore(legacyScore: number): number {
+  // Legacy range was 300-1000 (700 point range)
+  // Canonical range is 0-100
+  const normalized = Math.max(0, Math.min(1000, legacyScore));
+  if (normalized < 300) return 0;
+  return Math.round(((normalized - 300) / 700) * 100);
+}
+
+/**
+ * Convert canonical 0-100 score to legacy 300-1000 scale
+ */
+export function convertToLegacyTrustScore(canonicalScore: number): number {
+  const normalized = Math.max(0, Math.min(100, canonicalScore));
+  return Math.round(300 + (normalized / 100) * 700);
 }
 
 export interface AutonomyLevelRequirements {

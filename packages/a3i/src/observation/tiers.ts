@@ -194,7 +194,7 @@ export const TIER_DESCRIPTIONS: Record<
   [ObservationTier.BLACK_BOX]: {
     name: 'Black Box',
     description: 'Input/output only. No internal visibility.',
-    trustCeiling: 60,
+    trustCeiling: 600,
     whatWeCanSee: ['Inputs', 'Outputs', 'Response time', 'Error messages'],
     whatWeCantSee: [
       'Internal reasoning',
@@ -207,7 +207,7 @@ export const TIER_DESCRIPTIONS: Record<
   [ObservationTier.GRAY_BOX]: {
     name: 'Gray Box',
     description: 'I/O plus platform-level telemetry.',
-    trustCeiling: 75,
+    trustCeiling: 750,
     whatWeCanSee: [
       'Inputs',
       'Outputs',
@@ -219,8 +219,8 @@ export const TIER_DESCRIPTIONS: Record<
   },
   [ObservationTier.WHITE_BOX]: {
     name: 'White Box',
-    description: 'Full source code and architecture access. Reduced from 95% due to sleeper agent risk.',
-    trustCeiling: 90,
+    description: 'Full source code and architecture access. Reduced from 950 due to sleeper agent risk.',
+    trustCeiling: 900,
     whatWeCanSee: [
       'Source code',
       'Model architecture',
@@ -232,8 +232,8 @@ export const TIER_DESCRIPTIONS: Record<
   },
   [ObservationTier.ATTESTED_BOX]: {
     name: 'Attested Box',
-    description: 'Hardware-verified integrity via TEE. Reduced from 100% due to side-channel risk.',
-    trustCeiling: 95,
+    description: 'Hardware-verified integrity via TEE. Reduced from 1000 due to side-channel risk.',
+    trustCeiling: 950,
     whatWeCanSee: [
       'Everything in White Box',
       'Hardware attestation',
@@ -245,7 +245,7 @@ export const TIER_DESCRIPTIONS: Record<
   [ObservationTier.VERIFIED_BOX]: {
     name: 'Verified Box',
     description: 'Full verification stack: TEE + zkML proofs + interpretability analysis.',
-    trustCeiling: 100,
+    trustCeiling: 1000,
     whatWeCanSee: [
       'Everything in Attested Box',
       'Zero-knowledge model proofs',

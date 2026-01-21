@@ -7,21 +7,24 @@ import type { ObservationTier, TrustBand } from './enums.js';
 /**
  * The five trust dimensions used to calculate composite trust
  *
- * Each dimension is scored 0-100 where:
+ * Each dimension is scored 0-1000 where:
  * - 0: No trust / evidence of failure
- * - 50: Neutral / unproven
- * - 100: Maximum trust / proven excellence
+ * - 500: Neutral / unproven
+ * - 1000: Maximum trust / proven excellence
+ *
+ * Note: The 0-1000 scale provides higher precision for trust calculations
+ * and aligns with API response formats.
  */
 export interface TrustDimensions {
-  /** Capability Trust - Does the agent have the skills? */
+  /** Capability Trust - Does the agent have the skills? (0-1000) */
   CT: number;
-  /** Behavioral Trust - Has the agent acted reliably? */
+  /** Behavioral Trust - Has the agent acted reliably? (0-1000) */
   BT: number;
-  /** Governance Trust - Is the agent properly governed? */
+  /** Governance Trust - Is the agent properly governed? (0-1000) */
   GT: number;
-  /** Contextual Trust - Is this the right context for the agent? */
+  /** Contextual Trust - Is this the right context for the agent? (0-1000) */
   XT: number;
-  /** Assurance Confidence - How confident are we in our assessment? */
+  /** Assurance Confidence - How confident are we in our assessment? (0-1000) */
   AC: number;
 }
 
@@ -54,7 +57,7 @@ export interface TrustEvidence {
   evidenceId: string;
   /** Which dimension this evidence affects */
   dimension: keyof TrustDimensions;
-  /** Score impact (-100 to +100) */
+  /** Score impact (-1000 to +1000) on the 0-1000 scale */
   impact: number;
   /** Human-readable source of evidence */
   source: string;
@@ -75,19 +78,19 @@ export interface TrustProfile {
   /** Agent this profile belongs to */
   agentId: string;
 
-  /** Individual dimension scores */
+  /** Individual dimension scores (each 0-1000) */
   dimensions: TrustDimensions;
 
   /** Weights used for calculation */
   weights: TrustWeights;
 
-  /** Raw composite score (weighted sum of dimensions) */
+  /** Raw composite score (weighted sum of dimensions, 0-1000) */
   compositeScore: number;
 
   /** Observation tier determines trust ceiling */
   observationTier: ObservationTier;
 
-  /** Score after applying observation ceiling */
+  /** Score after applying observation ceiling (0-1000) */
   adjustedScore: number;
 
   /** Current trust band (T0-T5) */
@@ -111,7 +114,9 @@ export interface TrustProfile {
  */
 export interface TrustProfileSummary {
   agentId: string;
+  /** Raw composite score (0-1000) */
   compositeScore: number;
+  /** Adjusted score after observation ceiling (0-1000) */
   adjustedScore: number;
   band: TrustBand;
   observationTier: ObservationTier;
@@ -140,14 +145,19 @@ export interface BandThresholds {
   T5: { min: number; max: number };
 }
 
-/** Default band thresholds */
+/**
+ * Default band thresholds on 0-1000 scale
+ *
+ * These thresholds determine which TrustBand an agent falls into
+ * based on their adjusted trust score.
+ */
 export const DEFAULT_BAND_THRESHOLDS: BandThresholds = {
-  T0: { min: 0, max: 20 },
-  T1: { min: 21, max: 40 },
-  T2: { min: 41, max: 55 },
-  T3: { min: 56, max: 70 },
-  T4: { min: 71, max: 85 },
-  T5: { min: 86, max: 100 },
+  T0: { min: 0, max: 200 },
+  T1: { min: 201, max: 400 },
+  T2: { min: 401, max: 550 },
+  T3: { min: 551, max: 700 },
+  T4: { min: 701, max: 850 },
+  T5: { min: 851, max: 1000 },
 };
 
 /**
@@ -166,7 +176,8 @@ export interface BandingConfig {
 /** Default banding configuration */
 export const DEFAULT_BANDING_CONFIG: BandingConfig = {
   thresholds: DEFAULT_BAND_THRESHOLDS,
-  hysteresis: 3,
+  /** Points buffer on 0-1000 scale to prevent oscillation */
+  hysteresis: 30,
   decayRate: 0.01,
   promotionDelay: 7,
 };
@@ -245,7 +256,7 @@ export interface TrustDynamicsConfig {
 
   /**
    * Minimum trust score threshold for circuit breaker trigger
-   * Default: 10 (trust < 0.10 triggers circuit breaker)
+   * Default: 100 (trust < 100 on 0-1000 scale triggers circuit breaker)
    */
   circuitBreakerThreshold: number;
 }
@@ -258,7 +269,7 @@ export const DEFAULT_TRUST_DYNAMICS: TrustDynamicsConfig = {
   oscillationThreshold: 3,           // 3 direction changes triggers alert
   oscillationWindowHours: 24,        // Within 24 hours
   reversalPenaltyMultiplier: 2.0,    // 2x penalty for reversals
-  circuitBreakerThreshold: 10,       // Trust < 10 triggers circuit breaker
+  circuitBreakerThreshold: 100,      // Trust < 100 (on 0-1000 scale) triggers circuit breaker
 };
 
 /**
@@ -285,7 +296,7 @@ export interface DirectionChange {
   from: 'gain' | 'loss';
   /** New direction: 'gain' or 'loss' */
   to: 'gain' | 'loss';
-  /** Trust score at time of change */
+  /** Trust score at time of change (0-1000) */
   scoreAtChange: number;
 }
 

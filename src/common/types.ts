@@ -15,12 +15,33 @@ export type ID = string;
 export type Timestamp = string;
 
 /**
- * Trust level (L0-L4)
+ * Trust level (L0-L5)
+ *
+ * Updated to 6 levels per canonical ATSF-Core TrustBand definition:
+ * - 0 (T0_UNTRUSTED): No autonomous operations
+ * - 1 (T1_SUPERVISED): Human-supervised only
+ * - 2 (T2_CONSTRAINED): Limited autonomy with constraints
+ * - 3 (T3_TRUSTED): Standard trusted operations
+ * - 4 (T4_AUTONOMOUS): High autonomy
+ * - 5 (T5_MISSION_CRITICAL): Full autonomy for critical operations
+ *
+ * @deprecated Prefer importing TrustBand from @vorion/contracts for new code.
+ *             This type is maintained for backwards compatibility.
  */
-export type TrustLevel = 0 | 1 | 2 | 3 | 4;
+export type TrustLevel = 0 | 1 | 2 | 3 | 4 | 5;
 
 /**
  * Trust score (0-1000)
+ *
+ * Canonical trust scores use 0-1000 scale for precision:
+ * - 0-200: T0_UNTRUSTED
+ * - 201-400: T1_SUPERVISED
+ * - 401-550: T2_CONSTRAINED
+ * - 551-700: T3_TRUSTED
+ * - 701-850: T4_AUTONOMOUS
+ * - 851-1000: T5_MISSION_CRITICAL
+ *
+ * All trust dimensions and composite scores use this unified 0-1000 scale.
  */
 export type TrustScore = number;
 
@@ -62,12 +83,17 @@ export type ControlAction =
 
 /**
  * Entity identity
+ *
+ * @deprecated Prefer using Component from @vorion/contracts for agent registry.
+ *             This interface is maintained for backwards compatibility.
  */
 export interface Entity {
   id: ID;
   type: EntityType;
   name: string;
+  /** Trust score (0-1000 scale) */
   trustScore: TrustScore;
+  /** Trust level (0-5, maps to TrustBand T0-T5) */
   trustLevel: TrustLevel;
   metadata: Record<string, unknown>;
   createdAt: Timestamp;
@@ -76,21 +102,44 @@ export interface Entity {
 
 /**
  * Intent representing a goal to be governed
+ *
+ * Note: This is the legacy internal Intent type. For canonical intent structure,
+ * see packages/contracts/src/v2/intent.ts which uses:
+ * - intentId (instead of id)
+ * - agentId (instead of entityId)
+ * - action (instead of goal)
+ *
+ * @deprecated Prefer using Intent from @vorion/contracts for new integrations.
+ *             This interface is maintained for internal backwards compatibility.
  */
 export interface Intent {
+  /** Unique intent identifier */
   id: ID;
+  /** Tenant this intent belongs to */
   tenantId: ID;
+  /** Entity (agent) making the request - maps to canonical agentId */
   entityId: ID;
+  /** Goal/action to be performed - maps to canonical action */
   goal: string;
+  /** Optional intent type categorization */
   intentType?: string | null;
+  /** Additional context for evaluation */
   context: Record<string, unknown>;
+  /** Additional metadata */
   metadata: Record<string, unknown>;
+  /** Priority level (0-10) */
   priority?: number;
+  /** Trust state snapshot at intent creation */
   trustSnapshot?: Record<string, unknown> | null;
+  /** Trust level at evaluation (0-5) */
   trustLevel?: TrustLevel | null;
+  /** Trust score at evaluation (0-1000) */
   trustScore?: TrustScore | null;
+  /** Current status */
   status: IntentStatus;
+  /** Creation timestamp */
   createdAt: Timestamp;
+  /** Last update timestamp */
   updatedAt: Timestamp;
   /** Soft delete timestamp for GDPR compliance */
   deletedAt?: Timestamp | null;
@@ -187,12 +236,23 @@ export interface ConstraintEvaluationResult {
 
 /**
  * Decision from ENFORCE
+ *
+ * Note: The canonical Decision type in @vorion/contracts uses:
+ * - decisionId, intentId, agentId, correlationId
+ * - permitted: boolean (instead of action)
+ * - constraints: DecisionConstraints
+ * - trustBand: TrustBand (instead of trustLevel)
+ *
+ * @deprecated Prefer using Decision from @vorion/contracts for new integrations.
+ *             This interface is maintained for backwards compatibility.
  */
 export interface Decision {
   intentId: ID;
   action: ControlAction;
   constraintsEvaluated: ConstraintEvaluationResult[];
+  /** Trust score (0-1000 scale) */
   trustScore: TrustScore;
+  /** Trust level (0-5, maps to canonical TrustBand) */
   trustLevel: TrustLevel;
   escalation?: EscalationRequest;
   decidedAt: Timestamp;
@@ -230,15 +290,26 @@ export interface Proof {
 
 /**
  * Trust signal for scoring
+ *
+ * @deprecated Prefer using TrustEvidence from @vorion/contracts for new code.
+ *             This interface is maintained for backwards compatibility.
  */
 export interface TrustSignal {
+  /** Unique signal identifier */
   id: ID;
+  /** Entity this signal is for */
   entityId: ID;
+  /** Type/category of signal */
   type: string;
+  /** Signal value (impact on trust) */
   value: number;
-  weight?: number;
-  source?: string;
+  /** Weight multiplier for this signal (default: 1.0) */
+  weight: number;
+  /** Source system that generated this signal */
+  source: string;
+  /** When this signal was recorded */
   timestamp: Timestamp;
+  /** Additional context */
   metadata?: Record<string, unknown>;
 }
 
