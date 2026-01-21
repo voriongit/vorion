@@ -137,6 +137,19 @@ async def root():
     )
 
 
+@app.get("/status", include_in_schema=False)
+async def status_page():
+    """Serve the system status page."""
+    status_path = static_path / "status.html"
+    if status_path.exists():
+        return FileResponse(str(status_path), media_type="text/html")
+    # Fallback to health endpoint if status page doesn't exist
+    return HTMLResponse(
+        content='<html><head><meta http-equiv="refresh" content="0;url=/health"></head></html>',
+        status_code=200,
+    )
+
+
 @app.get("/robots.txt", include_in_schema=False)
 async def robots():
     """Serve robots.txt for search engine crawlers."""
@@ -167,6 +180,12 @@ async def sitemap():
     <lastmod>{today}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://cognigate.dev/status</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
   </url>
   <url>
     <loc>https://cognigate.dev/redoc</loc>

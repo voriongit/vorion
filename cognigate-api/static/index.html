@@ -15,14 +15,14 @@
     <meta property="og:url" content="https://cognigate.dev/">
     <meta property="og:title" content="Cognigate - AI Agent Governance Engine">
     <meta property="og:description" content="The operational engine that enforces the BASIS standard for AI agent governance. INTENT, ENFORCE, PROOF.">
-    <meta property="og:image" content="https://cognigate.dev/static/favicon.png">
+    <meta property="og:image" content="https://cognigate.dev/static/og-image.png">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:url" content="https://cognigate.dev/">
     <meta name="twitter:title" content="Cognigate - AI Agent Governance Engine">
     <meta name="twitter:description" content="The operational engine that enforces the BASIS standard for AI agent governance.">
-    <meta name="twitter:image" content="https://cognigate.dev/static/favicon.png">
+    <meta name="twitter:image" content="https://cognigate.dev/static/og-image.png">
     <style>
         * {
             margin: 0;
@@ -37,6 +37,10 @@
             --cyan-primary: #00d4ff;
             --cyan-glow: rgba(0, 212, 255, 0.3);
             --cyan-subtle: rgba(0, 212, 255, 0.1);
+            --emerald: #10b981;
+            --emerald-glow: rgba(16, 185, 129, 0.3);
+            --amber: #f59e0b;
+            --red: #ef4444;
             --text-primary: #ffffff;
             --text-secondary: #a0a0b0;
             --text-muted: #6a6a7a;
@@ -59,7 +63,14 @@
 
         /* Header */
         header {
-            padding: 24px 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 16px 0;
+            background: rgba(10, 10, 15, 0.9);
+            backdrop-filter: blur(12px);
             border-bottom: 1px solid var(--border-color);
         }
 
@@ -78,27 +89,31 @@
         }
 
         .logo-icon {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             background: linear-gradient(135deg, var(--cyan-primary), #0099cc);
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 18px;
+            font-size: 14px;
         }
 
         .logo-text {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 700;
             letter-spacing: -0.5px;
         }
 
         .nav-links {
             display: flex;
-            gap: 24px;
+            gap: 8px;
             align-items: center;
+        }
+
+        .nav-dropdown {
+            position: relative;
         }
 
         .nav-link {
@@ -106,11 +121,57 @@
             text-decoration: none;
             font-size: 14px;
             font-weight: 500;
-            transition: color 0.2s;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
 
         .nav-link:hover {
-            color: var(--cyan-primary);
+            color: var(--text-primary);
+            background: var(--cyan-subtle);
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 8px;
+            min-width: 220px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+
+        .nav-dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        .dropdown-item {
+            display: block;
+            padding: 10px 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .dropdown-item:hover {
+            background: var(--cyan-subtle);
+            color: var(--text-primary);
+        }
+
+        .dropdown-item small {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 2px;
         }
 
         .btn {
@@ -128,13 +189,13 @@
         }
 
         .btn-primary {
-            background: var(--cyan-primary);
-            color: var(--bg-primary);
+            background: var(--emerald);
+            color: white;
         }
 
         .btn-primary:hover {
-            background: #00b8e0;
-            box-shadow: 0 0 20px var(--cyan-glow);
+            background: #059669;
+            box-shadow: 0 0 20px var(--emerald-glow);
         }
 
         .btn-secondary {
@@ -150,7 +211,7 @@
 
         /* Hero */
         .hero {
-            padding: 100px 0 80px;
+            padding: 140px 0 80px;
             text-align: center;
         }
 
@@ -168,7 +229,7 @@
         }
 
         .hero h1 {
-            font-size: 56px;
+            font-size: 52px;
             font-weight: 800;
             line-height: 1.1;
             margin-bottom: 24px;
@@ -183,7 +244,7 @@
         }
 
         .hero-subtitle {
-            font-size: 20px;
+            font-size: 18px;
             color: var(--text-secondary);
             max-width: 600px;
             margin: 0 auto 40px;
@@ -195,6 +256,118 @@
             justify-content: center;
             flex-wrap: wrap;
         }
+
+        /* Quickstart Section */
+        .quickstart-section {
+            padding: 60px 0;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .quickstart-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .quickstart-header h2 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .quickstart-header p {
+            color: var(--text-secondary);
+        }
+
+        .code-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .code-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-card);
+        }
+
+        .code-tab {
+            padding: 12px 20px;
+            font-size: 13px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+
+        .code-tab:hover {
+            color: var(--text-secondary);
+        }
+
+        .code-tab.active {
+            color: var(--cyan-primary);
+            border-bottom-color: var(--cyan-primary);
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: flex-end;
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .copy-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            color: var(--text-primary);
+            border-color: var(--cyan-primary);
+        }
+
+        .copy-btn.copied {
+            color: var(--emerald);
+            border-color: var(--emerald);
+        }
+
+        .code-content {
+            display: none;
+            padding: 20px;
+            overflow-x: auto;
+        }
+
+        .code-content.active {
+            display: block;
+        }
+
+        .code-content pre {
+            font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            white-space: pre;
+            margin: 0;
+        }
+
+        .code-content .comment { color: var(--text-muted); }
+        .code-content .keyword { color: var(--cyan-primary); }
+        .code-content .string { color: #a5d6ff; }
+        .code-content .function { color: #d2a8ff; }
 
         /* Stack Section */
         .stack-section {
@@ -255,6 +428,9 @@
             font-weight: 700;
             margin-bottom: 12px;
             color: var(--cyan-primary);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .stack-card p {
@@ -274,69 +450,346 @@
             display: inline-block;
         }
 
-        /* Code Block */
-        .code-section {
-            padding: 60px 0;
-            text-align: center;
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+            cursor: help;
         }
 
-        .code-block {
+        .tooltip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            background: var(--cyan-subtle);
+            border-radius: 50%;
+            font-size: 10px;
+            color: var(--cyan-primary);
+        }
+
+        .tooltip-content {
+            display: none;
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            width: 280px;
+            text-align: left;
+            font-weight: normal;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            z-index: 50;
+        }
+
+        .tooltip-content::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: var(--border-color);
+        }
+
+        .tooltip:hover .tooltip-content {
+            display: block;
+        }
+
+        /* Playground Section */
+        .playground-section {
+            padding: 80px 0;
+            border-top: 1px solid var(--border-color);
+            background: linear-gradient(180deg, var(--bg-primary), var(--bg-secondary));
+        }
+
+        .playground-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .playground-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            justify-content: center;
+        }
+
+        .playground-tab {
+            padding: 10px 24px;
+            font-size: 14px;
+            font-family: 'SF Mono', monospace;
+            color: var(--text-muted);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .playground-tab:hover {
+            color: var(--text-secondary);
+            border-color: var(--text-muted);
+        }
+
+        .playground-tab.active {
+            color: var(--emerald);
+            border-color: var(--emerald);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .playground-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .playground-input {
+            padding: 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .playground-input label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .playground-input textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 16px;
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 32px;
-            text-align: left;
-            max-width: 500px;
-            margin: 0 auto;
-            font-family: 'SF Mono', 'Fira Code', monospace;
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'SF Mono', monospace;
             font-size: 14px;
-            line-height: 1.8;
+            resize: vertical;
         }
 
-        .code-block .comment {
+        .playground-input textarea:focus {
+            outline: none;
+            border-color: var(--cyan-primary);
+        }
+
+        .playground-actions {
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-secondary);
+        }
+
+        .run-btn {
+            padding: 12px 32px;
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+            background: var(--emerald);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .run-btn:hover {
+            background: #059669;
+            box-shadow: 0 0 20px var(--emerald-glow);
+        }
+
+        .run-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .playground-result {
+            padding: 24px;
+            display: none;
+        }
+
+        .playground-result.visible {
+            display: block;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .result-label {
+            font-size: 13px;
             color: var(--text-muted);
         }
 
-        .code-block .keyword {
-            color: var(--cyan-primary);
+        .decision-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: 'SF Mono', monospace;
+        }
+
+        .decision-badge.allow {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--emerald);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .decision-badge.deny {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .decision-badge.escalate {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--amber);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .result-json {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+
+        .result-json pre {
+            font-family: 'SF Mono', monospace;
+            font-size: 12px;
+            color: var(--emerald);
+            white-space: pre;
+            margin: 0;
         }
 
         /* Footer */
         footer {
-            padding: 40px 0;
+            padding: 60px 0 40px;
             border-top: 1px solid var(--border-color);
-            text-align: center;
+            background: var(--bg-secondary);
         }
 
-        .footer-brand {
-            color: var(--text-secondary);
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr repeat(4, 1fr);
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .footer-brand p {
+            color: var(--text-muted);
             font-size: 14px;
-            margin-bottom: 16px;
+            margin: 16px 0;
+            max-width: 280px;
         }
 
-        .footer-brand a {
+        .footer-social {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .footer-social a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .footer-social a:hover {
             color: var(--cyan-primary);
-            text-decoration: none;
+            border-color: var(--cyan-primary);
         }
 
-        .footer-links {
+        .footer-column h4 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .footer-column ul {
+            list-style: none;
+        }
+
+        .footer-column li {
+            margin-bottom: 10px;
+        }
+
+        .footer-column a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .footer-column a:hover {
+            color: var(--cyan-primary);
+        }
+
+        .footer-bottom {
+            padding-top: 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .footer-bottom p {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .footer-bottom-links {
             display: flex;
             gap: 24px;
-            justify-content: center;
         }
 
-        .footer-links a {
+        .footer-bottom-links a {
             color: var(--text-muted);
             text-decoration: none;
             font-size: 13px;
             transition: color 0.2s;
         }
 
-        .footer-links a:hover {
+        .footer-bottom-links a:hover {
             color: var(--cyan-primary);
         }
 
         /* Responsive */
+        @media (max-width: 900px) {
+            .footer-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .footer-brand {
+                grid-column: span 2;
+            }
+        }
+
         @media (max-width: 768px) {
             .hero h1 {
                 font-size: 36px;
@@ -353,6 +806,19 @@
             .stack-grid {
                 grid-template-columns: 1fr;
             }
+
+            .footer-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-brand {
+                grid-column: span 1;
+            }
+
+            .footer-bottom {
+                flex-direction: column;
+                text-align: center;
+            }
         }
     </style>
 </head>
@@ -364,10 +830,43 @@
                 <span class="logo-text">Cognigate</span>
             </a>
             <nav class="nav-links">
-                <a href="/docs" class="nav-link">API Docs</a>
-                <a href="/redoc" class="nav-link">ReDoc</a>
+                <div class="nav-dropdown">
+                    <a href="#" class="nav-link">
+                        Product
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                    </a>
+                    <div class="dropdown-content">
+                        <a href="/" class="dropdown-item">Overview<small>What is Cognigate?</small></a>
+                        <a href="#stack" class="dropdown-item">Governance Stack<small>INTENT, ENFORCE, PROOF</small></a>
+                        <a href="#playground" class="dropdown-item">Playground<small>Try the API live</small></a>
+                        <a href="/status" class="dropdown-item">Status<small>System health</small></a>
+                    </div>
+                </div>
+                <div class="nav-dropdown">
+                    <a href="#" class="nav-link">
+                        Docs
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                    </a>
+                    <div class="dropdown-content">
+                        <a href="/docs" class="dropdown-item">API Reference<small>Swagger UI</small></a>
+                        <a href="/redoc" class="dropdown-item">ReDoc<small>Alternative docs</small></a>
+                        <a href="/openapi.json" class="dropdown-item">OpenAPI Spec<small>Download schema</small></a>
+                    </div>
+                </div>
+                <div class="nav-dropdown">
+                    <a href="#" class="nav-link">
+                        Ecosystem
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                    </a>
+                    <div class="dropdown-content">
+                        <a href="https://vorion.org" class="dropdown-item" target="_blank">VORION<small>The Steward</small></a>
+                        <a href="https://vorion.org/basis" class="dropdown-item" target="_blank">BASIS Standard<small>The Rules</small></a>
+                        <a href="https://agentanchorai.com" class="dropdown-item" target="_blank">AgentAnchor<small>The Authority</small></a>
+                        <a href="https://aurais.agentanchorai.com" class="dropdown-item" target="_blank">Aurais Demo<small>Live assistant</small></a>
+                    </div>
+                </div>
                 <a href="https://discord.gg/basis-protocol" class="nav-link" target="_blank">Discord</a>
-                <a href="/docs" class="btn btn-primary">Get Started</a>
+                <a href="#playground" class="btn btn-primary">Try Playground</a>
             </nav>
         </div>
     </header>
@@ -387,26 +886,109 @@
                     Every intent validated. Every action accountable. Every proof verifiable.
                 </p>
                 <div class="hero-buttons">
-                    <a href="/docs" class="btn btn-primary">
+                    <a href="#playground" class="btn btn-primary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        Try Playground
+                    </a>
+                    <a href="/docs" class="btn btn-secondary">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                             <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
                         </svg>
                         API Documentation
                     </a>
-                    <a href="https://discord.gg/basis-protocol" class="btn btn-secondary" target="_blank">
+                    <a href="https://github.com/voriongit/cognigate" class="btn btn-secondary" target="_blank">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                         </svg>
-                        Join Discord
+                        GitHub
                     </a>
                 </div>
             </div>
         </section>
 
-        <section class="stack-section">
+        <!-- Quickstart Section -->
+        <section class="quickstart-section">
+            <div class="container">
+                <div class="quickstart-header">
+                    <h2>Quick Start</h2>
+                    <p>Get started with Cognigate in seconds</p>
+                </div>
+                <div class="code-container">
+                    <div class="code-tabs">
+                        <button class="code-tab active" data-lang="curl">curl</button>
+                        <button class="code-tab" data-lang="typescript">TypeScript</button>
+                        <button class="code-tab" data-lang="python">Python</button>
+                    </div>
+                    <div class="code-header">
+                        <button class="copy-btn" onclick="copyCode()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                            <span>Copy</span>
+                        </button>
+                    </div>
+                    <div class="code-content active" data-lang="curl">
+<pre><span class="comment"># 1. Parse an intent</span>
+<span class="keyword">curl</span> -X POST https://cognigate.dev/v1/intent \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d <span class="string">'{"entity_id": "my-agent", "raw_input": "Send email to john@example.com"}'</span>
+
+<span class="comment"># 2. Enforce the decision</span>
+<span class="keyword">curl</span> -X POST https://cognigate.dev/v1/enforce \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d <span class="string">'{"intent_id": "int_...", "entity_id": "my-agent"}'</span>
+
+<span class="comment"># 3. Get the proof receipt</span>
+<span class="keyword">curl</span> https://cognigate.dev/v1/proof/prf_...</pre>
+                    </div>
+                    <div class="code-content" data-lang="typescript">
+<pre><span class="comment">// Coming soon: @vorion/cognigate SDK</span>
+<span class="keyword">import</span> { Cognigate } <span class="keyword">from</span> <span class="string">'@vorion/cognigate'</span>;
+
+<span class="keyword">const</span> client = <span class="keyword">new</span> <span class="function">Cognigate</span>();
+
+<span class="comment">// 1. Parse intent</span>
+<span class="keyword">const</span> intent = <span class="keyword">await</span> client.intent.<span class="function">parse</span>({
+  entityId: <span class="string">'my-agent'</span>,
+  rawInput: <span class="string">'Send email to john@example.com'</span>,
+});
+
+<span class="comment">// 2. Enforce decision</span>
+<span class="keyword">const</span> decision = <span class="keyword">await</span> client.enforce.<span class="function">evaluate</span>({
+  intentId: intent.id,
+});
+
+console.<span class="function">log</span>(decision.verdict); <span class="comment">// ALLOW | DENY | ESCALATE</span></pre>
+                    </div>
+                    <div class="code-content" data-lang="python">
+<pre><span class="comment"># Coming soon: cognigate Python SDK</span>
+<span class="keyword">from</span> cognigate <span class="keyword">import</span> CognigateClient
+
+client = <span class="function">CognigateClient</span>()
+
+<span class="comment"># 1. Parse intent</span>
+intent = client.intent.<span class="function">parse</span>(
+    entity_id=<span class="string">'my-agent'</span>,
+    raw_input=<span class="string">'Send email to john@example.com'</span>
+)
+
+<span class="comment"># 2. Enforce decision</span>
+decision = client.enforce.<span class="function">evaluate</span>(
+    intent_id=intent.id
+)
+
+<span class="function">print</span>(decision.verdict)  <span class="comment"># ALLOW | DENY | ESCALATE</span></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Governance Stack Section -->
+        <section class="stack-section" id="stack">
             <div class="container">
                 <div class="section-header">
                     <h2>The Governance Stack</h2>
@@ -421,7 +1003,13 @@
                                 <path d="M12 8h.01"/>
                             </svg>
                         </div>
-                        <h3>INTENT</h3>
+                        <h3>
+                            INTENT
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-content">The INTENT layer parses natural language or structured input to understand what an AI agent wants to do before it does it. It normalizes goals into a structured, policy-checkable format.</span>
+                            </span>
+                        </h3>
                         <p>Normalize and validate agent intentions before execution. Extracts what the agent wants to do, translates it into structured policy-checkable format, and ensures clarity of purpose.</p>
                         <code class="stack-endpoint">POST /v1/intent</code>
                     </div>
@@ -431,7 +1019,13 @@
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                             </svg>
                         </div>
-                        <h3>ENFORCE</h3>
+                        <h3>
+                            ENFORCE
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-content">The ENFORCE layer evaluates normalized intents against BASIS policies in real-time. It returns ALLOW, DENY, or ESCALATE with detailed reasoning for every decision.</span>
+                            </span>
+                        </h3>
                         <p>Evaluate intentions against BASIS policies in real-time. Checks permissions, constraints, and safety boundaries. Returns ALLOW, DENY, or ESCALATE with detailed reasoning.</p>
                         <code class="stack-endpoint">POST /v1/enforce</code>
                     </div>
@@ -442,7 +1036,13 @@
                                 <polyline points="22 4 12 14.01 9 11.01"/>
                             </svg>
                         </div>
-                        <h3>PROOF</h3>
+                        <h3>
+                            PROOF
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-content">The PROOF layer generates cryptographic receipts for every governance decision. These immutable records enable full accountability and auditability.</span>
+                            </span>
+                        </h3>
                         <p>Generate and verify cryptographic evidence of all governance decisions. Creates immutable audit trails, enables accountability, and provides receipts for every action.</p>
                         <code class="stack-endpoint">POST /v1/proof</code>
                     </div>
@@ -450,14 +1050,45 @@
             </div>
         </section>
 
-        <section class="code-section">
+        <!-- Playground Section -->
+        <section class="playground-section" id="playground">
             <div class="container">
-                <div class="code-block">
-                    <div class="comment"># The Stack</div>
-                    <div><span class="keyword">BASIS</span> sets the rules.</div>
-                    <div><span class="keyword">INTENT</span> figures out the goal.</div>
-                    <div><span class="keyword">ENFORCE</span> stops the bad stuff.</div>
-                    <div><span class="keyword">PROOF</span> shows the receipts.</div>
+                <div class="section-header">
+                    <h2>Try the API</h2>
+                    <p>Test the governance engine live. No signup required.</p>
+                </div>
+                <div class="playground-container">
+                    <div class="playground-tabs">
+                        <button class="playground-tab active" data-endpoint="intent">INTENT</button>
+                        <button class="playground-tab" data-endpoint="enforce">ENFORCE</button>
+                        <button class="playground-tab" data-endpoint="proof">PROOF</button>
+                    </div>
+                    <div class="playground-card">
+                        <div class="playground-input">
+                            <label>Enter an action the AI agent wants to take:</label>
+                            <textarea id="playground-input" placeholder='{"entity_id": "demo-agent", "raw_input": "Send email to john@example.com about the meeting"}'>{"entity_id": "demo-agent", "raw_input": "Send email to john@example.com about the meeting"}</textarea>
+                        </div>
+                        <div class="playground-actions">
+                            <span style="color: var(--text-muted); font-size: 13px;">
+                                Endpoint: <code id="endpoint-display">/v1/intent</code>
+                            </span>
+                            <button class="run-btn" onclick="runPlayground()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="5 3 19 12 5 21 5 3"/>
+                                </svg>
+                                <span id="run-btn-text">Run Request</span>
+                            </button>
+                        </div>
+                        <div class="playground-result" id="playground-result">
+                            <div class="result-header">
+                                <span class="result-label">Response:</span>
+                                <span class="decision-badge allow" id="decision-badge" style="display: none;"></span>
+                            </div>
+                            <div class="result-json">
+                                <pre id="result-json"></pre>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -465,17 +1096,169 @@
 
     <footer>
         <div class="container">
-            <p class="footer-brand">
-                Built by <a href="https://vorion.org" target="_blank">VORION</a> - The Steward of Safe Autonomous Systems
-            </p>
-            <div class="footer-links">
-                <a href="/docs">API Docs</a>
-                <a href="/redoc">ReDoc</a>
-                <a href="/openapi.json">OpenAPI</a>
-                <a href="https://discord.gg/basis-protocol" target="_blank">Discord</a>
-                <a href="https://github.com/voriongit" target="_blank">GitHub</a>
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <a href="/" class="logo">
+                        <div class="logo-icon">CG</div>
+                        <span class="logo-text">Cognigate</span>
+                    </a>
+                    <p>AI Agent Governance Engine. Every intent validated. Every action accountable.</p>
+                    <div class="footer-social">
+                        <a href="https://github.com/voriongit" target="_blank" title="GitHub">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                            </svg>
+                        </a>
+                        <a href="https://discord.gg/basis-protocol" target="_blank" title="Discord">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                            </svg>
+                        </a>
+                        <a href="https://twitter.com/vorionorg" target="_blank" title="Twitter">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+                <div class="footer-column">
+                    <h4>Product</h4>
+                    <ul>
+                        <li><a href="/">Overview</a></li>
+                        <li><a href="#stack">Governance Stack</a></li>
+                        <li><a href="#playground">Playground</a></li>
+                        <li><a href="/status">Status</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4>Documentation</h4>
+                    <ul>
+                        <li><a href="/docs">API Reference</a></li>
+                        <li><a href="/redoc">ReDoc</a></li>
+                        <li><a href="/openapi.json">OpenAPI Spec</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4>Ecosystem</h4>
+                    <ul>
+                        <li><a href="https://vorion.org" target="_blank">VORION</a></li>
+                        <li><a href="https://vorion.org/basis" target="_blank">BASIS Standard</a></li>
+                        <li><a href="https://agentanchorai.com" target="_blank">AgentAnchor</a></li>
+                        <li><a href="https://aurais.agentanchorai.com" target="_blank">Aurais Demo</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4>Community</h4>
+                    <ul>
+                        <li><a href="https://discord.gg/basis-protocol" target="_blank">Discord</a></li>
+                        <li><a href="https://github.com/voriongit" target="_blank">GitHub</a></li>
+                        <li><a href="https://twitter.com/vorionorg" target="_blank">Twitter</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 Vorion Risk, LLC. All rights reserved.</p>
+                <div class="footer-bottom-links">
+                    <a href="/openapi.json">OpenAPI</a>
+                    <a href="/docs">API Docs</a>
+                    <a href="/redoc">ReDoc</a>
+                </div>
             </div>
         </div>
     </footer>
+
+    <script>
+        // Code tabs functionality
+        document.querySelectorAll('.code-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const lang = tab.dataset.lang;
+                document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.code-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.querySelector(`.code-content[data-lang="${lang}"]`).classList.add('active');
+            });
+        });
+
+        // Copy code functionality
+        function copyCode() {
+            const activeContent = document.querySelector('.code-content.active pre');
+            const text = activeContent.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                btn.classList.add('copied');
+                btn.querySelector('span').textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.querySelector('span').textContent = 'Copy';
+                }, 2000);
+            });
+        }
+
+        // Playground functionality
+        let currentEndpoint = 'intent';
+        const endpoints = {
+            intent: '/v1/intent',
+            enforce: '/v1/enforce',
+            proof: '/v1/proof'
+        };
+
+        const defaultInputs = {
+            intent: '{"entity_id": "demo-agent", "raw_input": "Send email to john@example.com about the meeting"}',
+            enforce: '{"intent_id": "int_demo_123", "entity_id": "demo-agent"}',
+            proof: '{"verdict_id": "vrd_demo_123"}'
+        };
+
+        document.querySelectorAll('.playground-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                currentEndpoint = tab.dataset.endpoint;
+                document.querySelectorAll('.playground-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('endpoint-display').textContent = endpoints[currentEndpoint];
+                document.getElementById('playground-input').value = defaultInputs[currentEndpoint];
+                document.getElementById('playground-result').classList.remove('visible');
+            });
+        });
+
+        async function runPlayground() {
+            const input = document.getElementById('playground-input').value;
+            const runBtn = document.querySelector('.run-btn');
+            const btnText = document.getElementById('run-btn-text');
+            const resultDiv = document.getElementById('playground-result');
+            const resultJson = document.getElementById('result-json');
+            const decisionBadge = document.getElementById('decision-badge');
+
+            try {
+                runBtn.disabled = true;
+                btnText.textContent = 'Running...';
+
+                const response = await fetch(endpoints[currentEndpoint], {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: input
+                });
+
+                const data = await response.json();
+                resultJson.textContent = JSON.stringify(data, null, 2);
+                resultDiv.classList.add('visible');
+
+                // Show decision badge if applicable
+                if (data.verdict || data.decision) {
+                    const verdict = data.verdict || data.decision;
+                    decisionBadge.textContent = verdict;
+                    decisionBadge.className = 'decision-badge ' + verdict.toLowerCase();
+                    decisionBadge.style.display = 'inline-flex';
+                } else {
+                    decisionBadge.style.display = 'none';
+                }
+            } catch (error) {
+                resultJson.textContent = JSON.stringify({ error: error.message }, null, 2);
+                resultDiv.classList.add('visible');
+                decisionBadge.style.display = 'none';
+            } finally {
+                runBtn.disabled = false;
+                btnText.textContent = 'Run Request';
+            }
+        }
+    </script>
 </body>
 </html>
