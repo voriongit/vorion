@@ -5,6 +5,21 @@
  * Checks for schema inconsistencies across the Vorion Platform codebase.
  * Ensures all type definitions match the canonical definitions in packages/contracts.
  *
+ * Canonical Type Location:
+ *   packages/contracts/src/canonical/
+ *
+ * Types defined in the canonical directory are considered authoritative.
+ * When a type exists in both canonical AND elsewhere, only the non-canonical
+ * location is flagged for migration.
+ *
+ * Issue Types:
+ *   [M] Migration - Type should be imported from canonical location (actionable)
+ *   [D] Duplicate - Type defined in multiple non-canonical places
+ *   [-] Missing   - Enum/type is missing required values
+ *   [~] Mismatch  - Value doesn't match canonical definition
+ *   [+] Extra     - Enum/type has unexpected values
+ *   [R] Range     - Value outside valid range
+ *
  * Exit codes:
  *   0 - No drift detected
  *   1 - Schema drift detected
@@ -215,7 +230,7 @@ const CANONICAL_BAND_THRESHOLDS = {
 interface DriftIssue {
   file: string;
   line: number;
-  type: 'missing' | 'mismatch' | 'duplicate' | 'invalid_range' | 'extra';
+  type: 'missing' | 'mismatch' | 'duplicate' | 'invalid_range' | 'extra' | 'migration';
   message: string;
   expected?: string;
   found?: string;
@@ -232,6 +247,17 @@ interface ScanResult {
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const CONTRACTS_DIR = path.join(ROOT_DIR, 'packages', 'contracts', 'src');
+const CANONICAL_DIR = path.join(CONTRACTS_DIR, 'canonical');
+
+/**
+ * Check if a file path is within the canonical type location.
+ * Files in packages/contracts/src/canonical/ are considered authoritative.
+ */
+function isCanonicalFile(filePath: string): boolean {
+  const relativePath = path.relative(ROOT_DIR, filePath);
+  const normalizedPath = relativePath.replace(/\\/g, '/');
+  return normalizedPath.startsWith('packages/contracts/src/canonical/');
+}
 
 /**
  * Get all TypeScript files in a directory recursively
@@ -317,11 +343,14 @@ function extractEnumValues(content: string, enumName: string): { values: string[
 }
 
 /**
- * Check for duplicate type definitions across files
+ * Check for duplicate type definitions across files.
+ * Types in packages/contracts/src/canonical/ are considered authoritative.
+ * When a type exists in both canonical and non-canonical locations,
+ * only the non-canonical location is flagged for migration.
  */
 function checkDuplicateDefinitions(files: string[]): DriftIssue[] {
   const issues: DriftIssue[] = [];
-  const definitions = new Map<string, { file: string; line: number }[]>();
+  const definitions = new Map<string, { file: string; line: number; isCanonical: boolean }[]>();
 
   const typePatterns = [
     /export\s+enum\s+(\w+)/g,
@@ -337,6 +366,7 @@ function checkDuplicateDefinitions(files: string[]): DriftIssue[] {
 
     const { content, lines } = readFileLines(filePath);
     const relativePath = path.relative(ROOT_DIR, filePath);
+    const fileIsCanonical = isCanonicalFile(filePath);
 
     for (const pattern of typePatterns) {
       let match: RegExpExecArray | null;
@@ -350,33 +380,62 @@ function checkDuplicateDefinitions(files: string[]): DriftIssue[] {
         if (!definitions.has(typeName)) {
           definitions.set(typeName, []);
         }
-        definitions.get(typeName)!.push({ file: relativePath, line: lineNum });
+        definitions.get(typeName)!.push({
+          file: relativePath,
+          line: lineNum,
+          isCanonical: fileIsCanonical
+        });
       }
     }
   }
 
-  // Check for duplicates (excluding re-exports)
+  // Check for duplicates and migrations needed
   for (const [typeName, locations] of definitions) {
     // Filter out re-exports (files that just re-export from index)
     const actualDefinitions = locations.filter((loc) => !loc.file.includes('index.ts'));
 
-    if (actualDefinitions.length > 1) {
-      // Check if they're in different packages (which is OK for re-exports)
-      const packages = new Set(actualDefinitions.map((loc) => loc.file.split('/')[0]));
+    if (actualDefinitions.length <= 1) {
+      continue;
+    }
 
-      if (packages.size > 1 || actualDefinitions.some((loc) => !loc.file.startsWith('packages/contracts'))) {
-        for (const loc of actualDefinitions.slice(1)) {
+    // Separate canonical and non-canonical definitions
+    const canonicalDefs = actualDefinitions.filter((loc) => loc.isCanonical);
+    const nonCanonicalDefs = actualDefinitions.filter((loc) => !loc.isCanonical);
+
+    // If there's a canonical definition, flag non-canonical ones for migration
+    if (canonicalDefs.length > 0 && nonCanonicalDefs.length > 0) {
+      const canonicalLoc = canonicalDefs[0];
+      for (const loc of nonCanonicalDefs) {
+        issues.push({
+          file: loc.file,
+          line: loc.line,
+          type: 'migration',
+          message: `Type '${typeName}' should be imported from canonical location`,
+          expected: `Import from packages/contracts/src/canonical/`,
+          found: `Local definition should migrate to use ${canonicalLoc.file}`,
+        });
+      }
+    }
+    // If no canonical definition exists, flag as duplicate (old behavior)
+    else if (canonicalDefs.length === 0 && nonCanonicalDefs.length > 1) {
+      // Check if they're in different packages (which is OK for re-exports)
+      const packages = new Set(nonCanonicalDefs.map((loc) => loc.file.split('/')[0]));
+
+      if (packages.size > 1 || nonCanonicalDefs.some((loc) => !loc.file.startsWith('packages/contracts'))) {
+        for (const loc of nonCanonicalDefs.slice(1)) {
           issues.push({
             file: loc.file,
             line: loc.line,
             type: 'duplicate',
             message: `Duplicate definition of '${typeName}'`,
-            expected: `Single definition in packages/contracts`,
-            found: `Also defined in ${actualDefinitions[0].file}:${actualDefinitions[0].line}`,
+            expected: `Single definition in packages/contracts (consider adding to canonical/)`,
+            found: `Also defined in ${nonCanonicalDefs[0].file}:${nonCanonicalDefs[0].line}`,
           });
         }
       }
     }
+    // Don't flag canonical definitions as duplicates of each other
+    // (e.g., agent.ts and governance.ts may both define shared types)
   }
 
   return issues;
@@ -944,10 +1003,17 @@ function validateObservationCeilings(filePath: string, content: string): DriftIs
 // ============================================================================
 
 /**
- * Scan a single file for schema drift
+ * Scan a single file for schema drift.
+ * Files in the canonical directory are considered authoritative and are not validated
+ * for drift (they ARE the source of truth).
  */
 function scanFile(filePath: string): DriftIssue[] {
   const issues: DriftIssue[] = [];
+
+  // Skip canonical files - they are the authoritative source
+  if (isCanonicalFile(filePath)) {
+    return issues;
+  }
 
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
@@ -1053,6 +1119,7 @@ function printIssues(issues: DriftIssue[]): void {
         duplicate: '[D]',
         invalid_range: '[R]',
         extra: '[+]',
+        migration: '[M]',
       }[issue.type];
 
       console.log(`  ${typeIcon} Line ${issue.line}: ${issue.message}`);
@@ -1067,6 +1134,22 @@ function printIssues(issues: DriftIssue[]): void {
 
     console.log();
   }
+
+  // Print summary by issue type
+  const summary = issues.reduce((acc, issue) => {
+    acc[issue.type] = (acc[issue.type] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  console.log('Summary:');
+  console.log('--------');
+  if (summary.migration) console.log(`  [M] Migration needed: ${summary.migration} (types to import from canonical/)`);
+  if (summary.duplicate) console.log(`  [D] Duplicates: ${summary.duplicate} (types defined in multiple places)`);
+  if (summary.missing) console.log(`  [-] Missing values: ${summary.missing}`);
+  if (summary.mismatch) console.log(`  [~] Mismatches: ${summary.mismatch}`);
+  if (summary.extra) console.log(`  [+] Extra values: ${summary.extra}`);
+  if (summary.invalid_range) console.log(`  [R] Invalid ranges: ${summary.invalid_range}`);
+  console.log();
 }
 
 /**
@@ -1074,7 +1157,9 @@ function printIssues(issues: DriftIssue[]): void {
  */
 function printGitHubAnnotations(issues: DriftIssue[]): void {
   for (const issue of issues) {
-    const level = issue.type === 'duplicate' ? 'warning' : 'error';
+    // Migration and duplicate issues are warnings (actionable but not breaking)
+    // Other issues (missing, mismatch, invalid_range, extra) are errors
+    const level = (issue.type === 'duplicate' || issue.type === 'migration') ? 'warning' : 'error';
     const message = `${issue.message}${issue.expected ? ` (expected: ${issue.expected})` : ''}`;
     console.log(`::${level} file=${issue.file},line=${issue.line}::${message}`);
   }
