@@ -31,8 +31,6 @@ import type {
 } from '../common/types.js';
 import {
   IntentRepository,
-  DEFAULT_PAGE_SIZE,
-  MAX_PAGE_SIZE,
   type IntentEventRecord,
   type PaginatedResult,
 } from './repository.js';
@@ -40,7 +38,6 @@ import { enqueueIntentSubmission, enqueueIntentSubmissionsBatch } from './queues
 import {
   ConsentService,
   ConsentRequiredError,
-  type ConsentType,
   type ConsentValidationResult,
 } from './consent.js';
 import {
@@ -596,14 +593,25 @@ export class IntentService {
       if (!submission) continue;
 
       try {
-        const intent = await this.submit(submission, {
+        const submitOptions: SubmitOptions = {
           tenantId: options.tenantId,
-          trustSnapshot: options.trustSnapshot,
-          trustLevel: options.trustLevel,
-          bypassTrustGate: options.bypassTrustGate,
-          userId: options.userId,
-          bypassConsentCheck: options.bypassConsentCheck,
-        });
+        };
+        if (options.trustSnapshot !== undefined) {
+          submitOptions.trustSnapshot = options.trustSnapshot;
+        }
+        if (options.trustLevel !== undefined) {
+          submitOptions.trustLevel = options.trustLevel;
+        }
+        if (options.bypassTrustGate !== undefined) {
+          submitOptions.bypassTrustGate = options.bypassTrustGate;
+        }
+        if (options.userId !== undefined) {
+          submitOptions.userId = options.userId;
+        }
+        if (options.bypassConsentCheck !== undefined) {
+          submitOptions.bypassConsentCheck = options.bypassConsentCheck;
+        }
+        const intent = await this.submit(submission, submitOptions);
 
         results.successful.push(intent);
         results.stats.succeeded++;
@@ -814,7 +822,7 @@ export class IntentService {
     }
 
     // Phase 2: Batch insert with transaction
-    const insertStart = Date.now();
+    // Note: insert timing is tracked via overall durationMs calculation, not separately
     try {
       // Prepare intent data for batch insert
       const intentsWithEvents = validatedIntents.map(({ submission, dedupeHash }) => ({
@@ -889,7 +897,7 @@ export class IntentService {
       return result;
     }
 
-    const insertDuration = (Date.now() - insertStart) / 1000;
+    // insertDuration intentionally not used; timing is tracked via recordBatchOperation
 
     // Phase 3: Batch enqueue to processing queue
     const enqueueStart = Date.now();
@@ -1138,11 +1146,11 @@ export class IntentService {
     payload: Record<string, unknown>,
     prefix: 'context' | 'metadata'
   ): Record<string, unknown> {
-    const cloned = JSON.parse(JSON.stringify(payload ?? {}));
+    const cloned = JSON.parse(JSON.stringify(payload ?? {})) as Record<string, unknown>;
     const prefixWithDot = `${prefix}.`;
     const relevant = this.config.intent.sensitivePaths
-      .filter((path) => path.startsWith(prefixWithDot))
-      .map((path) => path.slice(prefixWithDot.length));
+      .filter((path: string) => path.startsWith(prefixWithDot))
+      .map((path: string) => path.slice(prefixWithDot.length));
 
     for (const path of relevant) {
       this.applyRedaction(cloned, path.split('.'));

@@ -139,7 +139,7 @@ function mapRow(row: IntentRow): Intent {
     metadata: decryptIfNeeded(row.metadata),
     trustSnapshot: (row.trustSnapshot ?? null) as Record<string, unknown> | null,
     trustLevel: (row.trustLevel ?? null) as TrustLevel | null,
-    trustScore: (row.trustScore ?? null) as TrustScore | null,
+    trustScore: row.trustScore ?? null,
     status: row.status,
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
@@ -189,7 +189,7 @@ export class IntentRepository {
       metadata: encryptIfEnabled((intentData.metadata ?? {}) as Record<string, unknown>),
     };
 
-    return await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       const [intentRow] = await tx.insert(intents).values(encryptedData).returning();
       if (!intentRow) throw new Error('Failed to insert intent');
 
@@ -256,7 +256,7 @@ export class IntentRepository {
       return [];
     }
 
-    return await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       // Prepare encrypted intent data
       const encryptedIntents = intentsWithEvents.map(({ intentData }) => ({
         ...intentData,
@@ -455,7 +455,7 @@ export class IntentRepository {
     eventType: string,
     eventPayload: Record<string, unknown>
   ): Promise<Intent | null> {
-    return await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       // Update the intent status
       const [row] = await tx
         .update(intents)
@@ -512,7 +512,7 @@ export class IntentRepository {
     evaluationResult: Record<string, unknown>,
     eventPayload: Record<string, unknown>
   ): Promise<Intent | null> {
-    return await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       // Update the intent to cancelled status
       const [row] = await tx
         .update(intents)
@@ -576,7 +576,7 @@ export class IntentRepository {
    * Ensures data integrity: either both operations succeed or neither does.
    */
   async softDeleteWithEvent(id: ID, tenantId: ID): Promise<Intent | null> {
-    return await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       const deletedAt = new Date();
 
       // Soft delete the intent

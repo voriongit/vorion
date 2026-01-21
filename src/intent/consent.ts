@@ -8,7 +8,7 @@
  * @packageDocumentation
  */
 
-import { and, desc, eq, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { createLogger } from '../common/logger.js';
 import { getDatabase } from '../common/db.js';
 import {
@@ -21,7 +21,6 @@ import {
   consentPolicies,
   type UserConsentRow,
   type ConsentPolicyRow,
-  type NewUserConsentRow,
 } from './schema.js';
 
 // Re-export CircuitBreakerOpenError for consumers
@@ -415,12 +414,17 @@ export class ConsentService {
         };
       }
 
-      return {
+      const result: ConsentValidationResult = {
         valid: true,
         consentType,
-        grantedAt: row.grantedAt?.toISOString(),
         version: row.version,
       };
+
+      if (row.grantedAt) {
+        result.grantedAt = row.grantedAt.toISOString();
+      }
+
+      return result;
     });
   }
 

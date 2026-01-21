@@ -157,7 +157,7 @@ export async function checkPolicyLoaderHealth(): Promise<ComponentHealth> {
   const start = Date.now();
   try {
     // Try to access the policy loader singleton - if it initializes, the loader is healthy
-    getPolicyLoader();
+    await Promise.resolve(getPolicyLoader());
     // The loader being accessible means it's initialized
     return { status: 'ok', latencyMs: Date.now() - start };
   } catch (error) {
@@ -209,7 +209,7 @@ export async function checkDetailedQueueHealth(): Promise<ComponentCheckResult> 
  * Liveness check - is the process alive?
  * Should return quickly and only fail if process is deadlocked
  */
-export async function livenessCheck(): Promise<{ alive: boolean }> {
+export function livenessCheck(): { alive: boolean } {
   return { alive: true };
 }
 
@@ -239,7 +239,7 @@ export async function readinessCheck(): Promise<HealthStatus> {
   return {
     status: anyError ? 'unhealthy' : allOk ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
-    version: process.env['npm_package_version'] || '0.0.0',
+    version: process.env['npm_package_version'] ?? '0.0.0',
     uptime: Math.floor((Date.now() - startTime) / 1000),
     checks: { database, redis, queues, policies },
   };
@@ -304,7 +304,7 @@ export async function globalHealthCheck(
   if (isShuttingDown) {
     return {
       status: 'shutting_down',
-      version: process.env['npm_package_version'] || '0.0.0',
+      version: process.env['npm_package_version'] ?? '0.0.0',
       environment: config.env,
       timestamp: new Date().toISOString(),
       process: {
@@ -345,7 +345,7 @@ export async function globalHealthCheck(
 
   return {
     status,
-    version: process.env['npm_package_version'] || '0.0.0',
+    version: process.env['npm_package_version'] ?? '0.0.0',
     environment: config.env,
     timestamp: new Date().toISOString(),
     process: {

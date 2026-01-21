@@ -8,14 +8,16 @@
  */
 
 import { eq, and, lt, desc, sql } from 'drizzle-orm';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { createLogger } from '../common/logger.js';
-import { getDatabase, type Database } from '../common/db.js';
+import { getDatabase } from '../common/db.js';
 import {
   escalations,
   escalationAudit,
   type NewEscalation,
   type NewEscalationAudit,
   type Escalation,
+  type EscalationAudit,
 } from '../db/schema/escalations.js';
 import type { ID } from '../common/types.js';
 
@@ -88,16 +90,16 @@ export interface EscalationResponse {
  * Escalation Service
  */
 export class EscalationService {
-  private db: Database | null = null;
+  private db: NodePgDatabase | null = null;
   private initialized: boolean = false;
 
   /**
    * Initialize the service
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) return;
 
-    this.db = await getDatabase();
+    this.db = getDatabase();
     this.initialized = true;
     logger.info('Escalation service initialized');
   }
@@ -105,9 +107,9 @@ export class EscalationService {
   /**
    * Ensure service is initialized
    */
-  private async ensureInitialized(): Promise<Database> {
+  private ensureInitialized(): NodePgDatabase {
     if (!this.initialized || !this.db) {
-      await this.initialize();
+      this.initialize();
     }
     return this.db!;
   }
@@ -116,7 +118,7 @@ export class EscalationService {
    * Create a new escalation
    */
   async create(request: CreateEscalationRequest): Promise<EscalationResponse> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     const timeoutAt = new Date(Date.now() + request.timeoutMinutes * 60 * 1000);
 
@@ -166,7 +168,7 @@ export class EscalationService {
    * Get an escalation by ID with tenant authorization
    */
   async get(id: ID, tenantId: ID): Promise<EscalationResponse | null> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     const result = await db
       .select()
@@ -183,7 +185,7 @@ export class EscalationService {
    * Query escalations with tenant scope
    */
   async query(query: EscalationQuery): Promise<EscalationResponse[]> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     const conditions = [eq(escalations.tenantId, query.tenantId)];
 
@@ -211,14 +213,14 @@ export class EscalationService {
       .limit(query.limit ?? 100)
       .offset(query.offset ?? 0);
 
-    return results.map((r) => this.toResponse(r));
+    return results.map((r: Escalation) => this.toResponse(r));
   }
 
   /**
    * Resolve an escalation (approve or reject)
    */
   async resolve(request: ResolveEscalationRequest, tenantId: ID): Promise<EscalationResponse | null> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     // Get current escalation with tenant check
     const current = await db
@@ -298,7 +300,7 @@ export class EscalationService {
    * Cancel an escalation
    */
   async cancel(id: ID, tenantId: ID, cancelledBy: ID, reason?: string): Promise<EscalationResponse | null> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     const current = await db
       .select()
@@ -346,7 +348,7 @@ export class EscalationService {
    * Process timed-out escalations
    */
   async processTimeouts(): Promise<number> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     const now = new Date();
 
@@ -397,7 +399,7 @@ export class EscalationService {
     details?: Record<string, unknown>;
     timestamp: string;
   }>> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     const audit = await db
       .select()
@@ -410,22 +412,43 @@ export class EscalationService {
       )
       .orderBy(desc(escalationAudit.timestamp));
 
-    return audit.map((a) => ({
-      action: a.action,
-      actorId: a.actorId ?? undefined,
-      actorType: a.actorType,
-      previousStatus: a.previousStatus ?? undefined,
-      newStatus: a.newStatus ?? undefined,
-      details: (a.details as Record<string, unknown>) ?? undefined,
-      timestamp: a.timestamp.toISOString(),
-    }));
+    return audit.map((a: EscalationAudit) => {
+      const entry: {
+        action: string;
+        actorId?: string;
+        actorType: string;
+        previousStatus?: string;
+        newStatus?: string;
+        details?: Record<string, unknown>;
+        timestamp: string;
+      } = {
+        action: a.action,
+        actorType: a.actorType,
+        timestamp: a.timestamp.toISOString(),
+      };
+
+      if (a.actorId !== null) {
+        entry.actorId = a.actorId;
+      }
+      if (a.previousStatus !== null) {
+        entry.previousStatus = a.previousStatus;
+      }
+      if (a.newStatus !== null) {
+        entry.newStatus = a.newStatus;
+      }
+      if (a.details !== null) {
+        entry.details = a.details;
+      }
+
+      return entry;
+    });
   }
 
   /**
    * Get pending escalation count for tenant
    */
   async getPendingCount(tenantId: ID): Promise<number> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     const result = await db
       .select({ count: sql<number>`count(*)` })
@@ -443,7 +466,7 @@ export class EscalationService {
   /**
    * Log audit entry
    */
-  private async logAudit(db: Database, entry: Omit<NewEscalationAudit, 'id' | 'timestamp'>): Promise<void> {
+  private async logAudit(db: NodePgDatabase, entry: Omit<NewEscalationAudit, 'id' | 'timestamp'>): Promise<void> {
     await db.insert(escalationAudit).values(entry);
   }
 
@@ -451,7 +474,7 @@ export class EscalationService {
    * Convert database row to response
    */
   private toResponse(row: Escalation): EscalationResponse {
-    return {
+    const response: EscalationResponse = {
       id: row.id,
       tenantId: row.tenantId,
       intentId: row.intentId,
@@ -460,17 +483,34 @@ export class EscalationService {
       priority: row.priority,
       status: row.status,
       escalatedTo: row.escalatedTo,
-      escalatedBy: row.escalatedBy ?? undefined,
-      context: (row.context as Record<string, unknown>) ?? undefined,
-      requestedAction: row.requestedAction ?? undefined,
-      resolvedBy: row.resolvedBy ?? undefined,
-      resolvedAt: row.resolvedAt?.toISOString(),
-      resolution: row.resolution ?? undefined,
-      resolutionNotes: row.resolutionNotes ?? undefined,
       timeoutAt: row.timeoutAt.toISOString(),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+
+    if (row.escalatedBy !== null) {
+      response.escalatedBy = row.escalatedBy;
+    }
+    if (row.context !== null) {
+      response.context = row.context;
+    }
+    if (row.requestedAction !== null) {
+      response.requestedAction = row.requestedAction;
+    }
+    if (row.resolvedBy !== null) {
+      response.resolvedBy = row.resolvedBy;
+    }
+    if (row.resolvedAt !== null) {
+      response.resolvedAt = row.resolvedAt.toISOString();
+    }
+    if (row.resolution !== null) {
+      response.resolution = row.resolution;
+    }
+    if (row.resolutionNotes !== null) {
+      response.resolutionNotes = row.resolutionNotes;
+    }
+
+    return response;
   }
 }
 

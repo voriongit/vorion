@@ -116,7 +116,7 @@ class AuditQueue {
 
     // If queue is getting large, process immediately
     if (this.queue.length >= this.maxBatchSize) {
-      this.flush();
+      void this.flush();
     }
   }
 
@@ -128,7 +128,7 @@ class AuditQueue {
       clearInterval(this.flushTimer);
     }
     this.flushTimer = setInterval(() => {
-      this.flush();
+      void this.flush();
     }, this.flushIntervalMs);
   }
 
@@ -242,7 +242,7 @@ function getAuditQueue(): AuditQueue {
  *
  * @param entry - The audit entry to record (without id and timestamp)
  */
-export async function recordAudit(entry: CreateAuditEntry): Promise<void> {
+export function recordAudit(entry: CreateAuditEntry): void {
   // Fire and forget - enqueue for async processing
   setImmediate(() => {
     try {
@@ -285,23 +285,36 @@ export async function recordAuditSync(entry: CreateAuditEntry): Promise<AuditEnt
       })
       .returning();
 
+    if (!row) {
+      throw new Error('Failed to insert audit entry - no row returned');
+    }
+
     logger.debug(
       { auditId: row.id, action: entry.action, resourceType: entry.resourceType },
       'Audit entry recorded'
     );
 
-    return {
+    const result: AuditEntry = {
       id: row.id,
       tenantId: row.tenantId,
       userId: row.userId,
       action: row.action as AuditAction,
       resourceType: row.resourceType as AuditResourceType,
       resourceId: row.resourceId,
-      metadata: row.metadata as Record<string, unknown> | undefined,
-      ipAddress: row.ipAddress ?? undefined,
-      userAgent: row.userAgent ?? undefined,
       timestamp: row.timestamp,
     };
+
+    if (row.metadata != null) {
+      result.metadata = row.metadata as Record<string, unknown>;
+    }
+    if (row.ipAddress != null) {
+      result.ipAddress = row.ipAddress;
+    }
+    if (row.userAgent != null) {
+      result.userAgent = row.userAgent;
+    }
+
+    return result;
   });
 }
 
@@ -367,18 +380,29 @@ export async function queryAuditLog(filters: AuditQueryFilters): Promise<AuditQu
       .limit(limit)
       .offset(offset);
 
-    const entries: AuditEntry[] = rows.map((row) => ({
-      id: row.id,
-      tenantId: row.tenantId,
-      userId: row.userId,
-      action: row.action as AuditAction,
-      resourceType: row.resourceType as AuditResourceType,
-      resourceId: row.resourceId,
-      metadata: row.metadata as Record<string, unknown> | undefined,
-      ipAddress: row.ipAddress ?? undefined,
-      userAgent: row.userAgent ?? undefined,
-      timestamp: row.timestamp,
-    }));
+    const entries: AuditEntry[] = rows.map((row) => {
+      const entry: AuditEntry = {
+        id: row.id,
+        tenantId: row.tenantId,
+        userId: row.userId,
+        action: row.action as AuditAction,
+        resourceType: row.resourceType as AuditResourceType,
+        resourceId: row.resourceId,
+        timestamp: row.timestamp,
+      };
+
+      if (row.metadata != null) {
+        entry.metadata = row.metadata as Record<string, unknown>;
+      }
+      if (row.ipAddress != null) {
+        entry.ipAddress = row.ipAddress;
+      }
+      if (row.userAgent != null) {
+        entry.userAgent = row.userAgent;
+      }
+
+      return entry;
+    });
 
     return {
       entries,
@@ -428,13 +452,22 @@ export async function getUserAuditHistory(
   userId: string,
   options?: { from?: Date; to?: Date; limit?: number }
 ): Promise<AuditEntry[]> {
-  const result = await queryAuditLog({
+  const filters: AuditQueryFilters = {
     tenantId,
     userId,
-    from: options?.from,
-    to: options?.to,
-    limit: options?.limit,
-  });
+  };
+
+  if (options?.from !== undefined) {
+    filters.from = options.from;
+  }
+  if (options?.to !== undefined) {
+    filters.to = options.to;
+  }
+  if (options?.limit !== undefined) {
+    filters.limit = options.limit;
+  }
+
+  const result = await queryAuditLog(filters);
 
   return result.entries;
 }
@@ -470,8 +503,16 @@ export function extractRequestMetadata(request: {
   headers?: Record<string, string | string[] | undefined>;
 }): { ipAddress?: string; userAgent?: string } {
   const userAgentHeader = request.headers?.['user-agent'];
-  return {
-    ipAddress: request.ip,
-    userAgent: Array.isArray(userAgentHeader) ? userAgentHeader[0] : userAgentHeader,
-  };
+  const userAgent = Array.isArray(userAgentHeader) ? userAgentHeader[0] : userAgentHeader;
+
+  const result: { ipAddress?: string; userAgent?: string } = {};
+
+  if (request.ip !== undefined) {
+    result.ipAddress = request.ip;
+  }
+  if (userAgent !== undefined) {
+    result.userAgent = userAgent;
+  }
+
+  return result;
 }

@@ -60,7 +60,7 @@ export class EnforcementService {
   /**
    * Make an enforcement decision
    */
-  async decide(context: EnforcementContext): Promise<Decision> {
+  decide(context: EnforcementContext): Decision {
     const { intent, evaluation, trustScore, trustLevel } = context;
 
     // Check minimum trust level

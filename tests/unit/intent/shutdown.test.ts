@@ -232,11 +232,11 @@ describe('Graceful Shutdown Module', () => {
       expect(mockCleanup).toHaveBeenCalled();
     });
 
-    it('should handle missing cleanup function gracefully', async () => {
+    it('should handle missing cleanup function gracefully', () => {
       const mockRequest = {} as unknown as FastifyRequest;
 
       // Should not throw
-      await expect(shutdownResponseHook(mockRequest)).resolves.toBeUndefined();
+      expect(() => shutdownResponseHook(mockRequest)).not.toThrow();
     });
   });
 

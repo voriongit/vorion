@@ -159,7 +159,7 @@ export function encrypt(plaintext: string): EncryptedEnvelope {
  */
 export function decrypt(envelope: EncryptedEnvelope): string {
   if (envelope.version !== 1) {
-    throw new EncryptionError(`Unsupported encryption version: ${envelope.version}`, { version: envelope.version });
+    throw new EncryptionError(`Unsupported encryption version: ${String(envelope.version)}`, { version: envelope.version });
   }
 
   // Use the KDF version from the envelope, defaulting to v1 for backward compatibility

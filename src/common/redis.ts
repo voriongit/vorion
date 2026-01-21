@@ -75,7 +75,7 @@ export async function checkRedisHealth(timeoutMs?: number): Promise<{
     if (result === 'PONG') {
       return { healthy: true, latencyMs };
     }
-    return { healthy: false, latencyMs, error: `Unexpected response: ${result}` };
+    return { healthy: false, latencyMs, error: `Unexpected response: ${String(result)}` };
   } catch (error) {
     const latencyMs = Math.round(performance.now() - start);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

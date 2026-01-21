@@ -9,7 +9,7 @@
 import { createLogger } from '../common/logger.js';
 import { getRedis } from '../common/redis.js';
 import { PolicyService, createPolicyService } from './service.js';
-import type { Policy, PolicyDefinition } from './types.js';
+import type { Policy } from './types.js';
 import type { ID } from '../common/types.js';
 import { recordPolicyCacheHit, recordPolicyCacheMiss } from '../intent/metrics.js';
 
@@ -165,7 +165,7 @@ export class PolicyLoader {
     const redis = getRedis();
     redis
       .setex(CACHE_PREFIX + cacheKey, this.cacheTtl, JSON.stringify(policies))
-      .catch((error) => {
+      .catch((error: unknown) => {
         logger.warn({ error }, 'Failed to update Redis policy cache');
       });
   }

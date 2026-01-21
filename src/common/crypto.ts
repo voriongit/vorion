@@ -6,6 +6,8 @@
  * @packageDocumentation
  */
 
+/// <reference lib="dom" />
+
 import { createLogger } from './logger.js';
 
 const logger = createLogger({ component: 'crypto' });

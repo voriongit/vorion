@@ -81,7 +81,7 @@ export function validateBody<T extends ZodSchema>(
           'Request validation failed'
         );
 
-        reply.status(422).send({
+        void reply.status(422).send({
           error: {
             code: 'VALIDATION_ERROR',
             message: 'Request validation failed',
@@ -92,10 +92,10 @@ export function validateBody<T extends ZodSchema>(
       }
 
       // Replace body with validated/sanitized version
-      (request as { body: z.infer<T> }).body = result.data;
+      (request as { body: z.infer<T> }).body = result.data as z.infer<T>;
     } catch (error) {
       if (error instanceof ValidationError) {
-        reply.status(400).send({
+        void reply.status(400).send({
           error: {
             code: error.code,
             message: error.message,
@@ -121,7 +121,7 @@ export function validateQuery<T extends ZodSchema>(
     if (!result.success) {
       const errors = formatZodErrors(result.error);
 
-      reply.status(400).send({
+      void reply.status(400).send({
         error: {
           code: 'INVALID_QUERY',
           message: 'Invalid query parameters',
@@ -132,7 +132,7 @@ export function validateQuery<T extends ZodSchema>(
     }
 
     // Replace query with validated version
-    (request as { query: z.infer<T> }).query = result.data;
+    (request as { query: z.infer<T> }).query = result.data as z.infer<T>;
   };
 }
 
@@ -148,7 +148,7 @@ export function validateParams<T extends ZodSchema>(
     if (!result.success) {
       const errors = formatZodErrors(result.error);
 
-      reply.status(400).send({
+      void reply.status(400).send({
         error: {
           code: 'INVALID_PARAMS',
           message: 'Invalid route parameters',
@@ -159,7 +159,7 @@ export function validateParams<T extends ZodSchema>(
     }
 
     // Replace params with validated version
-    (request as { params: z.infer<T> }).params = result.data;
+    (request as { params: z.infer<T> }).params = result.data as z.infer<T>;
   };
 }
 

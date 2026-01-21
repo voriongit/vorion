@@ -191,7 +191,9 @@ export class CircuitBreaker {
     this.halfOpenMaxAttempts = options.halfOpenMaxAttempts ?? 3;
     this.monitorWindowMs = options.monitorWindowMs ?? 60000;
     this.redis = options.redis ?? getRedis();
-    this.onStateChange = options.onStateChange;
+    if (options.onStateChange) {
+      this.onStateChange = options.onStateChange;
+    }
   }
 
   /**
@@ -651,18 +653,23 @@ export function getCircuitBreaker(
   onStateChange?: (from: CircuitState, to: CircuitState, breaker: CircuitBreaker) => void
 ): CircuitBreaker {
   if (!circuitBreakers.has(serviceName)) {
-    // Get base config, fall back to database config for unknown services
-    const baseConfig = CIRCUIT_BREAKER_CONFIGS[serviceName] || {
-      ...CIRCUIT_BREAKER_CONFIGS.database,
-      name: serviceName,
-    };
+    // Default values for unknown services
+    const DEFAULT_FAILURE_THRESHOLD = 5;
+    const DEFAULT_RESET_TIMEOUT_MS = 30000;
+    const DEFAULT_HALF_OPEN_MAX_ATTEMPTS = 3;
+    const DEFAULT_MONITOR_WINDOW_MS = 60000;
+
+    // Get base config if it exists
+    const baseConfig = CIRCUIT_BREAKER_CONFIGS[serviceName];
 
     // Apply any config overrides
-    const overrides = configOverrides[serviceName] || {};
+    const overrides = configOverrides[serviceName];
     const finalConfig: CircuitBreakerConfig = {
-      ...baseConfig,
-      ...overrides,
       name: serviceName, // Always use the requested service name
+      failureThreshold: overrides?.failureThreshold ?? baseConfig?.failureThreshold ?? DEFAULT_FAILURE_THRESHOLD,
+      resetTimeoutMs: overrides?.resetTimeoutMs ?? baseConfig?.resetTimeoutMs ?? DEFAULT_RESET_TIMEOUT_MS,
+      halfOpenMaxAttempts: overrides?.halfOpenMaxAttempts ?? baseConfig?.halfOpenMaxAttempts ?? DEFAULT_HALF_OPEN_MAX_ATTEMPTS,
+      monitorWindowMs: overrides?.monitorWindowMs ?? baseConfig?.monitorWindowMs ?? DEFAULT_MONITOR_WINDOW_MS,
     };
 
     const breaker = new CircuitBreaker({
@@ -671,7 +678,7 @@ export function getCircuitBreaker(
       resetTimeoutMs: finalConfig.resetTimeoutMs,
       halfOpenMaxAttempts: finalConfig.halfOpenMaxAttempts,
       monitorWindowMs: finalConfig.monitorWindowMs,
-      onStateChange,
+      ...(onStateChange && { onStateChange }),
     });
 
     circuitBreakers.set(serviceName, breaker);

@@ -35,12 +35,6 @@ const logger = createLogger({ component: 'trust-cache' });
 // ============================================================================
 
 /**
- * Default cache TTL in milliseconds (5 minutes)
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _DEFAULT_CACHE_TTL_MS = 300_000;
-
-/**
  * Default cache TTL in seconds (5 minutes) - for legacy functions
  */
 const CACHE_TTL_SECONDS = 300;
@@ -86,12 +80,6 @@ const CACHE_KEY_PREFIX = 'trust';
  * Redis key prefix for generic XFetch cache
  */
 const XFETCH_KEY_PREFIX = 'xfetch';
-
-/**
- * Default computation time estimate in ms (used when delta is unknown)
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _DEFAULT_DELTA_MS = 50;
 
 // ============================================================================
 // XFetch Cache Entry Types
@@ -437,7 +425,7 @@ export async function getWithXFetch<T>(
     const cached = await redis.get(cacheKey);
 
     if (cached) {
-      const entry: XFetchCacheEntry<T> = JSON.parse(cached);
+      const entry = JSON.parse(cached) as XFetchCacheEntry<T>;
 
       // Check if we should refresh early using XFetch algorithm
       if (shouldRefresh(entry, beta)) {
@@ -537,7 +525,7 @@ function triggerBackgroundRefresh<T>(
 
   // Create the refresh promise
   const refreshPromise = fetchAndCacheXFetch(cacheKey, logKey, fetchFn, ttlMs, jitter)
-    .catch((error) => {
+    .catch((error: unknown) => {
       logger.error({ error, key: logKey }, 'Background XFetch refresh failed');
     })
     .finally(() => {
@@ -617,7 +605,7 @@ export async function getCachedTrustScoreWithRefresh(
     const cached = await redis.get(cacheKey);
 
     if (cached) {
-      const data: CachedTrustScore = JSON.parse(cached);
+      const data = JSON.parse(cached) as CachedTrustScore;
 
       // Check if we should refresh early using XFetch algorithm
       // Use delta if available, otherwise fall back to legacy behavior
@@ -718,7 +706,7 @@ function refreshTrustInBackground(
 
   // Create the refresh promise
   const refreshPromise = fetchAndCacheTrust(cacheKey, entityId, tenantId, fetchFn)
-    .catch((error) => {
+    .catch((error: unknown) => {
       logger.error({ error, entityId, tenantId }, 'Background trust refresh failed');
       throw error; // Re-throw to mark promise as rejected
     })
@@ -776,7 +764,7 @@ export async function getDecisionTimeCachedTrustScore(
     const cached = await redis.get(cacheKey);
 
     if (cached) {
-      const data: CachedTrustScore = JSON.parse(cached);
+      const data = JSON.parse(cached) as CachedTrustScore;
       const now = Math.floor(Date.now() / 1000);
       const age = now - data.cachedAt;
 
@@ -864,7 +852,7 @@ export async function getCachedTrustScore(
     const cached = await redis.get(cacheKey);
 
     if (cached) {
-      const data: CachedTrustScore = JSON.parse(cached);
+      const data = JSON.parse(cached) as CachedTrustScore;
       recordCacheHit();
       logger.debug({ entityId, tenantId, cacheKey }, 'Trust score cache hit');
       return data.record;

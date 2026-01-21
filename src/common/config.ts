@@ -82,7 +82,7 @@ const configSchema = z.object({
     requireJti: z.coerce.boolean().default(false),
   }).refine(
     (jwt) => {
-      const env = process.env['VORION_ENV'] || 'development';
+      const env = process.env['VORION_ENV'] ?? 'development';
       const isInsecureDefault = jwt.secret === 'development-secret-change-in-production';
       // Block insecure default in production/staging
       if ((env === 'production' || env === 'staging') && isInsecureDefault) {
@@ -188,19 +188,19 @@ const configSchema = z.object({
       default: z.object({
         limit: z.coerce.number().min(1).default(100),
         windowSeconds: z.coerce.number().min(1).default(60),
-      }),
+      }).default({ limit: 100, windowSeconds: 60 }),
       highRisk: z.object({
         limit: z.coerce.number().min(1).default(10),
         windowSeconds: z.coerce.number().min(1).default(60),
-      }),
+      }).default({ limit: 10, windowSeconds: 60 }),
       dataExport: z.object({
         limit: z.coerce.number().min(1).default(5),
         windowSeconds: z.coerce.number().min(1).default(60),
-      }),
+      }).default({ limit: 5, windowSeconds: 60 }),
       adminAction: z.object({
         limit: z.coerce.number().min(1).default(20),
         windowSeconds: z.coerce.number().min(1).default(60),
-      }),
+      }).default({ limit: 20, windowSeconds: 60 }),
     }).default({}),
     // Policy evaluation circuit breaker configuration (legacy - prefer circuitBreaker.policyEngine)
     policyCircuitBreaker: z.object({
@@ -622,10 +622,10 @@ export function getConfig(): Config {
   return configInstance;
 }
 
-function parseJsonRecord(value: string | undefined | null) {
+function parseJsonRecord(value: string | undefined | null): Record<string, string> {
   if (!value) return {};
   try {
-    const parsed = JSON.parse(value);
+    const parsed: unknown = JSON.parse(value);
     if (typeof parsed === 'object' && parsed !== null) {
       return parsed as Record<string, string>;
     }
@@ -643,13 +643,13 @@ function parseList(value: string | undefined | null): string[] {
     .filter((item) => item.length > 0);
 }
 
-function parseNumberRecord(value: string | undefined | null) {
+function parseNumberRecord(value: string | undefined | null): Record<string, number> {
   if (!value) return {};
   try {
-    const parsed = JSON.parse(value);
+    const parsed: unknown = JSON.parse(value);
     if (typeof parsed === 'object' && parsed !== null) {
       const result: Record<string, number> = {};
-      for (const [key, val] of Object.entries(parsed)) {
+      for (const [key, val] of Object.entries(parsed as Record<string, unknown>)) {
         const num = Number(val);
         if (!Number.isNaN(num)) {
           result[key] = num;

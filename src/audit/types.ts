@@ -176,7 +176,7 @@ export interface AuditRecord {
   tenantId: ID;
 
   // Event identification
-  eventType: AuditEventType | string;
+  eventType: string;
   eventCategory: AuditCategory;
   severity: AuditSeverity;
 
@@ -226,7 +226,7 @@ export interface AuditRecord {
  */
 export interface CreateAuditRecordInput {
   tenantId: ID;
-  eventType: AuditEventType | string;
+  eventType: string;
   actor: AuditActor;
   target: AuditTarget;
   action: string;
@@ -248,7 +248,7 @@ export interface CreateAuditRecordInput {
 
 export interface AuditQueryFilters {
   tenantId: ID;
-  eventType?: AuditEventType | string;
+  eventType?: string;
   eventCategory?: AuditCategory;
   severity?: AuditSeverity;
   actorId?: ID;

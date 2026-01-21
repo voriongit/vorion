@@ -106,13 +106,18 @@ export async function runCleanup(): Promise<CleanupResult> {
     'Cleanup job completed'
   );
 
-  return {
+  const result: CleanupResult = {
     eventsDeleted,
     intentsPurged,
-    auditCleanup,
     durationMs,
     errors,
   };
+
+  if (auditCleanup) {
+    result.auditCleanup = auditCleanup;
+  }
+
+  return result;
 }
 
 /**
@@ -122,12 +127,10 @@ export async function runCleanup(): Promise<CleanupResult> {
 export function scheduleCleanup(intervalMs: number = 24 * 60 * 60 * 1000): () => void {
   logger.info({ intervalMs }, 'Scheduling cleanup job');
 
-  const intervalId = setInterval(async () => {
-    try {
-      await runCleanup();
-    } catch (error) {
+  const intervalId = setInterval(() => {
+    runCleanup().catch((error: unknown) => {
       logger.error({ error }, 'Scheduled cleanup failed');
-    }
+    });
   }, intervalMs);
 
   // Return cleanup function

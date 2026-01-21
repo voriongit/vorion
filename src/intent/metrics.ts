@@ -849,7 +849,7 @@ export const tokenRevocationChecks = new Counter({
 export function recordIntentSubmission(
   tenantId: string,
   intentType: string | null | undefined,
-  outcome: 'success' | 'duplicate' | 'rejected' | 'error',
+  outcome: 'success' | 'duplicate' | 'rejected' | 'error' | 'consent_denied',
   trustLevel?: number
 ): void {
   intentsSubmittedTotal.inc({

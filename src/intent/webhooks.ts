@@ -197,7 +197,7 @@ function isPrivateIP(ip: string): boolean {
 /**
  * Validate a webhook URL for SSRF protection
  */
-export async function validateWebhookUrl(url: string): Promise<{ valid: boolean; reason?: string }> {
+export function validateWebhookUrl(url: string): { valid: boolean; reason?: string } {
   try {
     const parsed = new URL(url);
 
@@ -278,7 +278,7 @@ export async function validateWebhookUrl(url: string): Promise<{ valid: boolean;
  * This performs actual DNS resolution to catch DNS rebinding attacks
  */
 export async function validateWebhookUrlAtRuntime(url: string): Promise<{ valid: boolean; reason?: string; resolvedIP?: string }> {
-  const basicValidation = await validateWebhookUrl(url);
+  const basicValidation = validateWebhookUrl(url);
   if (!basicValidation.valid) {
     return basicValidation;
   }
@@ -851,13 +851,13 @@ export class WebhookService {
   /**
    * Transition circuit breaker to a new state with logging and metrics
    */
-  private async transitionCircuitState(
+  private transitionCircuitState(
     tenantId: ID,
     webhookId: string,
     fromState: CircuitBreakerState,
     toState: CircuitBreakerState,
     circuitData: CircuitBreakerData
-  ): Promise<void> {
+  ): void {
     if (fromState === toState) return;
 
     logger.info(
@@ -906,7 +906,7 @@ export class WebhookService {
           const previousState = circuitData.state;
           circuitData.state = 'half_open';
           await this.setCircuitState(tenantId, webhookId, circuitData);
-          await this.transitionCircuitState(tenantId, webhookId, previousState, 'half_open', circuitData);
+          this.transitionCircuitState(tenantId, webhookId, previousState, 'half_open', circuitData);
 
           logger.info(
             { tenantId, webhookId, elapsedMs: now - circuitData.openedAt },
@@ -957,7 +957,7 @@ export class WebhookService {
     await this.setCircuitState(tenantId, webhookId, circuitData);
 
     if (previousState !== 'closed') {
-      await this.transitionCircuitState(tenantId, webhookId, previousState, 'closed', circuitData);
+      this.transitionCircuitState(tenantId, webhookId, previousState, 'closed', circuitData);
       logger.info(
         { tenantId, webhookId, previousState },
         'Circuit breaker closed after successful delivery'
@@ -985,7 +985,7 @@ export class WebhookService {
       circuitData.openedAt = Date.now();
 
       await this.setCircuitState(tenantId, webhookId, circuitData);
-      await this.transitionCircuitState(tenantId, webhookId, previousState, 'open', circuitData);
+      this.transitionCircuitState(tenantId, webhookId, previousState, 'open', circuitData);
 
       logger.warn(
         { tenantId, webhookId, failures: circuitData.failures },
@@ -997,7 +997,7 @@ export class WebhookService {
       circuitData.openedAt = Date.now();
 
       await this.setCircuitState(tenantId, webhookId, circuitData);
-      await this.transitionCircuitState(tenantId, webhookId, previousState, 'open', circuitData);
+      this.transitionCircuitState(tenantId, webhookId, previousState, 'open', circuitData);
 
       logger.warn(
         { tenantId, webhookId, failures: circuitData.failures, threshold: webhookConfig.circuitFailureThreshold },
@@ -1044,7 +1044,7 @@ export class WebhookService {
     await this.setCircuitState(tenantId, webhookId, circuitData);
 
     if (previousState !== 'closed') {
-      await this.transitionCircuitState(tenantId, webhookId, previousState, 'closed', circuitData);
+      this.transitionCircuitState(tenantId, webhookId, previousState, 'closed', circuitData);
     }
 
     logger.info(

@@ -35,6 +35,7 @@ export function sanitizeString(input: string): string {
     // Remove null bytes
     .replace(/\0/g, '')
     // Remove control characters (except newlines and tabs)
+    // eslint-disable-next-line no-control-regex -- Intentional: sanitizing dangerous control characters
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
     // Normalize unicode to NFC form
     .normalize('NFC')
@@ -55,7 +56,7 @@ export function sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
     if (typeof value === 'string') {
       result[sanitizedKey] = sanitizeString(value);
     } else if (Array.isArray(value)) {
-      result[sanitizedKey] = value.map((item) =>
+      result[sanitizedKey] = value.map((item): unknown =>
         typeof item === 'string'
           ? sanitizeString(item)
           : typeof item === 'object' && item !== null
@@ -140,10 +141,11 @@ export function createBodyParser<T extends z.ZodTypeAny>(schema: T) {
           : data;
 
       // Validate with schema
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- Zod schema.parse returns any but is correctly typed via z.infer<T>
       return schema.parse(sanitized);
     },
 
-    safeParse: (data: unknown) => {
+    safeParse: (data: unknown): z.SafeParseReturnType<z.input<T>, z.output<T>> => {
       // Sanitize if object
       const sanitized =
         typeof data === 'object' && data !== null
@@ -151,7 +153,7 @@ export function createBodyParser<T extends z.ZodTypeAny>(schema: T) {
           : data;
 
       // Validate with schema
-      return schema.safeParse(sanitized);
+      return schema.safeParse(sanitized) as z.SafeParseReturnType<z.input<T>, z.output<T>>;
     },
   };
 }
@@ -199,7 +201,9 @@ export class ValidationError extends Error {
     super(message);
     this.name = 'ValidationError';
     this.code = code;
-    this.field = field;
+    if (field !== undefined) {
+      this.field = field;
+    }
   }
 }
 

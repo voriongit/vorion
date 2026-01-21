@@ -213,10 +213,14 @@ export function registerShutdownHandlers(
   };
 
   // SIGTERM: Kubernetes sends this for graceful termination
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGTERM', () => {
+    void shutdown('SIGTERM');
+  });
 
   // SIGINT: Ctrl+C in terminal
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGINT', () => {
+    void shutdown('SIGINT');
+  });
 
   logger.debug('Shutdown signal handlers registered');
 }
@@ -235,10 +239,10 @@ const DEFAULT_RETRY_AFTER_SECONDS = 5;
  * - Includes Retry-After header (RFC 7231)
  * - Provides structured error response
  */
-export async function shutdownRequestHook(
+export function shutdownRequestHook(
   request: FastifyRequest,
   reply: FastifyReply
-): Promise<void> {
+): void {
   if (isShuttingDown) {
     logger.info(
       { url: request.url, method: request.method },
@@ -246,7 +250,7 @@ export async function shutdownRequestHook(
     );
 
     // Set Retry-After header per RFC 7231 Section 7.1.3
-    reply
+    void reply
       .status(503)
       .header('Retry-After', String(DEFAULT_RETRY_AFTER_SECONDS))
       .header('Connection', 'close')
@@ -273,7 +277,7 @@ export async function shutdownRequestHook(
  * Fastify hook to clean up request tracking.
  * Add this to server.addHook('onResponse', ...)
  */
-export async function shutdownResponseHook(request: FastifyRequest): Promise<void> {
+export function shutdownResponseHook(request: FastifyRequest): void {
   const cleanup = (request as FastifyRequest & { shutdownCleanup?: () => void }).shutdownCleanup;
   if (cleanup) {
     cleanup();

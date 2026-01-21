@@ -15,15 +15,11 @@ import { getConfig } from '../common/config.js';
 import { getRedis } from '../common/redis.js';
 import { getDatabase, withLongQueryTimeout } from '../common/db.js';
 import { createAuditService, createAuditHelper } from '../audit/index.js';
-import {
-  withCircuitBreaker,
-  CircuitBreakerOpenError,
-} from '../common/circuit-breaker.js';
+import { withCircuitBreaker } from '../common/circuit-breaker.js';
 import type { ID } from '../common/types.js';
 import {
   intents,
   intentEvents,
-  intentEvaluations,
   escalations,
   auditRecords,
 } from './schema.js';
@@ -262,14 +258,19 @@ export class GdprService {
             createdAt: esc.createdAt.toISOString(),
             resolvedAt: esc.resolvedAt?.toISOString() ?? null,
           })),
-          auditRecords: userAuditRecords.map((record) => ({
-            id: record.id,
-            eventType: record.eventType,
-            action: record.action,
-            outcome: record.outcome,
-            eventTime: record.eventTime.toISOString(),
-            metadata: (record.metadata ?? undefined) as Record<string, unknown> | undefined,
-          })),
+          auditRecords: userAuditRecords.map((record) => {
+            const auditData: GdprAuditData = {
+              id: record.id,
+              eventType: record.eventType,
+              action: record.action,
+              outcome: record.outcome,
+              eventTime: record.eventTime.toISOString(),
+            };
+            if (record.metadata) {
+              auditData.metadata = record.metadata as Record<string, unknown>;
+            }
+            return auditData;
+          }),
         },
         metadata: {
           totalRecords:

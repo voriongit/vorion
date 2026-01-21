@@ -8,9 +8,8 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import type { JWT } from '@fastify/jwt';
 import { z } from 'zod';
-import { getOpenApiSpec, getOpenApiSpecJson } from './openapi.js';
+import { getOpenApiSpecJson } from './openapi.js';
 import {
   createIntentService,
   intentSubmissionSchema,
@@ -18,7 +17,7 @@ import {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
 } from './index.js';
-import { createEscalationService, type EscalationStatus } from './escalation.js';
+import { createEscalationService } from './escalation.js';
 import { createWebhookService } from './webhooks.js';
 import type { IntentStatus } from '../common/types.js';
 import { INTENT_STATUSES } from '../common/types.js';
@@ -34,14 +33,16 @@ import {
 declare module 'fastify' {
   interface FastifyRequest {
     jwtVerify<T = Record<string, unknown>>(): Promise<T>;
-    user?: {
-      tenantId?: string;
-      sub?: string;
-      roles?: string[];
-      groups?: string[];
-      [key: string]: unknown;
-    };
   }
+}
+
+// Type for JWT user payload
+interface JwtUserPayload {
+  tenantId?: string;
+  sub?: string;
+  roles?: string[];
+  groups?: string[];
+  [key: string]: unknown;
 }
 
 // Lazy-initialized services to avoid database connections at module load
@@ -183,10 +184,10 @@ const deliveryHistoryQuerySchema = z.object({
  * @param server - Fastify instance to register routes on
  * @param opts - Route options (e.g., prefix)
  */
-export async function registerIntentRoutes(
+export function registerIntentRoutes(
   server: FastifyInstance,
   opts: { prefix?: string } = {}
-): Promise<void> {
+): void {
   const prefix = opts.prefix ?? '/api/v1/intent';
 
   // Helper to get tenant ID from JWT
@@ -200,13 +201,15 @@ export async function registerIntentRoutes(
 
   // Helper to get user ID from JWT (for audit logging)
   function getUserId(request: FastifyRequest): string {
-    return request.user?.sub ?? 'anonymous';
+    const user = request.user as JwtUserPayload | undefined;
+    return user?.sub ?? 'anonymous';
   }
 
   // Helper to check if user has admin role (for audit query endpoint)
   function isAdmin(request: FastifyRequest): boolean {
-    const roles = request.user?.roles ?? [];
-    return roles.includes('admin') || roles.includes('compliance_officer');
+    const user = request.user as JwtUserPayload | undefined;
+    const roles = user?.roles ?? [];
+    return Array.isArray(roles) && (roles.includes('admin') || roles.includes('compliance_officer'));
   }
 
   // Helper to log read audit (fire-and-forget)
@@ -219,20 +222,21 @@ export async function registerIntentRoutes(
     metadata?: Record<string, unknown>
   ): void {
     const { ipAddress, userAgent } = extractRequestMetadata(request);
-    recordAudit({
+    const auditParams: Parameters<typeof recordAudit>[0] = {
       tenantId,
       userId: getUserId(request),
       action,
       resourceType,
       resourceId,
-      metadata,
-      ipAddress,
-      userAgent,
-    });
+    };
+    if (ipAddress !== undefined) auditParams.ipAddress = ipAddress;
+    if (userAgent !== undefined) auditParams.userAgent = userAgent;
+    if (metadata !== undefined) auditParams.metadata = metadata;
+    void recordAudit(auditParams);
   }
 
-  server.register(
-    async (api) => {
+  void server.register(
+    (api) => {
       // ========================================================================
       // OpenAPI Documentation Endpoints
       // ========================================================================
@@ -344,10 +348,10 @@ export async function registerIntentRoutes(
         // Build list options with pagination parameters
         const listOptions: Parameters<IntentService['list']>[0] = {
           tenantId,
-          limit: query.limit,
-          offset: query.offset,
-          cursor: query.cursor,
         };
+        if (query.limit !== undefined) listOptions.limit = query.limit;
+        if (query.offset !== undefined) listOptions.offset = query.offset;
+        if (query.cursor !== undefined) listOptions.cursor = query.cursor;
         if (query.entityId) listOptions.entityId = query.entityId;
         if (query.status) listOptions.status = query.status;
 
@@ -419,7 +423,7 @@ export async function registerIntentRoutes(
         const tenantId = await getTenantId(request);
         const params = intentIdParamsSchema.parse(request.params ?? {});
         const body = intentCancelBodySchema.parse(request.body ?? {});
-        const user = request.user;
+        const user = request.user as JwtUserPayload | undefined;
 
         const cancelOptions = user?.sub
           ? { tenantId, reason: body.reason, cancelledBy: user.sub }
@@ -454,15 +458,16 @@ export async function registerIntentRoutes(
         }
 
         // Create escalation
-        const escalation = await getEscalationService().create({
+        const createOptions: Parameters<ReturnType<typeof createEscalationService>['create']>[0] = {
           intentId: params.id,
           tenantId,
           reason: body.reason,
           reasonCategory: body.reasonCategory,
           escalatedTo: body.escalatedTo,
-          timeout: body.timeout,
-          context: body.context,
-        });
+        };
+        if (body.timeout !== undefined) createOptions.timeout = body.timeout;
+        if (body.context !== undefined) createOptions.context = body.context;
+        const escalation = await getEscalationService().create(createOptions);
 
         // Update intent status to escalated
         await getIntentService().updateStatus(params.id, tenantId, 'escalated');
@@ -551,7 +556,7 @@ export async function registerIntentRoutes(
         const tenantId = await getTenantId(request);
         const params = escalationIdParamsSchema.parse(request.params ?? {});
         const body = escalationResolveBodySchema.parse(request.body ?? {});
-        const user = request.user;
+        const user = request.user as JwtUserPayload | undefined;
 
         const escalation = await getEscalationService().get(params.id, tenantId);
         if (!escalation) {
@@ -560,10 +565,10 @@ export async function registerIntentRoutes(
           });
         }
 
-        const resolveOptions = {
+        const resolveOptions: { resolvedBy: string; notes?: string } = {
           resolvedBy: user?.sub ?? 'unknown',
-          notes: body.notes,
         };
+        if (body.notes !== undefined) resolveOptions.notes = body.notes;
 
         let resolved;
         if (body.resolution === 'approved') {
@@ -689,17 +694,19 @@ export async function registerIntentRoutes(
 
         const query = auditQuerySchema.parse(request.query ?? {});
 
-        const result = await queryAuditLog({
+        const auditFilters: Parameters<typeof queryAuditLog>[0] = {
           tenantId,
-          userId: query.userId,
-          action: query.action as AuditAction | undefined,
-          resourceType: query.resourceType as AuditResourceType | undefined,
-          resourceId: query.resourceId,
-          from: query.from,
-          to: query.to,
-          limit: query.limit,
-          offset: query.offset,
-        });
+        };
+        if (query.userId !== undefined) auditFilters.userId = query.userId;
+        if (query.action !== undefined) auditFilters.action = query.action as AuditAction;
+        if (query.resourceType !== undefined) auditFilters.resourceType = query.resourceType as AuditResourceType;
+        if (query.resourceId !== undefined) auditFilters.resourceId = query.resourceId;
+        if (query.from !== undefined) auditFilters.from = query.from;
+        if (query.to !== undefined) auditFilters.to = query.to;
+        if (query.limit !== undefined) auditFilters.limit = query.limit;
+        if (query.offset !== undefined) auditFilters.offset = query.offset;
+
+        const result = await queryAuditLog(auditFilters);
 
         return reply.send({
           data: result.entries.map((entry) => ({
@@ -856,7 +863,7 @@ export async function registerIntentRoutes(
 
           // Verify webhook ID matches
           if (updatedDelivery.webhookId !== params.webhookId) {
-            return reply.status(404).send({
+            return await reply.status(404).send({
               error: { code: 'DELIVERY_NOT_FOUND', message: 'Webhook delivery not found' },
             });
           }
@@ -868,7 +875,7 @@ export async function registerIntentRoutes(
             newStatus: updatedDelivery.status,
           });
 
-          return reply.status(202).send({
+          return await reply.status(202).send({
             id: updatedDelivery.id,
             webhookId: updatedDelivery.webhookId,
             eventType: updatedDelivery.eventType,

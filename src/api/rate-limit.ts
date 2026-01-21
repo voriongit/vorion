@@ -343,16 +343,16 @@ export function createRateLimitMiddleware(options?: {
     const result = limiter.check(tenantId, tier);
 
     // Set rate limit headers
-    reply.header('X-RateLimit-Limit-Minute', result.remaining.minute + (result.allowed ? 1 : 0));
-    reply.header('X-RateLimit-Remaining-Minute', result.remaining.minute);
-    reply.header('X-RateLimit-Reset-Minute', Math.ceil(result.resetAt.minute / 1000));
-    reply.header('X-RateLimit-Limit-Hour', result.remaining.hour + (result.allowed ? 1 : 0));
-    reply.header('X-RateLimit-Remaining-Hour', result.remaining.hour);
+    void reply.header('X-RateLimit-Limit-Minute', result.remaining.minute + (result.allowed ? 1 : 0));
+    void reply.header('X-RateLimit-Remaining-Minute', result.remaining.minute);
+    void reply.header('X-RateLimit-Reset-Minute', Math.ceil(result.resetAt.minute / 1000));
+    void reply.header('X-RateLimit-Limit-Hour', result.remaining.hour + (result.allowed ? 1 : 0));
+    void reply.header('X-RateLimit-Remaining-Hour', result.remaining.hour);
 
     if (!result.allowed) {
-      reply.header('Retry-After', result.retryAfter);
+      void reply.header('Retry-After', result.retryAfter);
 
-      reply.status(429).send({
+      void reply.status(429).send({
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
           message: 'Too many requests',
@@ -415,8 +415,8 @@ export function withRateLimit(
       const result = customLimiter.check(routeKey, 'custom');
 
       if (!result.allowed) {
-        reply.header('Retry-After', result.retryAfter);
-        reply.status(429).send({
+        void reply.header('Retry-After', result.retryAfter);
+        void reply.status(429).send({
           error: {
             code: 'RATE_LIMIT_EXCEEDED',
             message: 'Too many requests for this endpoint',

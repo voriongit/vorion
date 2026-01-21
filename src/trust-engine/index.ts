@@ -9,14 +9,18 @@
 
 import { eq, and, gte, desc, sql } from 'drizzle-orm';
 import { createLogger } from '../common/logger.js';
-import { getDatabase, type Database } from '../common/db.js';
+import { getDatabase } from '../common/db.js';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
   trustRecords,
   trustSignals,
   trustHistory,
+  type TrustRecord as TrustRecordRow,
   type NewTrustRecord,
   type NewTrustSignal,
   type NewTrustHistory,
+  type TrustSignal as TrustSignalRow,
+  type TrustHistory as TrustHistoryRow,
 } from '../db/schema/trust.js';
 import type {
   TrustScore,
@@ -97,21 +101,20 @@ export interface TrustCalculation {
  * Trust Engine service with PostgreSQL persistence
  */
 export class TrustEngine {
-  private db: Database | null = null;
-  private _decayRate: number;
+  private db: NodePgDatabase | null = null;
   private initialized: boolean = false;
 
-  constructor(decayRate: number = 0.01) {
-    this._decayRate = decayRate;
+  constructor(_decayRate: number = 0.01) {
+    // decayRate parameter reserved for future use
   }
 
   /**
    * Initialize the service
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) return;
 
-    this.db = await getDatabase();
+    this.db = getDatabase();
     this.initialized = true;
     logger.info('Trust engine initialized with database persistence');
   }
@@ -119,9 +122,9 @@ export class TrustEngine {
   /**
    * Ensure service is initialized
    */
-  private async ensureInitialized(): Promise<Database> {
+  private ensureInitialized(): NodePgDatabase {
     if (!this.initialized || !this.db) {
-      await this.initialize();
+      this.initialize();
     }
     return this.db!;
   }
@@ -130,7 +133,7 @@ export class TrustEngine {
    * Calculate trust score for an entity
    */
   async calculate(entityId: ID): Promise<TrustCalculation> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     // Get recent signals for the entity (last 7 days for weighted calculation)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -147,7 +150,7 @@ export class TrustEngine {
       .limit(1000);
 
     // Convert to domain signals
-    const domainSignals: TrustSignalType[] = signals.map((s) => ({
+    const domainSignals: TrustSignalType[] = signals.map((s: TrustSignalRow) => ({
       id: s.id,
       entityId: s.entityId,
       type: s.type,
@@ -192,7 +195,7 @@ export class TrustEngine {
    * Get trust score for an entity
    */
   async getScore(entityId: ID): Promise<TrustRecord | undefined> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     const result = await db
       .select()
@@ -260,7 +263,7 @@ export class TrustEngine {
         identity: record.identityScore,
         context: record.contextScore,
       },
-      signals: signals.map((s) => ({
+      signals: signals.map((s: TrustSignalRow) => ({
         id: s.id,
         entityId: s.entityId,
         type: s.type,
@@ -271,7 +274,7 @@ export class TrustEngine {
         timestamp: s.timestamp.toISOString(),
       })),
       lastCalculatedAt: record.lastCalculatedAt.toISOString(),
-      history: history.map((h) => ({
+      history: history.map((h: TrustHistoryRow) => ({
         score: h.score,
         level: parseInt(h.level) as TrustLevel,
         reason: h.reason,
@@ -284,7 +287,7 @@ export class TrustEngine {
    * Record a trust signal
    */
   async recordSignal(signal: TrustSignalType): Promise<void> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     // Insert the signal
     const newSignal: NewTrustSignal = {
@@ -324,7 +327,21 @@ export class TrustEngine {
       };
 
       await db.insert(trustRecords).values(initialRecord);
-      record = [{ ...initialRecord, id: crypto.randomUUID(), createdAt: new Date(), updatedAt: new Date() }] as any;
+      const insertedRecord: TrustRecordRow = {
+        id: crypto.randomUUID(),
+        entityId: signal.entityId,
+        score: 200,
+        level: '1',
+        behavioralScore: 0.5,
+        complianceScore: 0.5,
+        identityScore: 0.5,
+        contextScore: 0.5,
+        signalCount: 1,
+        lastCalculatedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      record = [insertedRecord];
     }
 
     const currentRecord = record[0]!;
@@ -359,7 +376,7 @@ export class TrustEngine {
         level: calculation.level.toString() as '0' | '1' | '2' | '3' | '4',
         previousLevel: previousLevel.toString() as '0' | '1' | '2' | '3' | '4',
         reason: `Signal: ${signal.type}`,
-        signalId: insertedSignal?.id,
+        signalId: insertedSignal?.id ?? null,
         timestamp: new Date(),
       };
 
@@ -383,7 +400,7 @@ export class TrustEngine {
     entityId: ID,
     initialLevel: TrustLevel = 1
   ): Promise<TrustRecord> {
-    const db = await this.ensureInitialized();
+    const db = this.ensureInitialized();
 
     const score = TRUST_THRESHOLDS[initialLevel].min;
     const now = new Date();
@@ -525,5 +542,3 @@ export function createTrustEngine(decayRate?: number): TrustEngine {
   return new TrustEngine(decayRate);
 }
 
-// Re-export types
-export type { TrustRecord, TrustHistoryEntry, TrustCalculation };

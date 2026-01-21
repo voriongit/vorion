@@ -137,7 +137,7 @@ export async function checkDatabaseHealth(timeoutMs?: number): Promise<{
     );
     const latencyMs = Math.round(performance.now() - start);
 
-    if (result.rows[0]?.health === 1) {
+    if ((result.rows[0] as { health?: number } | undefined)?.health === 1) {
       return { healthy: true, latencyMs };
     }
     return { healthy: false, latencyMs, error: 'Unexpected query result' };
@@ -241,7 +241,7 @@ export async function withStatementTimeout<T>(
         'Executing query with statement timeout'
       );
 
-      return await fn();
+      return fn();
     });
   } catch (error) {
     // Check if this is a statement timeout error

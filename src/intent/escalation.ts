@@ -582,7 +582,7 @@ export class EscalationService {
 
     // Update SLA breach rate and approval rate gauges
     // Fire and forget to not block the resolution
-    this.updateRateGauges(tenantId).catch((error) => {
+    this.updateRateGauges(tenantId).catch((error: unknown) => {
       logger.warn({ error, tenantId }, 'Failed to update rate gauges');
     });
 

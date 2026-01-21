@@ -7,12 +7,6 @@
 
 import type { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import {
-  dbQueryDuration,
-  dbQueryTotal,
-  dbQueryErrorsTotal,
-  dbPoolConnectionsActive,
-  dbPoolConnectionsIdle,
-  dbPoolConnectionsWaiting,
   detectOperationType,
   recordDbQuery,
   recordDbQueryError,

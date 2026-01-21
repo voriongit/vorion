@@ -133,28 +133,32 @@ export class AuditService {
         severity,
         actorType: input.actor.type,
         actorId: input.actor.id,
-        actorName: input.actor.name,
-        actorIp: input.actor.ip,
+        actorName: input.actor.name ?? null,
+        actorIp: input.actor.ip ?? null,
         targetType: input.target.type,
         targetId: input.target.id,
-        targetName: input.target.name,
+        targetName: input.target.name ?? null,
         requestId,
-        traceId: input.traceId ?? traceContext?.traceId,
-        spanId: input.spanId ?? traceContext?.spanId,
+        traceId: input.traceId ?? traceContext?.traceId ?? null,
+        spanId: input.spanId ?? traceContext?.spanId ?? null,
         action: input.action,
         outcome: input.outcome,
-        reason: input.reason,
-        beforeState: input.stateChange?.before,
-        afterState: input.stateChange?.after,
-        diffState: input.stateChange?.diff,
-        metadata: input.metadata,
-        tags: input.tags,
+        reason: input.reason ?? null,
+        beforeState: input.stateChange?.before ?? null,
+        afterState: input.stateChange?.after ?? null,
+        diffState: input.stateChange?.diff ?? null,
+        metadata: input.metadata ?? null,
+        tags: input.tags ?? null,
         sequenceNumber,
         previousHash,
         recordHash,
         eventTime: new Date(eventTime),
       })
       .returning();
+
+    if (!row) {
+      throw new Error('Failed to insert audit record');
+    }
 
     logger.info(
       {
@@ -323,7 +327,7 @@ export class AuditService {
     const conditions = [eq(auditRecords.tenantId, tenantId)];
 
     if (options?.startSequence !== undefined) {
-      conditions.push(gte(auditRecords.sequenceNumber, BigInt(options.startSequence)));
+      conditions.push(gte(auditRecords.sequenceNumber, options.startSequence));
     }
 
     const limit = options?.limit ?? 10000;
@@ -347,14 +351,12 @@ export class AuditService {
       };
     }
 
+    const firstRow = rows[0]!;
     let previousHash: string | null = null;
-    let firstRecord: ID | undefined;
-    let lastRecord: ID | undefined;
+    const firstRecord: ID = firstRow.id;
+    let lastRecord: ID = firstRow.id;
 
     for (const row of rows) {
-      if (!firstRecord) {
-        firstRecord = row.id;
-      }
       lastRecord = row.id;
 
       // First record in sequence should have null previousHash or match our starting point
@@ -467,38 +469,33 @@ export class AuditService {
    * Convert database row to AuditRecord
    */
   private rowToAuditRecord(row: typeof auditRecords.$inferSelect): AuditRecord {
-    return {
+    const actor: AuditRecord['actor'] = {
+      type: row.actorType as AuditRecord['actor']['type'],
+      id: row.actorId,
+    };
+    if (row.actorName) actor.name = row.actorName;
+    if (row.actorIp) actor.ip = row.actorIp;
+
+    const target: AuditRecord['target'] = {
+      type: row.targetType as AuditRecord['target']['type'],
+      id: row.targetId,
+    };
+    if (row.targetName) target.name = row.targetName;
+
+    const result: AuditRecord = {
       id: row.id,
       tenantId: row.tenantId,
       eventType: row.eventType,
       eventCategory: row.eventCategory as AuditCategory,
       severity: row.severity as AuditSeverity,
-      actor: {
-        type: row.actorType as AuditRecord['actor']['type'],
-        id: row.actorId,
-        name: row.actorName ?? undefined,
-        ip: row.actorIp ?? undefined,
-      },
-      target: {
-        type: row.targetType as AuditRecord['target']['type'],
-        id: row.targetId,
-        name: row.targetName ?? undefined,
-      },
+      actor,
+      target,
       requestId: row.requestId,
       traceId: row.traceId,
       spanId: row.spanId,
       action: row.action,
       outcome: row.outcome as AuditRecord['outcome'],
       reason: row.reason,
-      stateChange: (row.beforeState || row.afterState || row.diffState)
-        ? {
-            before: row.beforeState as Record<string, unknown> | undefined,
-            after: row.afterState as Record<string, unknown> | undefined,
-            diff: row.diffState as Record<string, unknown> | undefined,
-          }
-        : undefined,
-      metadata: row.metadata as Record<string, unknown> | undefined,
-      tags: row.tags ?? undefined,
       sequenceNumber: Number(row.sequenceNumber),
       previousHash: row.previousHash,
       recordHash: row.recordHash,
@@ -507,6 +504,19 @@ export class AuditService {
       archived: row.archived,
       archivedAt: row.archivedAt?.toISOString() ?? null,
     };
+
+    if (row.beforeState || row.afterState || row.diffState) {
+      const stateChange: AuditRecord['stateChange'] = {};
+      if (row.beforeState) stateChange.before = row.beforeState as Record<string, unknown>;
+      if (row.afterState) stateChange.after = row.afterState as Record<string, unknown>;
+      if (row.diffState) stateChange.diff = row.diffState as Record<string, unknown>;
+      result.stateChange = stateChange;
+    }
+
+    if (row.metadata) result.metadata = row.metadata as Record<string, unknown>;
+    if (row.tags) result.tags = row.tags;
+
+    return result;
   }
 
   // ==========================================================================
@@ -523,7 +533,7 @@ export class AuditService {
    */
   async archiveOldRecords(
     archiveAfterDays: number,
-    batchSize: number = 1000
+    _batchSize: number = 1000
   ): Promise<AuditArchiveResult> {
     const startTime = performance.now();
     const db = getDatabase();
@@ -557,9 +567,15 @@ export class AuditService {
     const archiveResult: AuditArchiveResult = {
       recordsArchived: result.length,
       durationMs,
-      oldestArchivedDate: sortedByTime[0]?.eventTime.toISOString(),
-      newestArchivedDate: sortedByTime[sortedByTime.length - 1]?.eventTime.toISOString(),
     };
+    const oldestArchived = sortedByTime[0];
+    const newestArchived = sortedByTime[sortedByTime.length - 1];
+    if (oldestArchived) {
+      archiveResult.oldestArchivedDate = oldestArchived.eventTime.toISOString();
+    }
+    if (newestArchived) {
+      archiveResult.newestArchivedDate = newestArchived.eventTime.toISOString();
+    }
 
     logger.info(
       {
@@ -587,7 +603,7 @@ export class AuditService {
    */
   async purgeOldRecords(
     retentionDays: number,
-    batchSize: number = 1000
+    _batchSize: number = 1000
   ): Promise<AuditPurgeResult> {
     const startTime = performance.now();
     const db = getDatabase();
@@ -618,9 +634,15 @@ export class AuditService {
     const purgeResult: AuditPurgeResult = {
       recordsPurged: result.length,
       durationMs,
-      oldestPurgedDate: sortedByTime[0]?.eventTime.toISOString(),
-      newestPurgedDate: sortedByTime[sortedByTime.length - 1]?.eventTime.toISOString(),
     };
+    const oldestPurged = sortedByTime[0];
+    const newestPurged = sortedByTime[sortedByTime.length - 1];
+    if (oldestPurged) {
+      purgeResult.oldestPurgedDate = oldestPurged.eventTime.toISOString();
+    }
+    if (newestPurged) {
+      purgeResult.newestPurgedDate = newestPurged.eventTime.toISOString();
+    }
 
     logger.info(
       {
@@ -774,14 +796,24 @@ export class AuditService {
       .orderBy(asc(auditRecords.archivedAt))
       .limit(1);
 
-    return {
+    const stats: {
+      totalRecords: number;
+      activeRecords: number;
+      archivedRecords: number;
+      oldestRecord?: string;
+      newestRecord?: string;
+      oldestArchived?: string;
+    } = {
       totalRecords: Number(totalResult?.count ?? 0),
       activeRecords: Number(activeResult?.count ?? 0),
       archivedRecords: Number(archivedResult?.count ?? 0),
-      oldestRecord: oldest?.eventTime.toISOString(),
-      newestRecord: newest?.eventTime.toISOString(),
-      oldestArchived: oldestArchived?.archivedAt?.toISOString(),
     };
+
+    if (oldest) stats.oldestRecord = oldest.eventTime.toISOString();
+    if (newest) stats.newestRecord = newest.eventTime.toISOString();
+    if (oldestArchived?.archivedAt) stats.oldestArchived = oldestArchived.archivedAt.toISOString();
+
+    return stats;
   }
 }
 
@@ -813,17 +845,18 @@ export class AuditHelper {
       metadata?: Record<string, unknown>;
     }
   ): Promise<AuditRecord> {
-    return this.service.record({
+    const input: CreateAuditRecordInput = {
       tenantId,
       eventType,
       actor,
       target: { type: 'intent', id: intentId },
       action: eventType.replace('intent.', ''),
       outcome: options?.outcome ?? 'success',
-      reason: options?.reason,
-      stateChange: options?.stateChange,
-      metadata: options?.metadata,
-    });
+    };
+    if (options?.reason !== undefined) input.reason = options.reason;
+    if (options?.stateChange !== undefined) input.stateChange = options.stateChange;
+    if (options?.metadata !== undefined) input.metadata = options.metadata;
+    return this.service.record(input);
   }
 
   /**
@@ -870,19 +903,20 @@ export class AuditHelper {
       metadata?: Record<string, unknown>;
     }
   ): Promise<AuditRecord> {
-    return this.service.record({
+    const input: CreateAuditRecordInput = {
       tenantId,
       eventType,
       actor,
       target: { type: 'escalation', id: escalationId },
       action: eventType.replace('escalation.', ''),
       outcome: options?.outcome ?? 'success',
-      reason: options?.reason,
       metadata: {
         ...options?.metadata,
         intentId,
       },
-    });
+    };
+    if (options?.reason !== undefined) input.reason = options.reason;
+    return this.service.record(input);
   }
 }
 

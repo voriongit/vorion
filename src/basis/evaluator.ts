@@ -41,7 +41,7 @@ export class RuleEvaluator {
   /**
    * Evaluate all applicable rules against the context
    */
-  async evaluate(context: EvaluationContext): Promise<EvaluationResult> {
+  evaluate(context: EvaluationContext): Promise<EvaluationResult> {
     const startTime = performance.now();
     const rulesEvaluated: RuleResult[] = [];
     const violatedRules: RuleResult[] = [];
@@ -54,7 +54,7 @@ export class RuleEvaluator {
 
     // Evaluate each rule
     for (const rule of applicableRules) {
-      const result = await this.evaluateRule(rule, context);
+      const result = this.evaluateRule(rule, context);
       rulesEvaluated.push(result);
 
       if (!result.matched || result.action === 'deny') {
@@ -84,14 +84,14 @@ export class RuleEvaluator {
       'Evaluation completed'
     );
 
-    return {
+    return Promise.resolve({
       passed,
       finalAction,
       rulesEvaluated,
       violatedRules,
       totalDurationMs,
       evaluatedAt: new Date().toISOString(),
-    };
+    });
   }
 
   /**
@@ -209,10 +209,10 @@ export class RuleEvaluator {
   /**
    * Evaluate a single rule against the context
    */
-  private async evaluateRule(
+  private evaluateRule(
     rule: Rule,
     context: EvaluationContext
-  ): Promise<RuleResult> {
+  ): RuleResult {
     const startTime = performance.now();
     let action: ControlAction = 'allow';
     let reason = 'No conditions matched';

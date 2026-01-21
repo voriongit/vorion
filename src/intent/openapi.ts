@@ -10,6 +10,12 @@
 import type { OpenAPIV3_1 } from 'openapi-types';
 
 /**
+ * Extended schema type that includes the `nullable` property for OpenAPI 3.0 compatibility.
+ * OpenAPI 3.1 replaced `nullable` with type arrays, but many tools still use `nullable`.
+ */
+type SchemaObjectWithNullable = OpenAPIV3_1.SchemaObject & { nullable?: boolean };
+
+/**
  * OpenAPI 3.1 specification for the INTENT module
  */
 export const intentOpenApiSpec: OpenAPIV3_1.Document = {
@@ -977,7 +983,7 @@ JWT token for authentication. The token must contain:
             type: 'string',
             nullable: true,
             description: 'Intent type classification',
-          },
+          } as SchemaObjectWithNullable,
           context: {
             type: 'object',
             additionalProperties: true,
@@ -1000,21 +1006,21 @@ JWT token for authentication. The token must contain:
             nullable: true,
             additionalProperties: true,
             description: 'Trust state snapshot at submission time',
-          },
+          } as SchemaObjectWithNullable,
           trustLevel: {
             type: 'integer',
             nullable: true,
             minimum: 0,
             maximum: 4,
             description: 'Trust level (L0-L4)',
-          },
+          } as SchemaObjectWithNullable,
           trustScore: {
             type: 'integer',
             nullable: true,
             minimum: 0,
             maximum: 1000,
             description: 'Trust score (0-1000)',
-          },
+          } as SchemaObjectWithNullable,
           createdAt: {
             type: 'string',
             format: 'date-time',
@@ -1030,12 +1036,12 @@ JWT token for authentication. The token must contain:
             format: 'date-time',
             nullable: true,
             description: 'Soft delete timestamp (GDPR)',
-          },
+          } as SchemaObjectWithNullable,
           cancellationReason: {
             type: 'string',
             nullable: true,
             description: 'Reason for cancellation if cancelled',
-          },
+          } as SchemaObjectWithNullable,
         },
       },
       IntentStatus: {
@@ -1105,12 +1111,12 @@ JWT token for authentication. The token must contain:
             type: 'string',
             nullable: true,
             description: 'SHA-256 hash for tamper detection',
-          },
+          } as SchemaObjectWithNullable,
           previousHash: {
             type: 'string',
             nullable: true,
             description: 'Previous event hash for chain integrity',
-          },
+          } as SchemaObjectWithNullable,
         },
       },
       IntentEvaluation: {
@@ -1161,7 +1167,7 @@ JWT token for authentication. The token must contain:
             type: 'object',
             properties: {
               stage: { type: 'string', const: 'trust-snapshot' },
-              result: { type: 'object', nullable: true },
+              result: { type: 'object', nullable: true } as SchemaObjectWithNullable,
             },
           },
           {
@@ -1320,7 +1326,7 @@ JWT token for authentication. The token must contain:
               resolvedAt: { type: 'string', format: 'date-time' },
               notes: { type: 'string' },
             },
-          },
+          } as SchemaObjectWithNullable,
           timeout: {
             type: 'string',
             description: 'ISO 8601 duration',
@@ -1335,7 +1341,7 @@ JWT token for authentication. The token must contain:
             format: 'date-time',
             nullable: true,
             description: 'When the escalation was acknowledged',
-          },
+          } as SchemaObjectWithNullable,
           slaBreached: {
             type: 'boolean',
             description: 'Whether the SLA was breached',
@@ -1345,13 +1351,13 @@ JWT token for authentication. The token must contain:
             nullable: true,
             additionalProperties: true,
             description: 'Escalation context',
-          },
+          } as SchemaObjectWithNullable,
           metadata: {
             type: 'object',
             nullable: true,
             additionalProperties: true,
             description: 'Escalation metadata',
-          },
+          } as SchemaObjectWithNullable,
           createdAt: {
             type: 'string',
             format: 'date-time',

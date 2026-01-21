@@ -11,8 +11,9 @@
 import { eq, and, gte, lte, asc, desc } from 'drizzle-orm';
 import { createLogger } from '../common/logger.js';
 import { sign, verify } from '../common/crypto.js';
-import { getDatabase, type Database } from '../common/db.js';
-import { proofs, proofChainMeta, type NewProof } from '../db/schema/proofs.js';
+import { getDatabase } from '../common/db.js';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { proofs, proofChainMeta, type NewProof, type Proof as DbProof } from '../db/schema/proofs.js';
 import type { Proof, Decision, Intent, ID } from '../common/types.js';
 
 const logger = createLogger({ component: 'proof' });
@@ -74,7 +75,7 @@ export interface ChainStats {
  * PROOF service for evidence management with PostgreSQL persistence
  */
 export class ProofService {
-  private db: Database | null = null;
+  private db: NodePgDatabase | null = null;
   private chainId: string = 'default';
   private lastHash: string = '0'.repeat(64);
   private chainLength: number = 0;
@@ -86,7 +87,7 @@ export class ProofService {
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    this.db = await getDatabase();
+    this.db = getDatabase();
 
     // Load chain metadata
     const meta = await this.db
@@ -118,7 +119,7 @@ export class ProofService {
   /**
    * Ensure service is initialized
    */
-  private async ensureInitialized(): Promise<Database> {
+  private async ensureInitialized(): Promise<NodePgDatabase> {
     if (!this.initialized || !this.db) {
       await this.initialize();
     }
@@ -172,7 +173,7 @@ export class ProofService {
       createdAt,
     };
 
-    await db.transaction(async (tx) => {
+    await db.transaction(async (tx: NodePgDatabase) => {
       // Insert proof
       await tx.insert(proofs).values(newProof);
 
@@ -275,7 +276,7 @@ export class ProofService {
       .limit(limit)
       .offset(offset);
 
-    return results.map((r) => this.toSignedProof(r));
+    return results.map((r: DbProof) => this.toSignedProof(r));
   }
 
   /**
@@ -452,7 +453,7 @@ export class ProofService {
    * Convert database row to SignedProof
    */
   private toSignedProof(row: typeof proofs.$inferSelect): SignedProof {
-    return {
+    const proof: SignedProof = {
       id: row.id,
       chainPosition: row.chainPosition,
       intentId: row.intentId,
@@ -464,14 +465,17 @@ export class ProofService {
       previousHash: row.previousHash,
       signature: row.signature,
       createdAt: row.createdAt.toISOString(),
-      signatureData: row.signaturePublicKey
-        ? {
-            publicKey: row.signaturePublicKey,
-            algorithm: row.signatureAlgorithm ?? 'unknown',
-            signedAt: row.signedAt?.toISOString() ?? row.createdAt.toISOString(),
-          }
-        : undefined,
     };
+
+    if (row.signaturePublicKey) {
+      proof.signatureData = {
+        publicKey: row.signaturePublicKey,
+        algorithm: row.signatureAlgorithm ?? 'unknown',
+        signedAt: row.signedAt?.toISOString() ?? row.createdAt.toISOString(),
+      };
+    }
+
+    return proof;
   }
 
   /**

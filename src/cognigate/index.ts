@@ -153,7 +153,7 @@ export class CognigateGateway {
       return {
         intentId: intent.id,
         success: true,
-        outputs: outputs as Record<string, unknown>,
+        outputs: outputs,
         resourceUsage: {
           memoryPeakMb: 0, // TODO: Track actual usage
           cpuTimeMs: execEnd - execStart,
@@ -209,7 +209,7 @@ export class CognigateGateway {
   /**
    * Terminate an execution (kill switch)
    */
-  async terminate(intentId: ID): Promise<void> {
+  terminate(intentId: ID): void {
     // TODO: Implement actual termination
     logger.warn({ intentId }, 'Terminate requested');
   }

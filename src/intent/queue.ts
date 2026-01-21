@@ -118,10 +118,10 @@ export class IntentQueue {
       return IntentQueue.initializingPromise;
     }
 
-    IntentQueue.initializingPromise = (async () => {
+    IntentQueue.initializingPromise = Promise.resolve().then(() => {
       IntentQueue.instance = new IntentQueue(config);
       return IntentQueue.instance;
-    })();
+    });
 
     try {
       return await IntentQueue.initializingPromise;
@@ -151,7 +151,7 @@ export class IntentQueue {
   /**
    * Enqueue an intent for processing
    */
-  async enqueue(intent: Intent, priority: number = 0): Promise<void> {
+  enqueue(intent: Intent, priority: number = 0): void {
     // Check for duplicate
     if (this.queue.has(intent.id) || this.processing.has(intent.id)) {
       logger.warn({ intentId: intent.id }, 'Intent already in queue or processing');

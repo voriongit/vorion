@@ -103,7 +103,7 @@ export function registerResponseMiddleware(
     };
 
     // Always set X-Request-ID header in response
-    reply.header(REQUEST_ID_HEADER, requestId);
+    void reply.header(REQUEST_ID_HEADER, requestId);
   });
 
   // Optionally wrap all responses in standard envelope
@@ -115,10 +115,10 @@ export function registerResponseMiddleware(
       }
 
       try {
-        const parsed = JSON.parse(payload);
+        const parsed: unknown = JSON.parse(payload);
 
         // Skip if already in envelope format
-        if ('success' in parsed && 'meta' in parsed) {
+        if (typeof parsed === 'object' && parsed !== null && 'success' in parsed && 'meta' in parsed) {
           return payload;
         }
 
@@ -220,7 +220,7 @@ export function createStandardErrorHandler(
 
       // Add Retry-After header for rate limit errors
       if (error instanceof RateLimitError && error.retryAfter !== undefined) {
-        reply.header('Retry-After', error.retryAfter.toString());
+        void reply.header('Retry-After', error.retryAfter.toString());
       }
 
       return reply.status(status).send(response);

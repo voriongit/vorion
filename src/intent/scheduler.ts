@@ -128,7 +128,7 @@ function createScheduledTasks(): void {
  */
 function startCronTasks(): void {
   for (const scheduledTask of scheduledTasks) {
-    scheduledTask.task.start();
+    void scheduledTask.task.start();
     logger.info(
       { name: scheduledTask.name, cron: scheduledTask.cronExpression },
       'Scheduled task started'
@@ -141,7 +141,7 @@ function startCronTasks(): void {
  */
 function stopCronTasks(): void {
   for (const scheduledTask of scheduledTasks) {
-    scheduledTask.task.stop();
+    void scheduledTask.task.stop();
     logger.info({ name: scheduledTask.name }, 'Scheduled task stopped');
   }
 }

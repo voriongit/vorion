@@ -118,7 +118,7 @@ export async function authenticate(
   // Extract token from Authorization header
   const authHeader = request.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
-    reply.status(401).send({
+    void reply.status(401).send({
       error: {
         code: 'UNAUTHORIZED',
         message: 'Missing or invalid authorization header',
@@ -133,7 +133,7 @@ export async function authenticate(
   const isValid = await verifySignature(token, config.jwt.secret);
   if (!isValid) {
     logger.warn({ requestId: request.id }, 'Invalid token signature');
-    reply.status(401).send({
+    void reply.status(401).send({
       error: {
         code: 'INVALID_TOKEN',
         message: 'Invalid or expired token',
@@ -144,8 +144,8 @@ export async function authenticate(
 
   // Decode payload
   const payload = decodeToken(token);
-  if (!payload || !payload.sub || !payload.tid) {
-    reply.status(401).send({
+  if (!payload?.sub || !payload.tid) {
+    void reply.status(401).send({
       error: {
         code: 'INVALID_TOKEN',
         message: 'Invalid token payload',
@@ -156,7 +156,7 @@ export async function authenticate(
 
   // Check expiration
   if (payload.exp && payload.exp * 1000 < Date.now()) {
-    reply.status(401).send({
+    void reply.status(401).send({
       error: {
         code: 'TOKEN_EXPIRED',
         message: 'Token has expired',
@@ -172,7 +172,7 @@ export async function authenticate(
     // Check if specific token has been revoked (by jti)
     const jtiValidation = validateJti(payload, config);
     if (!jtiValidation.valid) {
-      reply.status(401).send({
+      void reply.status(401).send({
         error: {
           code: 'INVALID_TOKEN',
           message: jtiValidation.error ?? 'Invalid token',
@@ -188,7 +188,7 @@ export async function authenticate(
           { jti: jtiValidation.jti, userId: payload.sub, requestId: request.id },
           'Revoked token used'
         );
-        reply.status(401).send({
+        void reply.status(401).send({
           error: {
             code: 'TOKEN_REVOKED',
             message: 'Token has been revoked',
@@ -207,7 +207,7 @@ export async function authenticate(
           { userId: payload.sub, issuedAt: issuedAt.toISOString(), requestId: request.id },
           'User token revoked (issued before revocation timestamp)'
         );
-        reply.status(401).send({
+        void reply.status(401).send({
           error: {
             code: 'TOKEN_REVOKED',
             message: 'Token has been revoked',
@@ -220,7 +220,7 @@ export async function authenticate(
     // Handle revocation check errors based on environment
     if (config.env === 'production') {
       logger.error({ error, requestId: request.id }, 'Token revocation check failed');
-      reply.status(401).send({
+      void reply.status(401).send({
         error: {
           code: 'TOKEN_VERIFICATION_FAILED',
           message: 'Unable to verify token status',
@@ -261,7 +261,7 @@ export async function authenticate(
 export function requirePermission(permission: string) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     if (!request.auth) {
-      reply.status(401).send({
+      void reply.status(401).send({
         error: {
           code: 'UNAUTHORIZED',
           message: 'Authentication required',
@@ -281,7 +281,7 @@ export function requirePermission(permission: string) {
         'Permission denied'
       );
 
-      reply.status(403).send({
+      void reply.status(403).send({
         error: {
           code: 'FORBIDDEN',
           message: 'Insufficient permissions',
@@ -299,7 +299,7 @@ export function requirePermission(permission: string) {
 export function requireTenantAccess(getTenantId: (request: FastifyRequest) => string | undefined) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     if (!request.auth) {
-      reply.status(401).send({
+      void reply.status(401).send({
         error: {
           code: 'UNAUTHORIZED',
           message: 'Authentication required',
@@ -310,7 +310,7 @@ export function requireTenantAccess(getTenantId: (request: FastifyRequest) => st
 
     const resourceTenantId = getTenantId(request);
     if (!resourceTenantId) {
-      reply.status(400).send({
+      void reply.status(400).send({
         error: {
           code: 'INVALID_REQUEST',
           message: 'Tenant ID required',
@@ -337,7 +337,7 @@ export function requireTenantAccess(getTenantId: (request: FastifyRequest) => st
         'Tenant access denied'
       );
 
-      reply.status(403).send({
+      void reply.status(403).send({
         error: {
           code: 'TENANT_ACCESS_DENIED',
           message: 'Access denied to this tenant resource',
@@ -354,7 +354,7 @@ export function requireTenantAccess(getTenantId: (request: FastifyRequest) => st
 export function requireRole(...roles: string[]) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     if (!request.auth) {
-      reply.status(401).send({
+      void reply.status(401).send({
         error: {
           code: 'UNAUTHORIZED',
           message: 'Authentication required',
@@ -376,7 +376,7 @@ export function requireRole(...roles: string[]) {
         'Role check failed'
       );
 
-      reply.status(403).send({
+      void reply.status(403).send({
         error: {
           code: 'FORBIDDEN',
           message: 'Insufficient role',

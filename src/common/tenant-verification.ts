@@ -79,11 +79,14 @@ export async function verifyTenantMembership(
         { userId, tenantId, cached: true, isMember: parsed.isMember },
         'Tenant membership cache hit'
       );
-      return {
+      const result: TenantMembershipResult = {
         isMember: parsed.isMember,
-        role: parsed.role,
         cached: true,
       };
+      if (parsed.role !== undefined) {
+        result.role = parsed.role;
+      }
+      return result;
     }
   } catch (error) {
     // Log but don't fail on cache errors - fall through to DB check
@@ -132,11 +135,14 @@ export async function verifyTenantMembership(
     'Tenant membership database lookup'
   );
 
-  return {
+  const result: TenantMembershipResult = {
     isMember,
-    role,
     cached: false,
   };
+  if (role !== undefined) {
+    result.role = role;
+  }
+  return result;
 }
 
 /**

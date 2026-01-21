@@ -34,7 +34,7 @@ import {
   getPolicyLoader,
   POLICY_STATUSES,
 } from '../policy/index.js';
-import { PolicyValidationError } from '../policy/service.js';
+import { PolicyValidationException } from '../policy/service.js';
 import type { PolicyStatus, PolicyDefinition } from '../policy/index.js';
 import {
   registerIntentWorkers,
@@ -491,8 +491,8 @@ export async function createServer(): Promise<FastifyInstance> {
     (request as FastifyRequest & { traceContext: TraceContext }).traceContext = traceContext;
 
     // Add trace ID to reply headers for correlation
-    reply.header('x-trace-id', traceContext.traceId);
-    reply.header('traceparent', traceContext.traceparent);
+    void reply.header('x-trace-id', traceContext.traceId);
+    void reply.header('traceparent', traceContext.traceparent);
   });
 
   // Graceful shutdown hooks - track active requests and reject new ones during shutdown
@@ -529,10 +529,10 @@ export async function createServer(): Promise<FastifyInstance> {
 
       // Add Retry-After header during shutdown
       if (healthStatus.status === 'shutting_down') {
-        reply.header('Retry-After', '5');
+        void reply.header('Retry-After', '5');
       }
 
-      return reply.status(statusCode).send(healthStatus);
+      return await reply.status(statusCode).send(healthStatus);
     } catch (error) {
       apiLogger.warn(
         { error: error instanceof Error ? error.message : 'Unknown error' },
@@ -541,7 +541,7 @@ export async function createServer(): Promise<FastifyInstance> {
 
       return reply.status(503).send({
         status: 'unhealthy',
-        version: process.env['npm_package_version'] || '0.0.0',
+        version: process.env['npm_package_version'] ?? '0.0.0',
         environment: config.env,
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString(),
@@ -568,7 +568,7 @@ export async function createServer(): Promise<FastifyInstance> {
       // Return 503 for non-ready status
       const statusCode = readinessStatus.status === 'ready' ? 200 : 503;
 
-      return reply.status(statusCode).send(readinessStatus);
+      return await reply.status(statusCode).send(readinessStatus);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       apiLogger.warn({ error: errorMessage }, 'Global readiness check failed');
@@ -596,7 +596,7 @@ export async function createServer(): Promise<FastifyInstance> {
   });
 
   // Scheduler status (no auth required for health monitoring)
-  server.get('/scheduler', async () => {
+  server.get('/scheduler', () => {
     const schedulerStatus = getSchedulerStatus();
     return {
       status: schedulerStatus.isLeader ? 'leader' : 'standby',
@@ -618,7 +618,7 @@ export async function createServer(): Promise<FastifyInstance> {
    * No external dependencies are checked.
    */
   server.get(`${config.api.basePath}/intent/health`, async (_request, reply) => {
-    const result = await intentLivenessCheck();
+    const result = intentLivenessCheck();
     const statusCode = result.alive ? 200 : 503;
 
     return reply.status(statusCode).send({
@@ -654,8 +654,8 @@ export async function createServer(): Promise<FastifyInstance> {
   );
 
   // API routes
-  server.register(
-    async (api) => {
+  void server.register(
+    (api) => {
       // Token revocation check hook - runs after JWT verification
       api.addHook('preHandler', async (request, reply) => {
         // Skip revocation check for logout endpoint (allow logout with revoked token)
@@ -663,64 +663,59 @@ export async function createServer(): Promise<FastifyInstance> {
           return;
         }
 
-        try {
-          // First verify JWT to get payload
-          const payload = await request.jwtVerify<{
-            jti?: string;
-            sub?: string;
-            iat?: number;
-            exp?: number;
-          }>();
+        // First verify JWT to get payload
+        const payload = await request.jwtVerify<{
+          jti?: string;
+          sub?: string;
+          iat?: number;
+          exp?: number;
+        }>();
 
-          // Validate jti claim
-          const jtiValidation = validateJti(payload, config);
-          if (!jtiValidation.valid) {
-            tokenRevocationChecks.inc({ result: 'missing_jti' });
-            return reply.status(401).send({
-              error: { code: 'TOKEN_INVALID', message: jtiValidation.error },
-            });
-          }
+        // Validate jti claim
+        const jtiValidation = validateJti(payload, config);
+        if (!jtiValidation.valid) {
+          tokenRevocationChecks.inc({ result: 'missing_jti' });
+          return reply.status(401).send({
+            error: { code: 'TOKEN_INVALID', message: jtiValidation.error },
+          });
+        }
 
-          // If no jti, skip revocation check (handled by validateJti based on config)
-          if (!jtiValidation.jti) {
-            tokenRevocationChecks.inc({ result: 'missing_jti' });
-            return;
-          }
+        // If no jti, skip revocation check (handled by validateJti based on config)
+        if (!jtiValidation.jti) {
+          tokenRevocationChecks.inc({ result: 'missing_jti' });
+          return;
+        }
 
-          // Check if the specific token is revoked
-          const isTokenRevoked = await tokenRevocationService.isRevoked(jtiValidation.jti);
-          if (isTokenRevoked) {
+        // Check if the specific token is revoked
+        const isTokenRevoked = await tokenRevocationService.isRevoked(jtiValidation.jti);
+        if (isTokenRevoked) {
+          tokenRevocationChecks.inc({ result: 'revoked' });
+          apiLogger.info({ jti: jtiValidation.jti }, 'Revoked token used');
+          return reply.status(401).send({
+            error: { code: 'TOKEN_REVOKED', message: 'Token has been revoked' },
+          });
+        }
+
+        // Check if all user tokens issued before a certain time are revoked
+        if (payload.sub && payload.iat) {
+          const issuedAt = new Date(payload.iat * 1000);
+          const isUserRevoked = await tokenRevocationService.isUserTokenRevoked(
+            payload.sub,
+            issuedAt
+          );
+          if (isUserRevoked) {
             tokenRevocationChecks.inc({ result: 'revoked' });
-            apiLogger.info({ jti: jtiValidation.jti }, 'Revoked token used');
+            apiLogger.info(
+              { userId: payload.sub, issuedAt: issuedAt.toISOString() },
+              'User token revoked (all tokens for user)'
+            );
             return reply.status(401).send({
               error: { code: 'TOKEN_REVOKED', message: 'Token has been revoked' },
             });
           }
-
-          // Check if all user tokens issued before a certain time are revoked
-          if (payload.sub && payload.iat) {
-            const issuedAt = new Date(payload.iat * 1000);
-            const isUserRevoked = await tokenRevocationService.isUserTokenRevoked(
-              payload.sub,
-              issuedAt
-            );
-            if (isUserRevoked) {
-              tokenRevocationChecks.inc({ result: 'revoked' });
-              apiLogger.info(
-                { userId: payload.sub, issuedAt: issuedAt.toISOString() },
-                'User token revoked (all tokens for user)'
-              );
-              return reply.status(401).send({
-                error: { code: 'TOKEN_REVOKED', message: 'Token has been revoked' },
-              });
-            }
-          }
-
-          tokenRevocationChecks.inc({ result: 'valid' });
-        } catch (error) {
-          // JWT verification failed - let Fastify handle JWT errors
-          throw error;
         }
+
+        tokenRevocationChecks.inc({ result: 'valid' });
       });
 
       // ========== Auth Routes ==========
@@ -738,7 +733,7 @@ export async function createServer(): Promise<FastifyInstance> {
           if (!payload.jti) {
             apiLogger.warn('Logout attempted with token missing jti claim');
             // Still return success - logout is idempotent
-            return reply.send({ message: 'Logged out successfully' });
+            return await reply.send({ message: 'Logged out successfully' });
           }
 
           if (!payload.exp) {
@@ -767,7 +762,7 @@ export async function createServer(): Promise<FastifyInstance> {
           }
 
           apiLogger.info({ jti: payload.jti, userId: payload.sub }, 'User logged out');
-          return reply.send({ message: 'Logged out successfully' });
+          return await reply.send({ message: 'Logged out successfully' });
         } catch (error) {
           // If JWT verification fails, user is effectively "logged out"
           apiLogger.warn({ error }, 'Logout with invalid token');
@@ -1180,7 +1175,7 @@ export async function createServer(): Promise<FastifyInstance> {
             'Approver assigned to escalation'
           );
 
-          return reply.status(201).send({
+          return await reply.status(201).send({
             id: assignment.id,
             escalationId: params.id,
             userId: body.userId,
@@ -1401,19 +1396,19 @@ export async function createServer(): Promise<FastifyInstance> {
         const tenantId = await getTenantId(request);
         const query = auditQuerySchema.parse(request.query ?? {});
 
-        const result = await auditService.query({
-          tenantId,
-          eventType: query.eventType,
-          eventCategory: query.eventCategory,
-          severity: query.severity,
-          actorId: query.actorId,
-          targetId: query.targetId,
-          targetType: query.targetType,
-          startTime: query.startTime,
-          endTime: query.endTime,
-          limit: query.limit,
-          offset: query.offset,
-        });
+        const queryFilters: Parameters<typeof auditService.query>[0] = { tenantId };
+        if (query.eventType !== undefined) queryFilters.eventType = query.eventType;
+        if (query.eventCategory !== undefined) queryFilters.eventCategory = query.eventCategory;
+        if (query.severity !== undefined) queryFilters.severity = query.severity;
+        if (query.actorId !== undefined) queryFilters.actorId = query.actorId;
+        if (query.targetId !== undefined) queryFilters.targetId = query.targetId;
+        if (query.targetType !== undefined) queryFilters.targetType = query.targetType;
+        if (query.startTime !== undefined) queryFilters.startTime = query.startTime;
+        if (query.endTime !== undefined) queryFilters.endTime = query.endTime;
+        if (query.limit !== undefined) queryFilters.limit = query.limit;
+        if (query.offset !== undefined) queryFilters.offset = query.offset;
+
+        const result = await auditService.query(queryFilters);
 
         return reply.send({
           data: result.records,
@@ -1445,11 +1440,15 @@ export async function createServer(): Promise<FastifyInstance> {
         const params = auditTargetParamsSchema.parse(request.params ?? {});
         const query = auditTargetQuerySchema.parse(request.query ?? {});
 
+        const targetOptions: { limit?: number; offset?: number } = {};
+        if (query.limit !== undefined) targetOptions.limit = query.limit;
+        if (query.offset !== undefined) targetOptions.offset = query.offset;
+
         const records = await auditService.getForTarget(
           tenantId,
           params.targetType,
           params.targetId,
-          { limit: query.limit, offset: query.offset }
+          targetOptions
         );
 
         return reply.send({ data: records });
@@ -1470,10 +1469,11 @@ export async function createServer(): Promise<FastifyInstance> {
         const tenantId = await getTenantId(request);
         const query = auditStatsQuerySchema.parse(request.query ?? {});
 
-        const stats = await auditService.getStats(tenantId, {
-          startTime: query.startTime,
-          endTime: query.endTime,
-        });
+        const statsOptions: { startTime?: string; endTime?: string } = {};
+        if (query.startTime !== undefined) statsOptions.startTime = query.startTime;
+        if (query.endTime !== undefined) statsOptions.endTime = query.endTime;
+
+        const stats = await auditService.getStats(tenantId, statsOptions);
 
         return reply.send(stats);
       });
@@ -1494,10 +1494,11 @@ export async function createServer(): Promise<FastifyInstance> {
 
         const body = auditVerifyBodySchema.parse(request.body ?? {});
 
-        const result: ChainIntegrityResult = await auditService.verifyChainIntegrity(tenantId, {
-          startSequence: body.startSequence,
-          limit: body.limit,
-        });
+        const verifyOptions: { startSequence?: number; limit?: number } = {};
+        if (body.startSequence !== undefined) verifyOptions.startSequence = body.startSequence;
+        if (body.limit !== undefined) verifyOptions.limit = body.limit;
+
+        const result: ChainIntegrityResult = await auditService.verifyChainIntegrity(tenantId, verifyOptions);
 
         return reply.send(result);
       });
@@ -1531,9 +1532,9 @@ export async function createServer(): Promise<FastifyInstance> {
             'Policy created'
           );
 
-          return reply.code(201).send(policy);
+          return await reply.code(201).send(policy);
         } catch (error) {
-          if (error instanceof PolicyValidationError) {
+          if (error instanceof PolicyValidationException) {
             return reply.status(400).send({
               error: {
                 code: 'POLICY_VALIDATION_ERROR',
@@ -1623,7 +1624,7 @@ export async function createServer(): Promise<FastifyInstance> {
           const policy = await policyService.update(params.id, tenantId, updateInput);
 
           if (!policy) {
-            return reply.status(404).send({
+            return await reply.status(404).send({
               error: { code: 'POLICY_NOT_FOUND', message: 'Policy not found' },
             });
           }
@@ -1636,9 +1637,9 @@ export async function createServer(): Promise<FastifyInstance> {
             'Policy updated'
           );
 
-          return reply.send(policy);
+          return await reply.send(policy);
         } catch (error) {
-          if (error instanceof PolicyValidationError) {
+          if (error instanceof PolicyValidationException) {
             return reply.status(400).send({
               error: {
                 code: 'POLICY_VALIDATION_ERROR',
@@ -1788,12 +1789,14 @@ export async function createServer(): Promise<FastifyInstance> {
         const body = webhookCreateBodySchema.parse(request.body ?? {});
 
         try {
-          const webhookId = await webhookService.registerWebhook(tenantId, {
+          const webhookConfig: Parameters<typeof webhookService.registerWebhook>[1] = {
             url: body.url,
-            secret: body.secret,
             events: body.events,
             enabled: body.enabled ?? true,
-          });
+          };
+          if (body.secret !== undefined) webhookConfig.secret = body.secret;
+
+          const webhookId = await webhookService.registerWebhook(tenantId, webhookConfig);
 
           const webhooks = await webhookService.getWebhooks(tenantId);
           const webhook = webhooks.find((w) => w.id === webhookId);
@@ -1803,7 +1806,7 @@ export async function createServer(): Promise<FastifyInstance> {
             'Webhook registered'
           );
 
-          return reply.code(201).send({
+          return await reply.code(201).send({
             id: webhookId,
             config: webhook?.config,
           });

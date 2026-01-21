@@ -7,7 +7,7 @@
  */
 
 import { createLogger } from '../common/logger.js';
-import type { ControlAction, TrustLevel } from '../common/types.js';
+import type { ControlAction } from '../common/types.js';
 import type {
   Policy,
   PolicyRule,
@@ -43,10 +43,10 @@ export class PolicyEvaluator {
   /**
    * Evaluate multiple policies against a context
    */
-  async evaluateMultiple(
+  evaluateMultiple(
     policies: Policy[],
     context: PolicyEvaluationContext
-  ): Promise<MultiPolicyEvaluationResult> {
+  ): MultiPolicyEvaluationResult {
     const startTime = performance.now();
     const policiesEvaluated: PolicyEvaluationResult[] = [];
     let appliedPolicy: PolicyEvaluationResult | undefined;
@@ -69,7 +69,7 @@ export class PolicyEvaluator {
 
     // Evaluate each applicable policy
     for (const policy of applicablePolicies) {
-      const result = await this.evaluatePolicy(policy, context);
+      const result = this.evaluatePolicy(policy, context);
       policiesEvaluated.push(result);
 
       // Apply the most restrictive action
@@ -106,24 +106,29 @@ export class PolicyEvaluator {
       'Multi-policy evaluation completed'
     );
 
-    return {
+    const result: MultiPolicyEvaluationResult = {
       passed: finalAction === 'allow',
       finalAction,
-      reason,
       policiesEvaluated,
-      appliedPolicy,
       totalDurationMs,
       evaluatedAt: new Date().toISOString(),
     };
+    if (reason !== undefined) {
+      result.reason = reason;
+    }
+    if (appliedPolicy !== undefined) {
+      result.appliedPolicy = appliedPolicy;
+    }
+    return result;
   }
 
   /**
    * Evaluate a single policy against a context
    */
-  async evaluatePolicy(
+  evaluatePolicy(
     policy: Policy,
     context: PolicyEvaluationContext
-  ): Promise<PolicyEvaluationResult> {
+  ): PolicyEvaluationResult {
     const startTime = performance.now();
     const rulesEvaluated: RuleEvaluationResult[] = [];
     const matchedRules: RuleEvaluationResult[] = [];
@@ -142,7 +147,7 @@ export class PolicyEvaluator {
 
     // Evaluate each rule
     for (const rule of sortedRules) {
-      const ruleResult = await this.evaluateRule(rule, context);
+      const ruleResult = this.evaluateRule(rule, context);
       rulesEvaluated.push(ruleResult);
 
       if (ruleResult.conditionsMet) {
@@ -168,41 +173,47 @@ export class PolicyEvaluator {
 
     const durationMs = performance.now() - startTime;
 
-    return {
+    const result: PolicyEvaluationResult = {
       policyId: policy.id,
       policyName: policy.name,
       policyVersion: policy.version,
       matched,
       action,
-      reason,
       rulesEvaluated,
       matchedRules,
       durationMs,
       evaluatedAt: new Date().toISOString(),
     };
+    if (reason !== undefined) {
+      result.reason = reason;
+    }
+    return result;
   }
 
   /**
    * Evaluate a single rule against a context
    */
-  private async evaluateRule(
+  private evaluateRule(
     rule: PolicyRule,
     context: PolicyEvaluationContext
-  ): Promise<RuleEvaluationResult> {
+  ): RuleEvaluationResult {
     const startTime = performance.now();
 
     const conditionsMet = this.evaluateCondition(rule.when, context);
     const durationMs = performance.now() - startTime;
 
-    return {
+    const result: RuleEvaluationResult = {
       ruleId: rule.id,
       ruleName: rule.name,
       matched: conditionsMet,
       conditionsMet,
       action: conditionsMet ? rule.then.action : 'allow',
-      reason: conditionsMet ? rule.then.reason : undefined,
       durationMs,
     };
+    if (conditionsMet && rule.then.reason !== undefined) {
+      result.reason = rule.then.reason;
+    }
+    return result;
   }
 
   /**
@@ -335,9 +346,10 @@ export class PolicyEvaluator {
         break;
       case 'dayOfWeek':
         // 0 = Sunday, 6 = Saturday
-        fieldValue = parseInt(
-          now.toLocaleString('en-US', { weekday: 'numeric', timeZone: timezone })
-        ) - 1;
+        // Use Intl.DateTimeFormat to get the day of week in the specified timezone
+        fieldValue = new Date(
+          now.toLocaleString('en-US', { timeZone: timezone })
+        ).getDay();
         break;
       case 'date':
         fieldValue = now.toISOString().split('T')[0]!;

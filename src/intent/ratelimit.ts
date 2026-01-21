@@ -465,11 +465,14 @@ export class RateLimiter {
     // If entity rate limiting is disabled, fall back to tenant-only
     if (!entityConfig.enabled) {
       const tenantResult = await this.checkLimit(tenantId, intentType);
-      return {
+      const baseResult: CombinedRateLimitResult = {
         tenant: tenantResult,
         allowed: tenantResult.allowed,
-        limitExceeded: tenantResult.allowed ? undefined : 'tenant',
       };
+      if (!tenantResult.allowed) {
+        baseResult.limitExceeded = 'tenant';
+      }
+      return baseResult;
     }
 
     const tenantKey = this.buildKey(tenantId, intentType);
@@ -586,12 +589,15 @@ export class RateLimiter {
       );
     }
 
-    return {
+    const combinedResult: CombinedRateLimitResult = {
       tenant: tenantResult,
       entity: entityResult,
       allowed: bothAllowed,
-      limitExceeded,
     };
+    if (limitExceeded !== undefined) {
+      combinedResult.limitExceeded = limitExceeded;
+    }
+    return combinedResult;
   }
 
   /**
@@ -875,7 +881,7 @@ export function createRateLimitHook(rateLimiter: RateLimiter) {
     const headers = rateLimiter.toHeaders(result);
 
     // Set rate limit headers
-    for (const [name, value] of Object.entries(headers)) {
+    for (const [name, value] of Object.entries(headers) as [string, string][]) {
       reply.header(name, value);
     }
 

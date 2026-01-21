@@ -22,10 +22,6 @@ import type {
   PolicyListFilters,
   PolicyValidationResult,
   PolicyValidationError,
-  PolicyRule,
-  PolicyCondition,
-  POLICY_STATUSES,
-  CONDITION_OPERATORS,
 } from './types.js';
 
 const logger = createLogger({ component: 'policy-service' });
@@ -271,25 +267,46 @@ export class PolicyService {
     // Validate definition
     const validation = validatePolicyDefinition(input.definition);
     if (!validation.valid) {
-      throw new PolicyValidationError('Invalid policy definition', validation.errors);
+      throw new PolicyValidationException('Invalid policy definition', validation.errors);
     }
 
     const checksum = generateChecksum(input.definition);
 
+    const insertValues: {
+      tenantId: ID;
+      name: string;
+      namespace: string;
+      description?: string;
+      version: number;
+      status: 'draft';
+      definition: PolicyDefinition;
+      checksum: string;
+      createdBy?: string;
+    } = {
+      tenantId,
+      name: input.name,
+      namespace: input.namespace ?? 'default',
+      version: 1,
+      status: 'draft',
+      definition: input.definition,
+      checksum,
+    };
+
+    if (input.description !== undefined) {
+      insertValues.description = input.description;
+    }
+    if (input.createdBy !== undefined) {
+      insertValues.createdBy = input.createdBy;
+    }
+
     const [row] = await db
       .insert(policies)
-      .values({
-        tenantId,
-        name: input.name,
-        namespace: input.namespace ?? 'default',
-        description: input.description,
-        version: 1,
-        status: 'draft',
-        definition: input.definition,
-        checksum,
-        createdBy: input.createdBy,
-      })
+      .values(insertValues)
       .returning();
+
+    if (!row) {
+      throw new Error('Failed to create policy');
+    }
 
     logger.info(
       { policyId: row.id, name: input.name, tenantId },
@@ -353,7 +370,7 @@ export class PolicyService {
     if (input.definition) {
       const validation = validatePolicyDefinition(input.definition);
       if (!validation.valid) {
-        throw new PolicyValidationError('Invalid policy definition', validation.errors);
+        throw new PolicyValidationException('Invalid policy definition', validation.errors);
       }
     }
 
@@ -362,29 +379,62 @@ export class PolicyService {
     const newVersion = existing.version + 1;
 
     // Start transaction
-    return await db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
       // Archive current version
-      await tx.insert(policyVersions).values({
+      const versionValues: {
+        policyId: ID;
+        version: number;
+        definition: PolicyDefinition;
+        checksum: string;
+        changeSummary?: string;
+        createdBy?: string;
+      } = {
         policyId: existing.id,
         version: existing.version,
         definition: existing.definition,
         checksum: existing.checksum,
-        changeSummary: input.changeSummary,
-        createdBy: input.updatedBy,
-      });
+      };
 
-      // Update policy
+      if (input.changeSummary !== undefined) {
+        versionValues.changeSummary = input.changeSummary;
+      }
+      if (input.updatedBy !== undefined) {
+        versionValues.createdBy = input.updatedBy;
+      }
+
+      await tx.insert(policyVersions).values(versionValues);
+
+      // Update policy - build set object conditionally to avoid exactOptionalPropertyTypes issues
+      const setValues: {
+        definition: PolicyDefinition;
+        checksum: string;
+        version: number;
+        status: PolicyStatus;
+        updatedAt: Date;
+        publishedAt: Date | null;
+        description?: string | null;
+      } = {
+        definition: newDefinition,
+        checksum: newChecksum,
+        version: newVersion,
+        status: input.status ?? existing.status,
+        updatedAt: new Date(),
+        publishedAt: input.status === 'published'
+          ? new Date()
+          : existing.publishedAt
+            ? new Date(existing.publishedAt)
+            : null,
+      };
+
+      if (input.description !== undefined) {
+        setValues.description = input.description;
+      } else if (existing.description !== undefined) {
+        setValues.description = existing.description;
+      }
+
       const [updated] = await tx
         .update(policies)
-        .set({
-          description: input.description ?? existing.description,
-          definition: newDefinition,
-          checksum: newChecksum,
-          version: newVersion,
-          status: input.status ?? existing.status,
-          updatedAt: new Date(),
-          publishedAt: input.status === 'published' ? new Date() : existing.publishedAt,
-        })
+        .set(setValues)
         .where(and(eq(policies.id, id), eq(policies.tenantId, tenantId)))
         .returning();
 
@@ -392,6 +442,10 @@ export class PolicyService {
         { policyId: id, version: newVersion, tenantId },
         'Policy updated'
       );
+
+      if (!updated) {
+        return null;
+      }
 
       return this.rowToPolicy(updated);
     });
@@ -423,7 +477,7 @@ export class PolicyService {
    */
   async list(filters: PolicyListFilters): Promise<Policy[]> {
     const db = getDatabase();
-    const { tenantId, namespace, status, name, limit = 50, offset = 0 } = filters;
+    const { tenantId, namespace, status, name: _name, limit = 50, offset = 0 } = filters;
 
     const conditions = [eq(policies.tenantId, tenantId)];
 
@@ -450,11 +504,16 @@ export class PolicyService {
    * Get published policies for evaluation
    */
   async getPublishedPolicies(tenantId: ID, namespace?: string): Promise<Policy[]> {
-    return this.list({
+    const filters: PolicyListFilters = {
       tenantId,
-      namespace,
       status: 'published',
-    });
+    };
+
+    if (namespace !== undefined) {
+      filters.namespace = namespace;
+    }
+
+    return this.list(filters);
   }
 
   /**
@@ -518,12 +577,12 @@ export class PolicyService {
 /**
  * Custom error for policy validation failures
  */
-export class PolicyValidationError extends Error {
-  public readonly errors: PolicyValidationError['errors'];
+export class PolicyValidationException extends Error {
+  public readonly errors: Array<{ path: string; message: string; code: string }>;
 
-  constructor(message: string, errors: { path: string; message: string; code: string }[]) {
+  constructor(message: string, errors: Array<{ path: string; message: string; code: string }>) {
     super(message);
-    this.name = 'PolicyValidationError';
+    this.name = 'PolicyValidationException';
     this.errors = errors;
   }
 }

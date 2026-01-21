@@ -147,8 +147,8 @@ class LeaderElectionImpl implements LeaderElection {
 
     logger.debug({ instanceId: this.instanceId }, 'Starting leader heartbeat');
 
-    this.heartbeatTimer = setInterval(async () => {
-      await this.sendHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      void this.sendHeartbeat();
     }, HEARTBEAT_INTERVAL);
 
     // Don't keep the process alive just for heartbeat
@@ -220,16 +220,17 @@ class LeaderElectionImpl implements LeaderElection {
 
     logger.debug({ instanceId: this.instanceId }, 'Starting periodic leader check');
 
-    this.leaderCheckTimer = setInterval(async () => {
+    this.leaderCheckTimer = setInterval(() => {
       if (!this._isLeader) {
-        const acquired = await this.tryBecomeLeader();
-        if (acquired) {
-          // Stop checking and start heartbeat
-          this.stopLeaderCheck();
-          this.startHeartbeat();
-          // Notify that we became leader
-          onBecameLeader();
-        }
+        void this.tryBecomeLeader().then((acquired) => {
+          if (acquired) {
+            // Stop checking and start heartbeat
+            this.stopLeaderCheck();
+            this.startHeartbeat();
+            // Notify that we became leader
+            onBecameLeader();
+          }
+        });
       }
     }, LEADER_CHECK_INTERVAL);
 
