@@ -349,7 +349,7 @@ export class EnforcementService {
     this.metrics.cacheMisses++;
 
     // Execute decision through circuit breaker for resilience
-    const result = await this.circuitBreaker.execute(() => this.decide(context));
+    const result = await this.circuitBreaker.execute(() => Promise.resolve(this.decide(context)));
 
     if (result.success && result.result) {
       // Cache the decision
