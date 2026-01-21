@@ -16,9 +16,49 @@
  */
 
 // =============================================================================
+// Canonical Type Imports from @vorion/contracts
+// =============================================================================
+
+import {
+  HierarchyLevel as CanonicalHierarchyLevel,
+  AuthorityScopeType as CanonicalAuthorityScope,
+  AuthorityScope as CanonicalAuthorityScopeInterface,
+  AgentTask as CanonicalAgentTask,
+  AgentPerformanceMetrics as CanonicalAgentMetrics,
+  HIERARCHY_LEVELS as CANONICAL_HIERARCHY_LEVELS,
+  HIERARCHY_ORDER as CANONICAL_HIERARCHY_ORDER,
+  HIERARCHY_TIERS,
+  hierarchyLevelSchema,
+  authorityScopeTypeSchema,
+  agentTaskSchema,
+  agentPerformanceMetricsSchema,
+} from '@vorion/contracts';
+
+// Re-export canonical types for backwards compatibility
+export {
+  CanonicalHierarchyLevel,
+  CanonicalAuthorityScope,
+  CanonicalAuthorityScopeInterface,
+  CanonicalAgentTask,
+  CanonicalAgentMetrics,
+  CANONICAL_HIERARCHY_LEVELS,
+  CANONICAL_HIERARCHY_ORDER,
+  HIERARCHY_TIERS,
+  hierarchyLevelSchema,
+  authorityScopeTypeSchema,
+  agentTaskSchema,
+  agentPerformanceMetricsSchema,
+};
+
+// =============================================================================
 // HIERARCHY LEVELS
 // =============================================================================
 
+/**
+ * @deprecated Use `HierarchyLevel` from `@vorion/contracts` instead.
+ * This local definition is maintained for backwards compatibility.
+ * Maps directly to the canonical HierarchyLevel type.
+ */
 export type HierarchyLevel = 'hitl' | 'orch' | 'metagoat' | 'agent' | 'bot'
 
 export const HIERARCHY_ORDER: HierarchyLevel[] = [
@@ -29,6 +69,10 @@ export const HIERARCHY_ORDER: HierarchyLevel[] = [
   'bot',      // Tier 4 - User-facing (lowest)
 ]
 
+/**
+ * @deprecated Use `AuthorityScopeType` from `@vorion/contracts` instead.
+ * This local definition is maintained for backwards compatibility.
+ */
 export type AuthorityScope = 'governance' | 'coordination' | 'management' | 'execution' | 'interaction'
 
 export interface HierarchyLevelConfig {
@@ -464,6 +508,12 @@ export interface Agent extends HierarchyEntity {
   collaborators: string[]         // Other agents frequently worked with
 }
 
+/**
+ * @deprecated Use `AgentTask` from `@vorion/contracts` instead.
+ * This local definition is maintained for backwards compatibility.
+ * The canonical version includes additional fields like `agentId`, `taskType`,
+ * `description`, `context`, `source`, `sourceId`, and `createdAt`.
+ */
 export interface AgentTask {
   id: string
   type: string
@@ -489,6 +539,11 @@ export interface Certification {
   score?: number                 // Assessment score
 }
 
+/**
+ * @deprecated Use `AgentPerformanceMetrics` from `@vorion/contracts` instead.
+ * This local definition is maintained for backwards compatibility.
+ * The canonical type has the same fields with full Zod validation support.
+ */
 export interface AgentMetrics {
   tasksCompleted: number
   tasksFailed: number

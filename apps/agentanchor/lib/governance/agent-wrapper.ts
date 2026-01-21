@@ -11,6 +11,11 @@
  */
 
 import {
+  AgentConfig as CanonicalAgentConfig,
+  AgentLifecycleStatus,
+} from '@vorion/contracts';
+
+import {
   AgentRuntimeContext,
   TrustContext,
   PersonaConfig,
@@ -26,6 +31,9 @@ import {
   ToolDefinition,
 } from './types';
 
+// Re-export canonical types for backwards compatibility
+export { CanonicalAgentConfig, AgentLifecycleStatus };
+
 import { buildTrustContext, assessRisk, evaluateAction } from './trust';
 import { buildSystemPrompt, buildPersonaConfig, injectContextToPrompt, DEFAULT_PERSONAS } from './persona';
 import { getAvailableCapabilities, getToolDefinitions, formatToolsForAnthropic, CAPABILITY_REGISTRY } from './capabilities';
@@ -36,6 +44,11 @@ import { checkPermission, PermissionContext } from './roles';
 // Agent Runtime Builder
 // =============================================================================
 
+/**
+ * @deprecated Use `AgentConfig` from `@vorion/contracts` instead.
+ * This local definition is maintained for backwards compatibility.
+ * The canonical version includes additional fields and Zod validation.
+ */
 export interface AgentConfig {
   agentId: string;
   userId: string;

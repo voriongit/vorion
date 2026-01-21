@@ -77,6 +77,58 @@ export type {
 
 export { DenialReason } from '../../packages/contracts/src/v2/decision.js';
 
+// Governance types (canonical)
+export type {
+  AuthorizationResult,
+  AuthorizationConstraints,
+  AuthContext,
+  HierarchyLevel,
+  HierarchyLevelConfig,
+  AuthorityScopeType,
+  AuthorityScope,
+  AuthorityScopeTimeRestriction,
+  Authority,
+  AuthorityAudit,
+  AuthorityType,
+  Permission,
+  GovernanceRole,
+  ControlAction as GovernanceControlAction,
+} from '../../packages/contracts/src/canonical/governance.js';
+
+export {
+  GovernanceDenialReason,
+  HIERARCHY_TIERS,
+  HIERARCHY_ORDER,
+  HIERARCHY_LEVELS,
+  getHierarchyTier,
+  getHierarchyLevelConfig,
+  isHigherAuthority,
+  canDelegate,
+  getReportingChain,
+  meetsMinimumTrust,
+  createAllowedResult,
+  createDeniedResult,
+  createGovernanceDeniedResult,
+  isHierarchyLevel,
+  isAuthorityScopeType,
+  // Zod schemas
+  governanceDenialReasonSchema,
+  authorizationConstraintsSchema,
+  authorizationResultSchema,
+  governanceRoleSchema,
+  hierarchyLevelSchema,
+  hierarchyLevelConfigSchema,
+  authorityScopeTypeSchema,
+  controlActionSchema,
+  authorityScopeTimeRestrictionSchema,
+  authorityScopeSchema,
+  authorityTypeSchema,
+  permissionSchema,
+  authorityAuditSchema,
+  authoritySchema,
+  authContextSchema,
+} from '../../packages/contracts/src/canonical/governance.js';
+
 // =============================================================================
 // LEGACY TYPE IMPORTS (for adapter functions)
 // =============================================================================

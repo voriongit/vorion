@@ -71,7 +71,13 @@ export const INTENT_STATUSES = [
 export type IntentStatus = (typeof INTENT_STATUSES)[number];
 
 /**
- * Control action types
+ * Control action types for enforcement decisions.
+ *
+ * @deprecated For governance/authorization actions, use `ControlAction` from
+ *             `@vorion/contracts/canonical/governance`. This type is maintained
+ *             for backwards compatibility with existing enforcement logic.
+ *             Note: The canonical type has different values:
+ *             ['allow', 'deny', 'constrain', 'clarify', 'escalate', 'log', 'audit']
  */
 export type ControlAction =
   | 'allow'

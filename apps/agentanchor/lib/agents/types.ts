@@ -2,9 +2,28 @@
 // Part of Epic 2: Agent Creation & Academy
 
 // ============================================================================
+// Canonical Type Imports from @vorion/contracts
+// ============================================================================
+
+import {
+  AgentLifecycleStatus as CanonicalAgentStatus,
+  AGENT_LIFECYCLE_STATUSES,
+  AGENT_LIFECYCLE_LABELS,
+  AGENT_LIFECYCLE_COLORS,
+} from '@vorion/contracts';
+
+// Re-export canonical types for backwards compatibility
+export { CanonicalAgentStatus, AGENT_LIFECYCLE_STATUSES, AGENT_LIFECYCLE_LABELS, AGENT_LIFECYCLE_COLORS };
+
+// ============================================================================
 // Core Agent Types
 // ============================================================================
 
+/**
+ * @deprecated Use `AgentLifecycleStatus` from `@vorion/contracts` instead.
+ * This local definition is maintained for backwards compatibility.
+ * Maps directly to the canonical AgentLifecycleStatus type.
+ */
 export type AgentStatus = 'draft' | 'training' | 'active' | 'suspended' | 'archived'
 export type MaintenanceFlag = 'author' | 'delegated' | 'platform' | 'none'
 

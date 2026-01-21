@@ -7,6 +7,27 @@
  */
 
 // =============================================================================
+// Canonical Type Imports from @vorion/contracts
+// =============================================================================
+
+import {
+  AgentCapability as CanonicalAgentCapability,
+  CollaborationMode as CanonicalCollaborationMode,
+  agentCapabilitySchema,
+  collaborationModeSchema,
+  COLLABORATION_MODES,
+} from '@vorion/contracts';
+
+// Re-export canonical types for backwards compatibility
+export {
+  CanonicalAgentCapability,
+  CanonicalCollaborationMode,
+  agentCapabilitySchema,
+  collaborationModeSchema,
+  COLLABORATION_MODES,
+};
+
+// =============================================================================
 // OPERATING PHILOSOPHY
 // =============================================================================
 
@@ -147,6 +168,12 @@ export interface ActionItem {
 // AGENT CAPABILITY MATCHING
 // =============================================================================
 
+/**
+ * @deprecated Use `AgentCapability` from `@vorion/contracts` instead.
+ * This local definition is maintained for backwards compatibility.
+ * The canonical type has the same structure with Zod validation support
+ * and uses a 0-5 autonomy level (maps to TrustBand).
+ */
 export interface AgentCapability {
   domain: string               // e.g., 'security', 'data-analysis', 'customer-service'
   skills: string[]             // Specific skills

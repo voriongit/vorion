@@ -9,6 +9,26 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { createLogger } from './logger.js';
 
+// Import canonical types from @vorion/contracts
+import {
+  AuthorizationResult as CanonicalAuthorizationResult,
+  AuthorizationConstraints,
+  GovernanceDenialReason,
+  authorizationResultSchema,
+  authorizationConstraintsSchema,
+  governanceDenialReasonSchema,
+} from '../../packages/contracts/src/canonical/governance.js';
+
+// Re-export canonical types for backwards compatibility
+export {
+  CanonicalAuthorizationResult,
+  AuthorizationConstraints,
+  GovernanceDenialReason,
+  authorizationResultSchema,
+  authorizationConstraintsSchema,
+  governanceDenialReasonSchema,
+};
+
 const authzLogger = createLogger({ component: 'authorization' });
 
 /**
@@ -24,6 +44,11 @@ export interface AuthUser {
 
 /**
  * Authorization check result
+ *
+ * @deprecated Use `CanonicalAuthorizationResult` from `@vorion/contracts` for new code.
+ *             This interface is maintained for backwards compatibility and is a subset
+ *             of the canonical type. The canonical type includes additional fields for
+ *             denial reasons, permissions, constraints, and remediations.
  */
 export interface AuthorizationResult {
   allowed: boolean;

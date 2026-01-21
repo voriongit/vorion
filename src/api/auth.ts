@@ -10,10 +10,35 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { createLogger } from '../common/logger.js';
 import { getConfig } from '../common/config.js';
 
+// Import canonical types from @vorion/contracts
+import {
+  AuthContext as CanonicalAuthContext,
+  GovernanceRole,
+  HierarchyLevel,
+  authContextSchema,
+  governanceRoleSchema,
+  hierarchyLevelSchema,
+} from '../../packages/contracts/src/canonical/governance.js';
+
+// Re-export canonical types for backwards compatibility
+export {
+  CanonicalAuthContext,
+  GovernanceRole,
+  HierarchyLevel,
+  authContextSchema,
+  governanceRoleSchema,
+  hierarchyLevelSchema,
+};
+
 const logger = createLogger({ component: 'auth' });
 
 /**
  * Authenticated user context
+ *
+ * @deprecated Use `CanonicalAuthContext` from `@vorion/contracts` for new code.
+ *             This interface is maintained for backwards compatibility and is a subset
+ *             of the canonical type. The canonical type includes additional fields for
+ *             governanceRole, sessionId, agentId, hierarchyLevel, and attributes.
  */
 export interface AuthContext {
   userId: string;

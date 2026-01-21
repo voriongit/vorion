@@ -6,6 +6,45 @@
  */
 
 // ============================================================================
+// Canonical Type Imports from @vorion/contracts
+// ============================================================================
+
+import {
+  AgentTask as CanonicalAgentTask,
+  TaskPriority,
+  TaskStatus as CanonicalTaskStatus,
+  TaskSource as CanonicalTaskSource,
+  CollaborationMode as CanonicalCollaborationMode,
+  agentTaskSchema,
+  taskPrioritySchema,
+  taskStatusSchema,
+  taskSourceSchema,
+  collaborationModeSchema,
+  TASK_PRIORITIES,
+  TASK_STATUSES,
+  TASK_SOURCES,
+  COLLABORATION_MODES,
+} from '@vorion/contracts';
+
+// Re-export canonical types for backwards compatibility
+export {
+  CanonicalAgentTask,
+  TaskPriority,
+  CanonicalTaskStatus,
+  CanonicalTaskSource,
+  CanonicalCollaborationMode,
+  agentTaskSchema,
+  taskPrioritySchema,
+  taskStatusSchema,
+  taskSourceSchema,
+  collaborationModeSchema,
+  TASK_PRIORITIES,
+  TASK_STATUSES,
+  TASK_SOURCES,
+  COLLABORATION_MODES,
+};
+
+// ============================================================================
 // COLLABORATION TYPES
 // ============================================================================
 
@@ -188,6 +227,10 @@ export interface ExcellenceCycle {
 // TASK QUEUE TYPES
 // ============================================================================
 
+/**
+ * @deprecated Use `TaskSource` from `@vorion/contracts` instead.
+ * This local definition is maintained for backwards compatibility.
+ */
 export type TaskSource =
   | 'system'
   | 'user'
@@ -196,6 +239,11 @@ export type TaskSource =
   | 'proactive'
   | 'scheduled';
 
+/**
+ * @deprecated Use `TaskStatus` from `@vorion/contracts` instead.
+ * This local definition is maintained for backwards compatibility.
+ * The canonical version includes additional statuses: 'active', 'paused', 'delegated'.
+ */
 export type TaskStatus =
   | 'queued'
   | 'assigned'
@@ -204,6 +252,12 @@ export type TaskStatus =
   | 'failed'
   | 'cancelled';
 
+/**
+ * @deprecated Use `AgentTask` from `@vorion/contracts` instead.
+ * This local definition is maintained for backwards compatibility.
+ * The canonical version includes additional fields like `title`, `input`,
+ * `output`, `metadata`, and uses `TaskPriority` enum for priority.
+ */
 export interface AgentTask {
   id: string;
   agentId: string;

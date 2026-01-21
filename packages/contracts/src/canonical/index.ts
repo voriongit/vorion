@@ -14,5 +14,11 @@ export * from './risk-level.js';
 export * from './intent.js';
 export * from './trust-signal.js';
 
+// Agent types
+export * from './agent.js';
+
+// Governance types
+export * from './governance.js';
+
 // Runtime validation
 export * from './validation.js';
