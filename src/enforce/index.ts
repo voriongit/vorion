@@ -255,72 +255,93 @@ export class EnforcementService {
    */
   decide(context: SimpleEnforcementContext): Decision {
     const startTime = performance.now();
-    const { intent, evaluation, trustScore, trustLevel } = context;
 
-    logger.debug(
-      {
-        intentId: intent.id,
-        trustLevel,
+    try {
+      const { intent, evaluation, trustScore, trustLevel } = context;
+
+      logger.debug(
+        {
+          intentId: intent.id,
+          trustLevel,
+          trustScore,
+          rulesEvaluated: evaluation.rulesEvaluated.length,
+        },
+        'Starting enforcement decision'
+      );
+
+      // Evaluate all constraints
+      const constraintResults = this.evaluateConstraints(context);
+
+      // Check if any constraint failed
+      const failedConstraints = constraintResults.filter((c) => !c.passed);
+      const hasFailedConstraints = failedConstraints.length > 0;
+
+      // Determine action based on constraints and evaluation
+      let action: ControlAction;
+      let reason: string | undefined;
+
+      if (hasFailedConstraints) {
+        // Find the most restrictive failed constraint
+        const mostRestrictive = this.getMostRestrictiveAction(failedConstraints);
+        action = mostRestrictive.action;
+        reason = mostRestrictive.reason;
+      } else if (!evaluation.passed) {
+        action = evaluation.finalAction;
+        reason = `Rule evaluation resulted in ${action}`;
+      } else {
+        action = 'allow';
+      }
+
+      // Check for escalation
+      const escalationRule = this.shouldEscalate(context, { action } as Decision);
+      if (escalationRule && action !== 'deny') {
+        action = 'escalate';
+        reason = `Escalation required: ${escalationRule.name}`;
+      }
+
+      // Calculate confidence score
+      const confidence = this.calculateConfidence(constraintResults, evaluation);
+
+      // Create the decision record
+      const decision = this.createDecision(
+        intent.id,
+        action,
+        evaluation.rulesEvaluated,
         trustScore,
-        rulesEvaluated: evaluation.rulesEvaluated.length,
-      },
-      'Starting enforcement decision'
-    );
+        trustLevel,
+        constraintResults,
+        confidence,
+        reason,
+        escalationRule
+      );
 
-    // Evaluate all constraints
-    const constraintResults = this.evaluateConstraints(context);
+      // Record metrics
+      const durationMs = performance.now() - startTime;
+      this.recordDecisionMetrics(decision, durationMs);
 
-    // Check if any constraint failed
-    const failedConstraints = constraintResults.filter((c) => !c.passed);
-    const hasFailedConstraints = failedConstraints.length > 0;
+      // Log the decision
+      this.logDecision(context, decision, durationMs);
 
-    // Determine action based on constraints and evaluation
-    let action: ControlAction;
-    let reason: string | undefined;
+      return decision;
+    } catch (error) {
+      const durationMs = performance.now() - startTime;
+      logger.error(
+        {
+          error,
+          intentId: context.intent?.id,
+          tenantId: context.intent?.tenantId,
+          entityId: context.intent?.entityId,
+          durationMs,
+        },
+        'Enforcement decision failed with error'
+      );
 
-    if (hasFailedConstraints) {
-      // Find the most restrictive failed constraint
-      const mostRestrictive = this.getMostRestrictiveAction(failedConstraints);
-      action = mostRestrictive.action;
-      reason = mostRestrictive.reason;
-    } else if (!evaluation.passed) {
-      action = evaluation.finalAction;
-      reason = `Rule evaluation resulted in ${action}`;
-    } else {
-      action = 'allow';
+      // Return a safe deny decision on error
+      return this.createFallbackDecision(
+        context,
+        error instanceof Error ? error.message : 'Unknown enforcement error'
+      );
     }
-
-    // Check for escalation
-    const escalationRule = this.shouldEscalate(context, { action } as Decision);
-    if (escalationRule && action !== 'deny') {
-      action = 'escalate';
-      reason = `Escalation required: ${escalationRule.name}`;
-    }
-
-    // Calculate confidence score
-    const confidence = this.calculateConfidence(constraintResults, evaluation);
-
-    // Create the decision record
-    const decision = this.createDecision(
-      intent.id,
-      action,
-      evaluation.rulesEvaluated,
-      trustScore,
-      trustLevel,
-      constraintResults,
-      confidence,
-      reason,
-      escalationRule
-    );
-
-    // Record metrics
-    const durationMs = performance.now() - startTime;
-    this.recordDecisionMetrics(decision, durationMs);
-
-    // Log the decision
-    this.logDecision(context, decision, durationMs);
-
-    return decision;
   }
 
   /**

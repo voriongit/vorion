@@ -16,6 +16,7 @@
 
 import { createLogger } from '../common/logger.js';
 import { getRedis } from '../common/redis.js';
+import { withCircuitBreakerResult } from '../common/circuit-breaker.js';
 import type {
   DecisionCacheKey,
   EnforcementDecision,
@@ -30,6 +31,34 @@ import {
   setCacheSize,
 } from './metrics.js';
 import crypto from 'crypto';
+
+/**
+ * Runtime validation for cached entries from Redis.
+ * Guards against corrupted or malformed cache data.
+ */
+function isValidCacheEntry(data: unknown): data is CacheEntry {
+  if (!data || typeof data !== 'object') return false;
+  const obj = data as Record<string, unknown>;
+
+  // Check required CacheEntry fields
+  if (typeof obj.expiresAt !== 'number') return false;
+  if (typeof obj.accessCount !== 'number') return false;
+  if (typeof obj.lastAccessedAt !== 'number') return false;
+
+  // Check decision object exists and has required fields
+  const decision = obj.decision;
+  if (!decision || typeof decision !== 'object') return false;
+  const dec = decision as Record<string, unknown>;
+
+  if (typeof dec.id !== 'string') return false;
+  if (typeof dec.intentId !== 'string') return false;
+  if (typeof dec.action !== 'string') return false;
+  if (!Array.isArray(dec.rulesEvaluated)) return false;
+  if (typeof dec.trustScore !== 'number') return false;
+  if (typeof dec.trustLevel !== 'number') return false;
+
+  return true;
+}
 
 const logger = createLogger({ component: 'decision-cache' });
 
@@ -106,30 +135,59 @@ export class DecisionCache {
       }
     }
 
-    // Check Redis cache (distributed)
-    try {
+    // Check Redis cache (distributed) with circuit breaker
+    const redisResult = await withCircuitBreakerResult('decisionCacheRead', async () => {
       const redis = getRedis();
       const redisCached = await redis.get(this.redisPrefix + cacheKeyString);
 
       if (redisCached) {
-        const entry = JSON.parse(redisCached) as CacheEntry;
+        // Parse and validate cached data
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(redisCached);
+        } catch {
+          logger.warn({ key: cacheKeyString }, 'Corrupted JSON in Redis cache, deleting');
+          await redis.del(this.redisPrefix + cacheKeyString);
+          return null;
+        }
+
+        if (!isValidCacheEntry(parsed)) {
+          logger.warn({ key: cacheKeyString }, 'Invalid cache entry format in Redis, deleting');
+          await redis.del(this.redisPrefix + cacheKeyString);
+          return null;
+        }
+
+        const entry: CacheEntry = parsed;
 
         if (this.isExpired(entry)) {
           // Clean up expired Redis entry
           await redis.del(this.redisPrefix + cacheKeyString);
           logger.debug({ key: cacheKeyString }, 'Redis cache entry expired');
-        } else {
-          // Update entry and store in local cache
-          entry.accessCount++;
-          entry.lastAccessedAt = Date.now();
-          this.storeLocal(cacheKeyString, entry, key.tenantId);
-          recordCacheHit(key.tenantId);
-          logger.debug({ key: cacheKeyString, source: 'redis' }, 'Decision cache hit');
-          return entry.decision;
+          return null;
         }
+
+        // Update entry and store in local cache
+        entry.accessCount++;
+        entry.lastAccessedAt = Date.now();
+        this.storeLocal(cacheKeyString, entry, key.tenantId);
+        recordCacheHit(key.tenantId);
+        logger.debug({ key: cacheKeyString, source: 'redis' }, 'Decision cache hit');
+        return entry.decision;
       }
-    } catch (error) {
-      logger.warn({ error, key: cacheKeyString }, 'Failed to read from Redis decision cache');
+      return null;
+    });
+
+    if (redisResult.success && redisResult.result) {
+      return redisResult.result;
+    }
+
+    if (redisResult.circuitOpen) {
+      logger.warn({ key: cacheKeyString }, 'Decision cache circuit breaker open, skipping Redis');
+    } else if (!redisResult.success) {
+      logger.warn(
+        { error: redisResult.error, key: cacheKeyString },
+        'Failed to read from Redis decision cache'
+      );
     }
 
     // Cache miss
@@ -160,8 +218,8 @@ export class DecisionCache {
     // Store in local cache
     this.storeLocal(cacheKeyString, entry, key.tenantId);
 
-    // Store in Redis (fire and forget with logging)
-    try {
+    // Store in Redis with circuit breaker
+    const writeResult = await withCircuitBreakerResult('decisionCacheWrite', async () => {
       const redis = getRedis();
       const ttlSeconds = Math.ceil(this.ttlMs / 1000);
       await redis.setex(
@@ -169,9 +227,18 @@ export class DecisionCache {
         ttlSeconds,
         JSON.stringify(entry)
       );
+      return true;
+    });
+
+    if (writeResult.success) {
       logger.debug({ key: cacheKeyString, ttlMs: this.ttlMs }, 'Decision cached');
-    } catch (error) {
-      logger.warn({ error, key: cacheKeyString }, 'Failed to write to Redis decision cache');
+    } else if (writeResult.circuitOpen) {
+      logger.warn({ key: cacheKeyString }, 'Decision cache write circuit open, local cache only');
+    } else {
+      logger.warn(
+        { error: writeResult.error, key: cacheKeyString },
+        'Failed to write to Redis decision cache'
+      );
     }
   }
 

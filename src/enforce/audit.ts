@@ -140,7 +140,9 @@ export class EnforcementAuditService {
 
         // Flush if buffer is getting large
         if (this.buffer.length >= this.batchSize) {
-          void this.flush();
+          this.flush().catch((err: unknown) => {
+            logger.error({ error: err }, 'Background enforcement audit flush failed');
+          });
         }
       } catch (error) {
         // Log but don't throw - audit logging should never fail requests
@@ -167,7 +169,9 @@ export class EnforcementAuditService {
 
         // Flush if buffer is getting large
         if (this.buffer.length >= this.batchSize) {
-          void this.flush();
+          this.flush().catch((err: unknown) => {
+            logger.error({ error: err }, 'Background enforcement escalation audit flush failed');
+          });
         }
       } catch (error) {
         logger.error(
@@ -272,9 +276,27 @@ export class EnforcementAuditService {
       this.flushTimer = null;
     }
 
-    // Final flush of any remaining entries
-    while (this.buffer.length > 0) {
-      await this.flush();
+    // Final flush of any remaining entries with max retry protection
+    const maxAttempts = 5;
+    let attempts = 0;
+
+    while (this.buffer.length > 0 && attempts < maxAttempts) {
+      try {
+        await this.flush();
+      } catch (error) {
+        logger.error(
+          { error, attempt: attempts + 1, remaining: this.buffer.length },
+          'Flush failed during enforcement audit shutdown'
+        );
+      }
+      attempts++;
+    }
+
+    if (this.buffer.length > 0) {
+      logger.error(
+        { remaining: this.buffer.length },
+        'Enforcement audit shutdown completed with unflushed entries'
+      );
     }
 
     logger.info('Enforcement audit service shutdown complete');
