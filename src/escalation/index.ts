@@ -178,7 +178,10 @@ export class EscalationService {
 
     if (result.length === 0) return null;
 
-    return this.toResponse(result[0]!);
+    const escalation = result[0];
+    if (!escalation) return null;
+
+    return this.toResponse(escalation);
   }
 
   /**
@@ -242,7 +245,8 @@ export class EscalationService {
       return null;
     }
 
-    const escalation = current[0]!;
+    const escalation = current[0];
+    if (!escalation) return null;
 
     // Check if already resolved
     if (escalation.status !== 'pending') {
@@ -310,8 +314,11 @@ export class EscalationService {
 
     if (current.length === 0) return null;
 
-    if (current[0]!.status !== 'pending') {
-      throw new Error(`Cannot cancel escalation with status: ${current[0]!.status}`);
+    const currentEscalation = current[0];
+    if (!currentEscalation) return null;
+
+    if (currentEscalation.status !== 'pending') {
+      throw new Error(`Cannot cancel escalation with status: ${currentEscalation.status}`);
     }
 
     const now = new Date();

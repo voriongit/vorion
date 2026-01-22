@@ -33,12 +33,15 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@fastify/jwt": "10.0.0",
+    "drizzle-kit": "0.31.8",
+    "jsonpath-plus": "10.3.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.0.17"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"

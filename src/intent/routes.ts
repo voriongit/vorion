@@ -10,6 +10,18 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { getOpenApiSpecJson } from './openapi.js';
+
+// Type-safe JSON value schema for proper validation instead of z.any()
+const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(jsonValueSchema),
+  ])
+);
 import {
   createIntentService,
   intentSubmissionSchema,
@@ -128,7 +140,7 @@ const escalateIntentBodySchema = z.object({
   ]),
   escalatedTo: z.string().min(1),
   timeout: z.string().regex(/^P(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$/).optional(),
-  context: z.record(z.any()).optional(),
+  context: z.record(jsonValueSchema).optional(),
 });
 
 const entityIdParamsSchema = z.object({

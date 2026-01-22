@@ -579,8 +579,10 @@ export class EnforcementService {
       const match = conditionLower.match(/trust_level\s*([<>=]+)\s*(\d)/);
       if (match) {
         const operator = match[1];
-        const level = parseInt(match[2]!, 10) as TrustLevel;
-        return this.evaluateComparison(context.trustLevel, operator!, level);
+        const levelStr = match[2];
+        if (!operator || !levelStr) return false;
+        const level = parseInt(levelStr, 10) as TrustLevel;
+        return this.evaluateComparison(context.trustLevel, operator, level);
       }
     }
 
@@ -975,7 +977,11 @@ export class EnforcementService {
       allow: 5,
     };
 
-    let mostRestrictive = constraints[0]!;
+    const firstConstraint = constraints[0];
+    if (!firstConstraint) {
+      return { action: 'allow', reason: 'No constraints to evaluate' };
+    }
+    let mostRestrictive = firstConstraint;
 
     for (const constraint of constraints) {
       if (priority[constraint.action] < priority[mostRestrictive.action]) {

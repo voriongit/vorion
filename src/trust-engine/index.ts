@@ -205,7 +205,8 @@ export class TrustEngine {
 
     if (result.length === 0) return undefined;
 
-    const record = result[0]!;
+    const record = result[0];
+    if (!record) return undefined;
 
     // Check if recalculation is needed (older than 1 minute)
     const staleness = Date.now() - record.lastCalculatedAt.getTime();
@@ -344,7 +345,10 @@ export class TrustEngine {
       record = [insertedRecord];
     }
 
-    const currentRecord = record[0]!;
+    const currentRecord = record[0];
+    if (!currentRecord) {
+      throw new Error(`Trust record not found for entity ${signal.entityId}`);
+    }
     const previousScore = currentRecord.score;
     const previousLevel = parseInt(currentRecord.level) as TrustLevel;
 

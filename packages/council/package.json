@@ -18,7 +18,10 @@
     "test": "vitest --passWithNoTests"
   },
   "dependencies": {
+    "@fastify/jwt": "10.0.0",
     "@vorion/ai-gateway": "*",
+    "drizzle-kit": "0.31.8",
+    "jsonpath-plus": "10.3.0",
     "zod": "^3.24.1"
   },
   "peerDependencies": {
@@ -33,7 +36,7 @@
     "@types/node": "^20.11.5",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
-    "vitest": "^1.0.0"
+    "vitest": "^4.0.17"
   },
   "keywords": [
     "ai",

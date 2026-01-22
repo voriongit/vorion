@@ -60,6 +60,18 @@ import {
 
 const logger = createLogger({ component: 'intent' });
 
+// Type-safe JSON value schema for proper validation instead of z.unknown()
+const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(jsonValueSchema),
+  ])
+);
+
 // Payload size limits for security and performance
 const MAX_PAYLOAD_SIZE_BYTES = 1024 * 1024; // 1MB max total payload
 const MAX_CONTEXT_BYTES = 64 * 1024; // 64KB max context (backward compatible)
@@ -78,7 +90,7 @@ export const PAYLOAD_LIMITS = {
 /**
  * Schema for validating intent payload records with size limits
  */
-export const intentPayloadSchema = z.record(z.unknown())
+export const intentPayloadSchema = z.record(jsonValueSchema)
   .refine(
     (payload) => {
       const size = Buffer.byteLength(JSON.stringify(payload), 'utf8');
@@ -96,7 +108,7 @@ export const intentSubmissionSchema = z
     entityId: z.string().uuid(),
     goal: z.string().min(1).max(MAX_STRING_LENGTH),
     context: intentPayloadSchema,
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(jsonValueSchema).optional(),
     intentType: z.string().max(100).optional(),
     priority: z.number().int().min(0).max(10).default(0),
     idempotencyKey: z.string().max(255).optional(),

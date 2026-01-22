@@ -97,8 +97,12 @@ export class ProofService {
       .limit(1);
 
     if (meta.length > 0) {
-      this.lastHash = meta[0]!.lastHash;
-      this.chainLength = meta[0]!.chainLength;
+      const chainMeta = meta[0];
+      if (!chainMeta) {
+        throw new Error('Unexpected: meta array has length > 0 but first element is undefined');
+      }
+      this.lastHash = chainMeta.lastHash;
+      this.chainLength = chainMeta.chainLength;
       logger.info(
         { chainLength: this.chainLength, lastHash: this.lastHash.slice(0, 16) + '...' },
         'Chain state loaded from database'
@@ -238,7 +242,10 @@ export class ProofService {
 
     if (result.length === 0) return undefined;
 
-    return this.toSignedProof(result[0]!);
+    const proof = result[0];
+    if (!proof) return undefined;
+
+    return this.toSignedProof(proof);
   }
 
   /**
@@ -302,7 +309,16 @@ export class ProofService {
       };
     }
 
-    const proof = result[0]!;
+    const proof = result[0];
+    if (!proof) {
+      return {
+        valid: false,
+        proofId: id,
+        chainPosition: -1,
+        issues: ['Proof not found'],
+        verifiedAt: new Date().toISOString(),
+      };
+    }
 
     // Verify hash
     const proofData = {
@@ -332,8 +348,10 @@ export class ProofService {
         .limit(1);
 
       if (previousResult.length > 0) {
-        const previous = previousResult[0]!;
-        if (proof.previousHash !== previous.hash) {
+        const previous = previousResult[0];
+        if (!previous) {
+          issues.push('Previous proof in chain not found');
+        } else if (proof.previousHash !== previous.hash) {
           issues.push('Chain linkage broken - previous hash does not match');
         }
       } else {
@@ -350,7 +368,7 @@ export class ProofService {
       );
       if (!sigResult.valid) {
         issues.push(
-          `Signature verification failed: ${sigResult.error || 'invalid signature'}`
+          `Signature verification failed: ${sigResult.error ?? 'invalid signature'}`
         );
       }
     } else {
@@ -395,7 +413,8 @@ export class ProofService {
       .orderBy(asc(proofs.chainPosition));
 
     for (let i = 0; i < allProofs.length; i++) {
-      const proof = allProofs[i]!;
+      const proof = allProofs[i];
+      if (!proof) continue;
       const verification = await this.verify(proof.id);
 
       if (!verification.valid) {
@@ -490,10 +509,11 @@ export class ProofService {
       .orderBy(desc(proofs.createdAt))
       .limit(1);
 
+    const lastProof = result[0];
     return {
       totalProofs: this.chainLength,
       chainLength: this.chainLength,
-      lastProofAt: result.length > 0 ? result[0]!.createdAt.toISOString() : null,
+      lastProofAt: lastProof ? lastProof.createdAt.toISOString() : null,
     };
   }
 }

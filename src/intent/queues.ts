@@ -632,10 +632,15 @@ export function registerIntentWorkers(service: IntentService): void {
 
     // Move to DLQ after final retry
     if (job.attemptsMade >= config.intent.maxRetries) {
-      void (async () => {
-        await moveToDeadLetterQueue(job, error, 'intake');
-        await markIntentFailed(intentId, tenantId, error);
-      })();
+      Promise.all([
+        moveToDeadLetterQueue(job, error, 'intake'),
+        markIntentFailed(intentId, tenantId, error),
+      ]).catch((dlqError: unknown) => {
+        logger.error(
+          { jobId: job.id, intentId, error: dlqError },
+          'Failed to move intake job to DLQ or mark intent as failed'
+        );
+      });
     }
   });
 
@@ -915,10 +920,15 @@ export function registerIntentWorkers(service: IntentService): void {
     logger.error({ jobId: job.id, intentId, error: error.message }, 'Intent evaluation job failed');
 
     if (job.attemptsMade >= config.intent.maxRetries) {
-      void (async () => {
-        await moveToDeadLetterQueue(job, error, 'evaluate');
-        await markIntentFailed(intentId, tenantId, error);
-      })();
+      Promise.all([
+        moveToDeadLetterQueue(job, error, 'evaluate'),
+        markIntentFailed(intentId, tenantId, error),
+      ]).catch((dlqError: unknown) => {
+        logger.error(
+          { jobId: job.id, intentId, error: dlqError },
+          'Failed to move evaluate job to DLQ or mark intent as failed'
+        );
+      });
     }
   });
 
@@ -1229,10 +1239,15 @@ export function registerIntentWorkers(service: IntentService): void {
     logger.error({ jobId: job.id, intentId, error: error.message }, 'Intent decision job failed');
 
     if (job.attemptsMade >= config.intent.maxRetries) {
-      void (async () => {
-        await moveToDeadLetterQueue(job, error, 'decision');
-        await markIntentFailed(intentId, tenantId, error);
-      })();
+      Promise.all([
+        moveToDeadLetterQueue(job, error, 'decision'),
+        markIntentFailed(intentId, tenantId, error),
+      ]).catch((dlqError: unknown) => {
+        logger.error(
+          { jobId: job.id, intentId, error: dlqError },
+          'Failed to move decision job to DLQ or mark intent as failed'
+        );
+      });
     }
   });
 
@@ -1482,10 +1497,15 @@ export function registerIntentWorkers(service: IntentService): void {
     logger.error({ jobId: job.id, intentId, error: error.message }, 'Intent execution job failed');
 
     if (job.attemptsMade >= config.intent.maxRetries) {
-      void (async () => {
-        await moveToDeadLetterQueue(job, error, 'execute');
-        await markIntentFailed(intentId, tenantId, error);
-      })();
+      Promise.all([
+        moveToDeadLetterQueue(job, error, 'execute'),
+        markIntentFailed(intentId, tenantId, error),
+      ]).catch((dlqError: unknown) => {
+        logger.error(
+          { jobId: job.id, intentId, error: dlqError },
+          'Failed to move execute job to DLQ or mark intent as failed'
+        );
+      });
     }
   });
 

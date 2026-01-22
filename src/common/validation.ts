@@ -221,7 +221,9 @@ export function createRateLimitedValidator<T>(
     const oneMinuteAgo = now - 60000;
 
     // Clean old entries
-    while (calls.length > 0 && calls[0]! < oneMinuteAgo) {
+    while (calls.length > 0) {
+      const oldestCall = calls[0];
+      if (oldestCall === undefined || oldestCall >= oneMinuteAgo) break;
       calls.shift();
     }
 

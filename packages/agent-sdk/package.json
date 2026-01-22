@@ -43,14 +43,17 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "@fastify/jwt": "10.0.0",
+    "drizzle-kit": "0.31.8",
     "eventemitter3": "^5.0.1",
+    "jsonpath-plus": "10.3.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
     "@types/ws": "^8.5.0",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.0.17"
   },
   "peerDependencies": {
     "typescript": ">=5.0.0"

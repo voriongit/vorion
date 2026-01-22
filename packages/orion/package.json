@@ -33,13 +33,16 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@fastify/jwt": "10.0.0",
     "@vorion/contracts": "*",
+    "drizzle-kit": "0.31.8",
+    "jsonpath-plus": "10.3.0",
     "uuid": "^11.0.4"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
     "@types/uuid": "^10.0.0",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.0.17"
   }
 }

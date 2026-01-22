@@ -304,9 +304,11 @@ export class PolicyEvaluator {
         return conditions.every((c) => this.evaluateCondition(c, context));
       case 'or':
         return conditions.some((c) => this.evaluateCondition(c, context));
-      case 'not':
+      case 'not': {
         // NOT applies to the first condition
-        return conditions.length > 0 && !this.evaluateCondition(conditions[0]!, context);
+        const firstCondition = conditions[0];
+        return conditions.length > 0 && firstCondition !== undefined && !this.evaluateCondition(firstCondition, context);
+      }
       default:
         return false;
     }
@@ -351,9 +353,12 @@ export class PolicyEvaluator {
           now.toLocaleString('en-US', { timeZone: timezone })
         ).getDay();
         break;
-      case 'date':
-        fieldValue = now.toISOString().split('T')[0]!;
+      case 'date': {
+        const datePart = now.toISOString().split('T')[0];
+        if (!datePart) return false;
+        fieldValue = datePart;
         break;
+      }
       default:
         return false;
     }

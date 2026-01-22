@@ -7,6 +7,7 @@
  */
 
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import { createLogger } from '../common/logger.js';
 import { getConfig } from '../common/config.js';
 import { createTokenRevocationService, validateJti } from '../common/token-revocation.js';
@@ -24,17 +25,22 @@ export interface AuthContext {
 }
 
 /**
+ * Zod schema for JWT payload validation
+ */
+const jwtPayloadSchema = z.object({
+  sub: z.string(),
+  tid: z.string(),
+  jti: z.string().optional(),
+  roles: z.array(z.string()).optional(),
+  permissions: z.array(z.string()).optional(),
+  iat: z.number().optional(),
+  exp: z.number().optional(),
+}).passthrough(); // Allow extra fields
+
+/**
  * JWT payload structure
  */
-interface JwtPayload {
-  sub: string; // userId
-  tid: string; // tenantId
-  jti?: string; // JWT ID for revocation tracking
-  roles?: string[];
-  permissions?: string[];
-  iat?: number;
-  exp?: number;
-}
+type JwtPayload = z.infer<typeof jwtPayloadSchema>;
 
 /**
  * Extend FastifyRequest with auth context
@@ -55,8 +61,14 @@ function decodeToken(token: string): JwtPayload | null {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
 
-    const payload = Buffer.from(parts[1]!, 'base64url').toString('utf-8');
-    return JSON.parse(payload) as JwtPayload;
+    const payloadPart = parts[1];
+    if (!payloadPart) return null;
+    const payload = Buffer.from(payloadPart, 'base64url').toString('utf-8');
+    try {
+      return jwtPayloadSchema.parse(JSON.parse(payload));
+    } catch {
+      return null; // Invalid payload structure
+    }
   } catch {
     return null;
   }

@@ -351,7 +351,13 @@ export class AuditService {
       };
     }
 
-    const firstRow = rows[0]!;
+    const firstRow = rows[0];
+    if (!firstRow) {
+      return {
+        valid: true,
+        recordsChecked: 0,
+      };
+    }
     let previousHash: string | null = null;
     const firstRecord: ID = firstRow.id;
     let lastRecord: ID = firstRow.id;

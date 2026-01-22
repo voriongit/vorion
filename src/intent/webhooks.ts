@@ -598,7 +598,7 @@ function decryptStoredSecret(storedConfig: StoredWebhookConfig | WebhookConfig):
       { hasPlaintextSecret: true },
       'Webhook contains legacy plaintext secret. Consider re-registering to encrypt.'
     );
-    return storedConfig.secret as string;
+    return storedConfig.secret;
   }
 
   return undefined;

@@ -67,6 +67,12 @@ const BETA = DEFAULT_BETA;
 const DEFAULT_JITTER_FRACTION = 0.1;
 
 /**
+ * Maximum number of in-flight refresh entries to prevent memory leaks
+ * If this limit is reached, the cache is cleared to prevent OOM
+ */
+const MAX_IN_FLIGHT_REFRESHES = 10000;
+
+/**
  * Maximum jitter percentage (0-10% of base TTL) - legacy alias
  */
 const JITTER_PERCENTAGE = DEFAULT_JITTER_FRACTION;
@@ -508,7 +514,8 @@ async function fetchAndCacheXFetch<T>(
  * Trigger a background refresh with deduplication
  *
  * Prevents multiple concurrent refreshes for the same key by tracking
- * in-flight refresh operations.
+ * in-flight refresh operations. Includes size limit protection to prevent
+ * memory leaks from unbounded Map growth.
  */
 function triggerBackgroundRefresh<T>(
   cacheKey: string,
@@ -521,6 +528,15 @@ function triggerBackgroundRefresh<T>(
   if (inFlightRefreshes.has(cacheKey)) {
     logger.debug({ key: logKey }, 'Skipping duplicate background refresh');
     return;
+  }
+
+  // Check size limit to prevent unbounded memory growth (OOM protection)
+  if (inFlightRefreshes.size >= MAX_IN_FLIGHT_REFRESHES) {
+    logger.warn(
+      { size: inFlightRefreshes.size, limit: MAX_IN_FLIGHT_REFRESHES },
+      'Cleared in-flight refresh cache due to size limit'
+    );
+    inFlightRefreshes.clear();
   }
 
   // Create the refresh promise
@@ -691,6 +707,8 @@ async function fetchAndCacheTrust(
 
 /**
  * Refresh trust cache in background with deduplication
+ *
+ * Includes size limit protection to prevent memory leaks from unbounded Map growth.
  */
 function refreshTrustInBackground(
   cacheKey: string,
@@ -702,6 +720,15 @@ function refreshTrustInBackground(
   if (inFlightTrustRefreshes.has(cacheKey)) {
     logger.debug({ entityId, tenantId }, 'Skipping duplicate trust refresh');
     return;
+  }
+
+  // Check size limit to prevent unbounded memory growth (OOM protection)
+  if (inFlightTrustRefreshes.size >= MAX_IN_FLIGHT_REFRESHES) {
+    logger.warn(
+      { size: inFlightTrustRefreshes.size, limit: MAX_IN_FLIGHT_REFRESHES },
+      'Cleared in-flight trust refresh cache due to size limit'
+    );
+    inFlightTrustRefreshes.clear();
   }
 
   // Create the refresh promise

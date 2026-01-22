@@ -171,7 +171,7 @@ export function createTokenRevocationService(): TokenRevocationService {
  * Returns the jti if valid, or handles missing jti based on environment
  */
 export function validateJti(
-  payload: { jti?: string },
+  payload: { jti?: string | undefined },
   config: { env: string; jwt: { requireJti: boolean } }
 ): { valid: boolean; jti?: string; error?: string } {
   if (payload.jti) {
