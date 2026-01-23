@@ -45,6 +45,7 @@ export class HandlerRegistry {
   private healthCheckIntervalMs: number;
   private healthFailureCounts: Map<string, number>;
   private drainPromises: Map<string, { resolve: () => void; count: number }>;
+  private activeExecutionCounts: Map<string, number>;
   private shutdownRequested: boolean;
 
   constructor(options?: { healthCheckIntervalMs?: number }) {
@@ -53,6 +54,7 @@ export class HandlerRegistry {
     this.healthCheckIntervalMs = options?.healthCheckIntervalMs ?? DEFAULT_HEALTH_CHECK_INTERVAL_MS;
     this.healthFailureCounts = new Map();
     this.drainPromises = new Map();
+    this.activeExecutionCounts = new Map();
     this.shutdownRequested = false;
 
     logger.info(
@@ -242,6 +244,17 @@ export class HandlerRegistry {
   }
 
   /**
+   * Record that an execution has started for a handler.
+   * Must be called before execution begins so drain() can track in-flight work.
+   *
+   * @param name - The handler name
+   */
+  startExecution(name: string): void {
+    const current = this.activeExecutionCounts.get(name) ?? 0;
+    this.activeExecutionCounts.set(name, current + 1);
+  }
+
+  /**
    * Put a handler into draining mode.
    * The handler will not receive new executions, and the returned promise
    * resolves when all in-flight executions complete.
@@ -259,11 +272,11 @@ export class HandlerRegistry {
 
     logger.info({ name }, 'Handler entering drain mode');
 
-    // If no active executions, resolve immediately
-    const drainEntry = this.drainPromises.get(name);
-    if (drainEntry && drainEntry.count > 0) {
+    // Check active execution count
+    const activeCount = this.activeExecutionCounts.get(name) ?? 0;
+    if (activeCount > 0) {
       return new Promise<void>((resolve) => {
-        this.drainPromises.set(name, { resolve, count: drainEntry.count });
+        this.drainPromises.set(name, { resolve, count: activeCount });
       });
     }
 
@@ -354,6 +367,12 @@ export class HandlerRegistry {
       registration.failureCount += 1;
     }
 
+    // Decrement active execution count
+    const activeCount = this.activeExecutionCounts.get(name) ?? 0;
+    if (activeCount > 0) {
+      this.activeExecutionCounts.set(name, activeCount - 1);
+    }
+
     // Update rolling average duration
     const prevAvg = registration.avgDurationMs ?? 0;
     const prevTotal = prevAvg * (registration.executionCount - 1);
@@ -362,8 +381,8 @@ export class HandlerRegistry {
     // Check drain completion
     const drainEntry = this.drainPromises.get(name);
     if (drainEntry && registration.status === 'draining') {
-      drainEntry.count -= 1;
-      if (drainEntry.count <= 0) {
+      const remaining = this.activeExecutionCounts.get(name) ?? 0;
+      if (remaining <= 0) {
         registration.status = 'inactive';
         drainEntry.resolve();
         this.drainPromises.delete(name);

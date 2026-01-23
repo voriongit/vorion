@@ -261,7 +261,7 @@ export class DecisionCache {
     // Remove from Redis
     try {
       const redis = getRedis();
-      const pattern = `${this.redisPrefix}*:${intentId}:*`;
+      const pattern = `${this.redisPrefix}*:${this.escapeRedisGlob(intentId)}:*`;
       let cursor = '0';
       let redisDeleted = 0;
 
@@ -306,7 +306,7 @@ export class DecisionCache {
     // Remove from Redis
     try {
       const redis = getRedis();
-      const pattern = `${this.redisPrefix}${tenantId}:*`;
+      const pattern = `${this.redisPrefix}${this.escapeRedisGlob(tenantId)}:*`;
       let cursor = '0';
       let redisDeleted = 0;
 
@@ -407,6 +407,14 @@ export class DecisionCache {
    */
   private buildCacheKeyString(key: DecisionCacheKey): string {
     return `${key.tenantId}:${key.intentId}:${key.trustLevel}:${key.contextHash}`;
+  }
+
+  /**
+   * Escape Redis glob pattern special characters in a string.
+   * Prevents cache key collisions when IDs contain *, ?, [, or ] characters.
+   */
+  private escapeRedisGlob(value: string): string {
+    return value.replace(/[*?[\]\\]/g, '\\$&');
   }
 
   /**

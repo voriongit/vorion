@@ -34,7 +34,7 @@ export interface ExportedKeyPair {
 export interface SignatureResult {
   signature: string; // Base64 encoded
   publicKey: string; // Base64 encoded
-  algorithm: 'Ed25519';
+  algorithm: 'Ed25519' | 'ECDSA';
   signedAt: string;
 }
 
@@ -206,7 +206,7 @@ export async function sign(data: string): Promise<SignatureResult> {
   return {
     signature: bufferToBase64(signature),
     publicKey: bufferToBase64(publicKeyBuffer),
-    algorithm: 'Ed25519', // For API consistency
+    algorithm: algorithm as 'Ed25519' | 'ECDSA',
     signedAt: new Date().toISOString(),
   };
 }
@@ -288,24 +288,15 @@ export async function sha256(data: string): Promise<string> {
  * Convert ArrayBuffer to base64 string
  */
 function bufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
+  return Buffer.from(buffer).toString('base64');
 }
 
 /**
  * Convert base64 string to ArrayBuffer
  */
 function base64ToBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
+  const buf = Buffer.from(base64, 'base64');
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 }
 
 /**

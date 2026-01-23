@@ -140,21 +140,23 @@ export class ExecutionSandbox {
 
     const abortController = new AbortController();
     let timeoutHandle: NodeJS.Timeout | undefined;
+    const startTime = performance.now();
 
     try {
       // Set up timeout enforcement
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutHandle = setTimeout(() => {
+          const elapsedMs = Math.round(performance.now() - startTime);
           const violation: SandboxViolation = {
             type: 'resource_limit',
             resource: 'executionTimeMs',
             limit: limits.timeoutMs,
-            actual: limits.timeoutMs,
+            actual: elapsedMs,
             timestamp: new Date().toISOString(),
             executionId,
           };
           this.recordViolation(violation);
-          abortController.abort(new Error(`Execution timeout after ${limits.timeoutMs}ms`));
+          abortController.abort(new Error(`Execution timeout after ${elapsedMs}ms`));
           reject(new Error(`Sandbox execution timeout after ${limits.timeoutMs}ms`));
         }, limits.timeoutMs);
       });
@@ -331,8 +333,9 @@ export class ExecutionSandbox {
 
       // Wildcard match (e.g., "*.example.com" matches "api.example.com")
       if (normalizedPattern.startsWith('*.')) {
-        const domain = normalizedPattern.slice(2);
-        if (normalizedHost.endsWith(domain) && normalizedHost.length > domain.length) {
+        // Keep the dot to prevent "evilexample.com" matching "*.example.com"
+        const domainSuffix = normalizedPattern.slice(1); // ".example.com"
+        if (normalizedHost.endsWith(domainSuffix)) {
           return true;
         }
       }

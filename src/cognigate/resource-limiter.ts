@@ -138,6 +138,13 @@ export class ResourceMonitor {
   }
 
   /**
+   * Get the configured resource limits for this monitor.
+   */
+  getLimits(): ResourceLimits {
+    return this.limits;
+  }
+
+  /**
    * Check if any resource limit has been violated.
    * Returns the first detected violation or null if within limits.
    */
@@ -549,29 +556,32 @@ export class ResourceLimiter {
 
   /**
    * Calculate the percentage of a resource limit currently used.
+   * All cases return a value in the 0-100 range representing utilization against configured limits.
    */
   private calculateThresholdPercent(
     resource: ResourceThreshold['resource'],
     usage: ResourceUsage,
-    _monitor: ResourceMonitor
+    monitor: ResourceMonitor
   ): { percent: number; resourceName: string } {
+    const limits = monitor.getLimits();
+
     switch (resource) {
       case 'memory':
-        return { percent: usage.memoryPeakMb > 0 ? (usage.memoryCurrentMb / usage.memoryPeakMb) * 100 : 0, resourceName: 'memoryMb' };
+        return { percent: limits.maxMemoryMb > 0 ? (usage.memoryCurrentMb / limits.maxMemoryMb) * 100 : 0, resourceName: 'memoryMb' };
       case 'cpu':
-        return { percent: usage.wallTimeMs > 0 ? (usage.cpuTimeMs / usage.wallTimeMs) * 100 : 0, resourceName: 'cpuPercent' };
+        return { percent: limits.maxCpuPercent > 0 ? (usage.wallTimeMs > 0 ? (usage.cpuTimeMs / usage.wallTimeMs) * 100 : 0) : 0, resourceName: 'cpuPercent' };
       case 'time':
-        return { percent: usage.wallTimeMs, resourceName: 'wallTimeMs' };
+        return { percent: limits.timeoutMs > 0 ? (usage.wallTimeMs / limits.timeoutMs) * 100 : 0, resourceName: 'wallTimeMs' };
       case 'network_requests':
-        return { percent: usage.networkRequests, resourceName: 'networkRequests' };
+        return { percent: limits.maxNetworkRequests > 0 ? (usage.networkRequests / limits.maxNetworkRequests) * 100 : 0, resourceName: 'networkRequests' };
       case 'network_bytes':
-        return { percent: usage.networkBytesIn + usage.networkBytesOut, resourceName: 'networkBytes' };
+        return { percent: limits.maxPayloadSizeBytes > 0 ? ((usage.networkBytesIn + usage.networkBytesOut) / limits.maxPayloadSizeBytes) * 100 : 0, resourceName: 'networkBytes' };
       case 'filesystem':
-        return { percent: usage.fileSystemReads + usage.fileSystemWrites, resourceName: 'fileSystemOps' };
+        return { percent: limits.maxFileSystemOps > 0 ? ((usage.fileSystemReads + usage.fileSystemWrites) / limits.maxFileSystemOps) * 100 : 0, resourceName: 'fileSystemOps' };
       case 'concurrent_ops':
-        return { percent: usage.concurrentOps, resourceName: 'concurrentOps' };
+        return { percent: limits.maxConcurrentOps > 0 ? (usage.concurrentOps / limits.maxConcurrentOps) * 100 : 0, resourceName: 'concurrentOps' };
       case 'payload_size':
-        return { percent: usage.networkBytesIn + usage.networkBytesOut, resourceName: 'payloadBytes' };
+        return { percent: limits.maxPayloadSizeBytes > 0 ? ((usage.networkBytesIn + usage.networkBytesOut) / limits.maxPayloadSizeBytes) * 100 : 0, resourceName: 'payloadBytes' };
       default:
         return { percent: 0, resourceName: 'unknown' };
     }

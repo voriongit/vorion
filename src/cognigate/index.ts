@@ -797,11 +797,13 @@ export class CognigateService {
       }, Math.max(0, deadline - Date.now()));
 
       // Wire external abort signal if provided
+      let externalAbortHandler: (() => void) | undefined;
       if (context.abortSignal) {
-        context.abortSignal.addEventListener('abort', () => {
+        externalAbortHandler = () => {
           abortController.abort();
           logger.info({ executionId }, 'External abort signal received');
-        });
+        };
+        context.abortSignal.addEventListener('abort', externalAbortHandler);
       }
 
       // Step 6: Track active execution
@@ -889,6 +891,9 @@ export class CognigateService {
       } finally {
         // Step 12: Cleanup
         clearTimeout(deadlineTimer);
+        if (externalAbortHandler && context.abortSignal) {
+          context.abortSignal.removeEventListener('abort', externalAbortHandler);
+        }
         this.activeExecutions.delete(executionId);
         this.abortControllers.delete(executionId);
         this.bulkhead.release(context.tenantId, handler.definition.name);
@@ -1545,7 +1550,7 @@ export class CognigateService {
     const resourceUsage = this.trackResourceUsage(context.executionId, durationMs);
 
     // Check for resource limit violations
-    const violation = this.checkResourceLimits(resourceUsage, resourceLimits);
+    const violation = this.checkResourceLimits(context.executionId, resourceUsage, resourceLimits);
     if (violation) {
       this.metrics.resourceBreaches++;
       this.recordAuditEntry({
@@ -1917,6 +1922,7 @@ export class CognigateService {
    * @returns SandboxViolation if a limit is breached, null otherwise
    */
   private checkResourceLimits(
+    executionId: string,
     usage: ResourceUsage,
     limits: ResourceLimits
   ): SandboxViolation | null {
@@ -1928,7 +1934,7 @@ export class CognigateService {
         limit: limits.maxMemoryMb,
         actual: usage.memoryPeakMb,
         timestamp: new Date().toISOString(),
-        executionId: '',
+        executionId,
       };
     }
 
@@ -1940,7 +1946,7 @@ export class CognigateService {
         limit: limits.timeoutMs,
         actual: usage.wallTimeMs,
         timestamp: new Date().toISOString(),
-        executionId: '',
+        executionId,
       };
     }
 
@@ -1952,7 +1958,7 @@ export class CognigateService {
         limit: limits.maxNetworkRequests,
         actual: usage.networkRequests,
         timestamp: new Date().toISOString(),
-        executionId: '',
+        executionId,
       };
     }
 
@@ -1965,7 +1971,7 @@ export class CognigateService {
         limit: limits.maxFileSystemOps,
         actual: totalFsOps,
         timestamp: new Date().toISOString(),
-        executionId: '',
+        executionId,
       };
     }
 
@@ -1977,7 +1983,7 @@ export class CognigateService {
         limit: limits.maxConcurrentOps,
         actual: usage.concurrentOps,
         timestamp: new Date().toISOString(),
-        executionId: '',
+        executionId,
       };
     }
 
