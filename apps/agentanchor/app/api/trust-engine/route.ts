@@ -9,6 +9,30 @@ import {
   getTrustLevelName,
   AGENT_SIGNAL_TYPES,
 } from '@/lib/trust/trust-engine-service'
+import type { TrustLevel } from '@vorionsys/atsf-core/types'
+
+/**
+ * Trust record response type for API serialization
+ * Mirrors TrustRecord from atsf-core with safe access to all fields
+ */
+type TrustRecordResponse = {
+  entityId: string
+  score: number
+  level: TrustLevel
+  components: {
+    behavioral: number
+    compliance: number
+    identity: number
+    context: number
+  }
+  signals: unknown[]
+  lastCalculatedAt: string
+  history?: Array<{ score: number; level: number; reason: string; timestamp: string }>
+  recentFailures?: string[]
+  recentSuccesses?: string[]
+  peakScore?: number
+  consecutiveSuccesses?: number
+}
 
 /**
  * GET /api/trust-engine
@@ -21,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     if (agentId) {
       // Get specific agent's trust score
-      const record = await getAgentTrustScore(agentId)
+      const record = await getAgentTrustScore(agentId) as TrustRecordResponse | undefined
 
       if (!record) {
         return NextResponse.json(
@@ -40,13 +64,13 @@ export async function GET(request: NextRequest) {
         levelName: getTrustLevelName(record.level),
         components: record.components,
         lastCalculatedAt: record.lastCalculatedAt,
-        peakScore: record.peakScore,
-        consecutiveSuccesses: record.consecutiveSuccesses,
+        peakScore: record.peakScore ?? record.score,
+        consecutiveSuccesses: record.consecutiveSuccesses ?? 0,
         acceleratedDecayActive: acceleratedDecay,
         acceleratedRecoveryActive: acceleratedRecovery,
-        recentFailures: record.recentFailures.length,
-        recentSuccesses: record.recentSuccesses.length,
-        history: record.history.slice(-10), // Last 10 history entries
+        recentFailures: record.recentFailures?.length ?? 0,
+        recentSuccesses: record.recentSuccesses?.length ?? 0,
+        history: record.history?.slice(-10) ?? [], // Last 10 history entries
       })
     }
 
@@ -123,7 +147,7 @@ export async function POST(request: NextRequest) {
         await recordAgentSignal(agentId, signalType, value, metadata || {})
 
         // Get updated score
-        const record = await getAgentTrustScore(agentId)
+        const record = await getAgentTrustScore(agentId) as TrustRecordResponse | undefined
 
         return NextResponse.json({
           success: true,
@@ -134,7 +158,7 @@ export async function POST(request: NextRequest) {
           newScore: record?.score,
           newLevel: record?.level,
           levelName: record ? getTrustLevelName(record.level) : undefined,
-          consecutiveSuccesses: record?.consecutiveSuccesses,
+          consecutiveSuccesses: record?.consecutiveSuccesses ?? 0,
         })
       }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
-import { assessRisk, canAutoApprove, getRequiredApproval } from '@/lib/council'
+import { assessRisk, canAutoApprove, getRequiredApproval, canonicalToNumericRisk } from '@/lib/council'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,10 +62,14 @@ export async function POST(request: NextRequest) {
     // Get approval requirements
     const approval = getRequiredApproval(assessment.riskLevel)
 
+    const numericLevel = typeof assessment.riskLevel === 'string'
+      ? canonicalToNumericRisk(assessment.riskLevel)
+      : assessment.riskLevel
+
     return NextResponse.json({
       risk: {
         level: assessment.riskLevel,
-        levelName: ['Routine', 'Standard', 'Elevated', 'Significant', 'Critical'][assessment.riskLevel],
+        levelName: ['Routine', 'Standard', 'Elevated', 'Significant', 'Critical'][numericLevel],
         reasoning: assessment.reasoning,
         factors: assessment.factors,
       },
@@ -78,11 +82,11 @@ export async function POST(request: NextRequest) {
         reason: autoApproval.reason,
         trustTier: agentTrustTier,
       } : null,
-      recommendation: assessment.riskLevel <= 1
+      recommendation: numericLevel <= 1
         ? 'This action can proceed automatically'
-        : assessment.riskLevel === 2
+        : numericLevel === 2
         ? 'This action requires single validator approval'
-        : assessment.riskLevel === 3
+        : numericLevel === 3
         ? 'This action requires majority Council approval'
         : 'This action requires unanimous approval and human confirmation',
     })

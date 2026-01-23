@@ -132,7 +132,7 @@ export function parseTrustBand(value: unknown): TrustBand | null {
     }
     // Try as short form (e.g., "T3")
     const shortFormMatch = value.match(/^T(\d)$/i);
-    if (shortFormMatch) {
+    if (shortFormMatch && shortFormMatch[1]) {
       const level = parseInt(shortFormMatch[1], 10);
       if (level >= 0 && level <= 5) {
         return level as TrustBand;

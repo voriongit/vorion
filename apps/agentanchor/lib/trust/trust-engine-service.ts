@@ -12,7 +12,6 @@ import {
   TrustEngine,
   createTrustEngine,
   type TrustRecord,
-  type TrustEngineConfig,
   TRUST_LEVEL_NAMES,
   TRUST_THRESHOLDS,
 } from '@vorionsys/atsf-core/trust-engine'
@@ -23,9 +22,31 @@ import type { TrustSignal, TrustLevel, TrustScore, ID } from '@vorionsys/atsf-co
 let trustEngineInstance: TrustEngine | null = null
 
 /**
+ * Extended trust engine config with recovery features
+ * Some properties may not be typed in older atsf-core versions
+ */
+interface ExtendedTrustEngineConfig {
+  decayRate?: number
+  decayIntervalMs?: number
+  failureThreshold?: number
+  acceleratedDecayMultiplier?: number
+  failureWindowMs?: number
+  minFailuresForAcceleration?: number
+  persistence?: PersistenceProvider
+  autoPersist?: boolean
+  // Recovery settings (may not exist in older versions)
+  successThreshold?: number
+  recoveryRate?: number
+  acceleratedRecoveryMultiplier?: number
+  minSuccessesForAcceleration?: number
+  successWindowMs?: number
+  maxRecoveryPerSignal?: number
+}
+
+/**
  * Default trust engine configuration optimized for enterprise use
  */
-const DEFAULT_CONFIG: TrustEngineConfig = {
+const DEFAULT_CONFIG: ExtendedTrustEngineConfig = {
   // Decay settings
   decayRate: 0.005,              // 0.5% decay per interval (gentler for enterprise)
   decayIntervalMs: 3600000,      // 1 hour decay interval
@@ -66,14 +87,14 @@ class DrizzlePersistenceProvider implements PersistenceProvider {
       entityId: record.entityId,
       score: record.score,
       level: record.level,
-      components: record.components as Record<string, unknown>,
+      components: record.components as unknown as Record<string, unknown>,
       signals: record.signals as unknown[],
       lastCalculatedAt: new Date(record.lastCalculatedAt),
       history: record.history as unknown[],
       recentFailures: record.recentFailures,
-      recentSuccesses: record.recentSuccesses ?? [],
-      peakScore: record.peakScore ?? record.score,
-      consecutiveSuccesses: record.consecutiveSuccesses ?? 0,
+      recentSuccesses: (record as any).recentSuccesses ?? [],
+      peakScore: (record as any).peakScore ?? record.score,
+      consecutiveSuccesses: (record as any).consecutiveSuccesses ?? 0,
       updatedAt: new Date(),
     }
 
@@ -149,7 +170,8 @@ class DrizzlePersistenceProvider implements PersistenceProvider {
 
   private rowToRecord(row: SelectTrustScore): TrustRecord {
     const components = row.components as Record<string, number>
-    return {
+    // Return extended record with all fields, cast to TrustRecord for interface compliance
+    const record = {
       entityId: row.entityId,
       score: row.score as TrustScore,
       level: row.level as TrustLevel,
@@ -161,12 +183,13 @@ class DrizzlePersistenceProvider implements PersistenceProvider {
       },
       signals: (row.signals ?? []) as TrustRecord['signals'],
       lastCalculatedAt: row.lastCalculatedAt.toISOString(),
-      history: (row.history ?? []) as TrustRecord['history'],
+      history: (row.history ?? []) as any[],
       recentFailures: row.recentFailures ?? [],
       recentSuccesses: row.recentSuccesses ?? [],
       peakScore: row.peakScore as TrustScore,
       consecutiveSuccesses: row.consecutiveSuccesses,
     }
+    return record as TrustRecord
   }
 }
 
@@ -185,10 +208,11 @@ export async function getTrustEngine(): Promise<TrustEngine> {
   await persistence.initialize()
 
   // Create trust engine with persistence
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   trustEngineInstance = createTrustEngine({
     ...DEFAULT_CONFIG,
     persistence,
-  })
+  } as any)
 
   // Load existing records
   try {
@@ -257,7 +281,11 @@ export async function hasAcceleratedDecay(agentId: string): Promise<boolean> {
  */
 export async function hasAcceleratedRecovery(agentId: string): Promise<boolean> {
   const engine = await getTrustEngine()
-  return engine.isAcceleratedRecoveryActive(agentId)
+  // Method may not exist in older atsf-core versions
+  if (typeof (engine as any).isAcceleratedRecoveryActive === 'function') {
+    return (engine as any).isAcceleratedRecoveryActive(agentId)
+  }
+  return false
 }
 
 /**

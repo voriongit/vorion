@@ -341,7 +341,7 @@ export function minRiskLevel(levels: RiskLevel[]): RiskLevel {
 export function escalateRiskLevel(level: RiskLevel): RiskLevel {
   const currentValue = RISK_LEVEL_VALUES[level];
   const escalatedValue = Math.min(currentValue + 1, 3);
-  return NUMERIC_TO_RISK_LEVEL[escalatedValue];
+  return NUMERIC_TO_RISK_LEVEL[escalatedValue] ?? 'critical';
 }
 
 /**
@@ -360,7 +360,7 @@ export function escalateRiskLevel(level: RiskLevel): RiskLevel {
 export function deescalateRiskLevel(level: RiskLevel): RiskLevel {
   const currentValue = RISK_LEVEL_VALUES[level];
   const deescalatedValue = Math.max(currentValue - 1, 0);
-  return NUMERIC_TO_RISK_LEVEL[deescalatedValue];
+  return NUMERIC_TO_RISK_LEVEL[deescalatedValue] ?? 'low';
 }
 
 // ============================================================================

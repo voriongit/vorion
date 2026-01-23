@@ -195,4 +195,5 @@ export type EvidenceType = z.infer<typeof EvidenceTypeSchema>;
 export type EvidenceClassification = z.infer<typeof EvidenceClassificationSchema>;
 export type EvidenceItem = z.infer<typeof EvidenceItemSchema>;
 export type EvidencePack = z.infer<typeof EvidencePackSchema>;
-export type ProofEvent = z.infer<typeof ProofEventSchema>;
+// export type ProofEvent = z.infer<typeof ProofEventSchema>; // Deprecated name - removed to avoid collision
+export type EvidenceProofEvent = z.infer<typeof ProofEventSchema>;

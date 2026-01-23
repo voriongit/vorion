@@ -21,7 +21,7 @@ import { z } from 'zod';
  * Brand symbol for TrustScore type safety.
  * @internal
  */
-declare const TrustScoreBrand: unique symbol;
+export declare const TrustScoreBrand: unique symbol;
 
 /**
  * Branded type for trust scores on the canonical 0-1000 scale.
@@ -322,13 +322,14 @@ export function weightedAverage(scores: TrustScore[], weights?: number[]): Trust
       throw new Error('Weights array must match scores array length');
     }
 
+    let normalizedWeights = weights;
     const totalWeight = weights.reduce((sum, w) => sum + w, 0);
     if (Math.abs(totalWeight - 1) > 0.001) {
       // Normalize weights if they don't sum to 1
-      weights = weights.map((w) => w / totalWeight);
+      normalizedWeights = weights.map((w) => w / totalWeight);
     }
 
-    const weighted = scores.reduce((sum, score, i) => sum + score * weights![i], 0);
+    const weighted = scores.reduce((sum, score, i) => sum + score * normalizedWeights[i]!, 0);
     return createTrustScoreClamped(weighted);
   }
 

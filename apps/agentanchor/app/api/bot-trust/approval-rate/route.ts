@@ -6,7 +6,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { approvalRateCalculator } from '@/lib/bot-trust';
+import { getApprovalRateCalculator } from '@/lib/bot-trust/approval-rate-calculator';
+
+// Force dynamic rendering to avoid build-time initialization
+export const dynamic = 'force-dynamic';
 import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
@@ -21,8 +24,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await approvalRateCalculator.storeApprovalRate(bot_id);
-    const approvalRate = await approvalRateCalculator.getApprovalRate(bot_id);
+    await getApprovalRateCalculator().storeApprovalRate(bot_id);
+    const approvalRate = await getApprovalRateCalculator().getApprovalRate(bot_id);
 
     return NextResponse.json({ success: true, approval_rate: approvalRate }, { status: 201 });
   } catch (error) {
@@ -49,11 +52,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (history) {
-      const historyData = await approvalRateCalculator.getApprovalRateHistory(bot_id, limit);
+      const historyData = await getApprovalRateCalculator().getApprovalRateHistory(bot_id, limit);
       return NextResponse.json({ history: historyData });
     }
 
-    const approvalRate = await approvalRateCalculator.getApprovalRate(bot_id);
+    const approvalRate = await getApprovalRateCalculator().getApprovalRate(bot_id);
     return NextResponse.json({ approval_rate: approvalRate });
   } catch (error) {
     logger.error('GET /api/bot-trust/approval-rate failed', { error });

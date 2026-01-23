@@ -189,9 +189,38 @@ const configSchema = z.object({
 type Config = z.infer<typeof configSchema>
 
 /**
+ * Check if we're in a build phase where env vars may not be available
+ */
+function isBuildPhase(): boolean {
+  // During Next.js build, these env vars indicate build phase
+  return process.env.NEXT_PHASE === 'phase-production-build' ||
+         process.env.VERCEL_ENV === undefined && !process.env.NEXT_PUBLIC_SUPABASE_URL
+}
+
+/**
  * Parse and validate environment variables
  */
 function parseConfig(): Config {
+  // During build phase, return placeholder config to allow static analysis
+  if (isBuildPhase()) {
+    console.log('[Config] Build phase detected, using placeholder config')
+    // Use valid Supabase URL format to pass SDK validation
+    const placeholderSupabaseUrl = 'https://placeholder-build.supabase.co'
+    const placeholderKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MTgwMDAwMDAwMH0.placeholder'
+    return {
+      env: 'development',
+      nodeEnv: 'development',
+      urls: getUrls(),
+      app: { name: 'AgentAnchor', port: 3000 },
+      supabase: { url: placeholderSupabaseUrl, anonKey: placeholderKey, serviceRoleKey: placeholderKey },
+      anthropic: { apiKey: 'sk-ant-placeholder-build-key', defaultModel: 'claude-3-5-sonnet-20241022', maxTokens: 4096, temperature: 1.0 },
+      rateLimit: { enabled: false },
+      monitoring: { logLevel: 'info' },
+      features: { mcpServers: false, teamChat: false, publicBots: true, apiKeys: false },
+      security: { corsOrigins: ['http://localhost:3000'], rateLimitPerMinute: 60, maxRequestSize: '1mb' },
+    } as Config
+  }
+
   const rawConfig = {
     env: process.env.NEXT_PUBLIC_ENV || process.env.NODE_ENV || 'development',
     nodeEnv: process.env.NODE_ENV || 'development',
@@ -290,24 +319,56 @@ function parseConfig(): Config {
 }
 
 /**
- * Singleton config instance
+ * Lazy singleton config instance
+ * Only validates when actually accessed, not at import time
  */
-export const config = parseConfig()
+let _config: Config | null = null
+
+function getConfigSingleton(): Config {
+  if (!_config) {
+    _config = parseConfig()
+  }
+  return _config
+}
+
+// Export config as a getter to enable lazy initialization
+export const config = new Proxy({} as Config, {
+  get(_target, prop: keyof Config) {
+    return getConfigSingleton()[prop]
+  },
+})
 
 /**
- * Helper functions
+ * Helper functions - also lazy
  */
-export const isDevelopment = config.env === 'development'
-export const isProduction = config.env === 'production'
-export const isStaging = config.env === 'staging'
-export const isTest = config.nodeEnv === 'test'
+export const isDevelopment = (() => {
+  try { return getConfigSingleton().env === 'development' } catch { return process.env.NODE_ENV === 'development' }
+})()
+export const isProduction = (() => {
+  try { return getConfigSingleton().env === 'production' } catch { return process.env.NODE_ENV === 'production' }
+})()
+export const isStaging = (() => {
+  try { return getConfigSingleton().env === 'staging' } catch { return false }
+})()
+export const isTest = (() => {
+  try { return getConfigSingleton().nodeEnv === 'test' } catch { return process.env.NODE_ENV === 'test' }
+})()
 
 /**
  * Centralized URL configuration - use this instead of hardcoding URLs
  * Example: import { urls } from '@/lib/config'
  *          const verifyUrl = `${urls.verify}/${certificateId}`
  */
-export const urls = config.urls
+export const urls = new Proxy({} as Config['urls'], {
+  get(_target, prop: keyof Config['urls']) {
+    try {
+      return getConfigSingleton().urls[prop]
+    } catch {
+      // Fallback for build time
+      return getUrls()[prop]
+    }
+  },
+})
 
 /**
  * Validate required environment variables are set

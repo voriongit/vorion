@@ -15,9 +15,32 @@ import {
   getTrustLevelName,
   AGENT_SIGNAL_TYPES,
 } from '@/lib/trust/trust-engine-service'
-import type { TrustRecord } from '@vorionsys/atsf-core/trust-engine'
 import type { TrustLevel } from '@vorionsys/atsf-core/types'
 import { TrustContext, TrustTier, RiskLevel, GovernanceDecision } from './types'
+import type { RoutingPath } from './matrix-router'
+
+/**
+ * Trust record with extended fields for API responses
+ * Workaround for Vercel build type resolution issues
+ */
+type TrustRecordExt = {
+  entityId: string
+  score: number
+  level: TrustLevel
+  components: {
+    behavioral: number
+    compliance: number
+    identity: number
+    context: number
+  }
+  signals: unknown[]
+  lastCalculatedAt: string
+  history?: Array<{ score: number; level: number; reason: string; timestamp: string }>
+  recentFailures?: string[]
+  recentSuccesses?: string[]
+  peakScore?: number
+  consecutiveSuccesses?: number
+}
 
 // =============================================================================
 // Trust Engine to Governance Bridge
@@ -46,9 +69,9 @@ export async function getTrustContextFromEngine(agentId: string): Promise<TrustC
 }
 
 /**
- * Convert a TrustRecord to TrustContext
+ * Convert a trust record to TrustContext
  */
-export function trustRecordToContext(record: TrustRecord): TrustContext {
+export function trustRecordToContext(record: TrustRecordExt): TrustContext {
   return {
     score: record.score,
     tier: LEVEL_TO_TIER[record.level] || 'untrusted',
@@ -64,10 +87,10 @@ export function trustRecordToContext(record: TrustRecord): TrustContext {
 export async function ensureAgentTrust(
   agentId: string,
   initialLevel: TrustLevel = 1
-): Promise<TrustRecord> {
-  let record = await getAgentTrustScore(agentId)
+): Promise<TrustRecordExt> {
+  let record = await getAgentTrustScore(agentId) as TrustRecordExt | undefined
   if (!record) {
-    record = await initializeAgentTrust(agentId, initialLevel)
+    record = await initializeAgentTrust(agentId, initialLevel) as TrustRecordExt
   }
   return record
 }
@@ -217,7 +240,7 @@ export interface EnhancedTrustStatus {
  * Get enhanced trust status for an agent
  */
 export async function getEnhancedTrustStatus(agentId: string): Promise<EnhancedTrustStatus | null> {
-  const record = await getAgentTrustScore(agentId)
+  const record = await getAgentTrustScore(agentId) as TrustRecordExt | undefined
   if (!record) return null
 
   const acceleratedDecay = await hasAcceleratedDecay(agentId)
@@ -230,12 +253,12 @@ export async function getEnhancedTrustStatus(agentId: string): Promise<EnhancedT
     levelName: getTrustLevelName(record.level),
     tier: LEVEL_TO_TIER[record.level] || 'untrusted',
     components: record.components,
-    peakScore: record.peakScore,
-    consecutiveSuccesses: record.consecutiveSuccesses,
+    peakScore: record.peakScore ?? record.score,
+    consecutiveSuccesses: record.consecutiveSuccesses ?? 0,
     acceleratedDecayActive: acceleratedDecay,
     acceleratedRecoveryActive: acceleratedRecovery,
-    recentFailures: record.recentFailures.length,
-    recentSuccesses: record.recentSuccesses.length,
+    recentFailures: record.recentFailures?.length ?? 0,
+    recentSuccesses: record.recentSuccesses?.length ?? 0,
     lastCalculatedAt: record.lastCalculatedAt,
   }
 }
@@ -262,11 +285,6 @@ export async function checkTrustThreshold(
 // =============================================================================
 // Matrix Router Integration
 // =============================================================================
-
-/**
- * Determine routing path based on trust engine data
- */
-export type RoutingPath = 'green' | 'yellow' | 'red'
 
 export interface TrustBasedRouting {
   path: RoutingPath

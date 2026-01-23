@@ -1,0 +1,35 @@
+﻿src/canonical/index.ts(24,1): error TS2308: Module './intent.js' has already exported a member named 'isActionType'. Consider explicitly re-exporting to resolve the ambiguity.
+src/canonical/index.ts(24,1): error TS2308: Module './intent.js' has already exported a member named 'isDataSensitivity'. Consider explicitly re-exporting to resolve the ambiguity.
+src/canonical/index.ts(24,1): error TS2308: Module './intent.js' has already exported a member named 'isReversibility'. Consider explicitly re-exporting to resolve the ambiguity.
+src/canonical/index.ts(24,1): error TS2308: Module './trust-band.js' has already exported a member named 'isTrustBand'. Consider explicitly re-exporting to resolve the ambiguity.
+src/canonical/intent.ts(620,14): error TS2527: The inferred type of 'trustSnapshotSchema' references an inaccessible 'unique symbol' type. A type annotation is necessary.
+src/canonical/intent.ts(620,14): error TS4023: Exported variable 'trustSnapshotSchema' has or is using name 'TrustScoreBrand' from external module "C:/Axiom/packages/contracts/src/canonical/trust-score" but cannot be named.
+src/canonical/intent.ts(630,14): error TS2527: The inferred type of 'intentSchema' references an inaccessible 'unique symbol' type. A type annotation is necessary.
+src/canonical/intent.ts(630,14): error TS4023: Exported variable 'intentSchema' has or is using name 'TrustScoreBrand' from external module "C:/Axiom/packages/contracts/src/canonical/trust-score" but cannot be named.
+src/canonical/risk-level.ts(344,3): error TS2322: Type 'RiskLevel | undefined' is not assignable to type 'RiskLevel'.
+  Type 'undefined' is not assignable to type 'RiskLevel'.
+src/canonical/risk-level.ts(363,3): error TS2322: Type 'RiskLevel | undefined' is not assignable to type 'RiskLevel'.
+  Type 'undefined' is not assignable to type 'RiskLevel'.
+src/canonical/trust-score.ts(331,69): error TS2532: Object is possibly 'undefined'.
+src/canonical/trust-signal.ts(16,1): error TS6133: 'TrustScore' is declared but its value is never read.
+src/canonical/trust-signal.ts(17,1): error TS6133: 'trustScoreSchema' is declared but its value is never read.
+src/canonical/validation.ts(136,30): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/index.ts(16,1): error TS2308: Module './v2/index.js' has already exported a member named 'ActionType'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './v2/index.js' has already exported a member named 'CreateIntentRequest'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './v2/index.js' has already exported a member named 'DataSensitivity'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './v2/index.js' has already exported a member named 'Intent'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './v2/index.js' has already exported a member named 'IntentContext'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './v2/index.js' has already exported a member named 'IntentSummary'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './v2/index.js' has already exported a member named 'Reversibility'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './v2/index.js' has already exported a member named 'RiskLevel'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './v2/index.js' has already exported a member named 'TrustBand'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './v2/index.js' has already exported a member named 'ValidationError'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './validators/index.js' has already exported a member named 'actionTypeSchema'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './validators/index.js' has already exported a member named 'createIntentRequestSchema'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './validators/index.js' has already exported a member named 'dataSensitivitySchema'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './validators/index.js' has already exported a member named 'intentContextSchema'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './validators/index.js' has already exported a member named 'intentSchema'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './validators/index.js' has already exported a member named 'reversibilitySchema'. Consider explicitly re-exporting to resolve the ambiguity.
+src/index.ts(16,1): error TS2308: Module './validators/index.js' has already exported a member named 'trustBandSchema'. Consider explicitly re-exporting to resolve the ambiguity.
+src/v2/index.ts(41,1): error TS2308: Module './proof-event.js' has already exported a member named 'ProofEvent'. Consider explicitly re-exporting to resolve the ambiguity.

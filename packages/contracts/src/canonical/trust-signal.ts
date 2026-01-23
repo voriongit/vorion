@@ -13,8 +13,7 @@
  */
 
 import { z } from 'zod';
-import type { TrustScore } from './trust-score.js';
-import { trustScoreSchema } from './trust-score.js';
+// import { trustScoreSchema } from './trust-score.js';
 
 // ============================================================================
 // Enums and Constants

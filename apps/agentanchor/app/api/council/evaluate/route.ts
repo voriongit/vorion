@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
-import { evaluateRequest, RiskLevel, UpchainRequest } from '@/lib/council'
+import { evaluateRequest, RiskLevel, UpchainRequest, numericToCanonicalRisk, NumericRiskLevel } from '@/lib/council'
 import { applyTrustChange, calculateCouncilDecisionImpact } from '@/lib/agents/trust-service'
 import { getAutonomyLimits, recordActivity } from '@/lib/agents/decay-service'
 import { TrustTier } from '@/lib/agents/types'
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
         confidence_score: decision.votes.length > 0
           ? decision.votes.reduce((sum, v) => sum + v.confidence, 0) / decision.votes.length
           : 1.0,
-        risk_level: ['low', 'low', 'medium', 'high', 'critical'][riskLevel],
+        risk_level: numericToCanonicalRisk(riskLevel as NumericRiskLevel),
       })
 
     if (insertError) {
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
     // Apply trust score change based on Council decision (FR51, FR52)
     let trustChange = null
     if (decision.outcome === 'approved' || decision.outcome === 'denied') {
-      const riskLevelName = (['low', 'low', 'medium', 'high', 'critical'] as const)[riskLevel]
+      const riskLevelName = numericToCanonicalRisk(riskLevel as NumericRiskLevel)
       const impact = calculateCouncilDecisionImpact(
         decision.outcome === 'approved',
         riskLevelName
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
       await logEvent({
         source: 'council',
         event_type: 'council_request',
-        risk_level: (['info', 'low', 'medium', 'high', 'critical'] as const)[riskLevel],
+        risk_level: (['info', 'low', 'medium', 'high', 'critical'] as const)[riskLevel] || 'info',
         agent_id: agentId,
         user_id: user.id,
         data: {

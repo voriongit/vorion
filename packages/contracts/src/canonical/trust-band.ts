@@ -260,28 +260,7 @@ export function meetsMinimumTrustBand(band: TrustBand, requiredBand: TrustBand):
   return band >= requiredBand;
 }
 
-/**
- * Type guard to check if a value is a valid TrustBand.
- *
- * @param value - Value to check
- * @returns True if value is a valid TrustBand
- *
- * @example
- * ```typescript
- * isTrustBand(TrustBand.T3_STANDARD); // true
- * isTrustBand(3); // true
- * isTrustBand(6); // false
- * isTrustBand('T3_STANDARD'); // false
- * ```
- */
-export function isTrustBand(value: unknown): value is TrustBand {
-  return (
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= TrustBand.T0_UNTRUSTED &&
-    value <= TrustBand.T5_CERTIFIED
-  );
-}
+// Note: isTrustBand type guard is exported from canonical/validation.ts to avoid duplication
 
 // ============================================================================
 // Zod Schemas

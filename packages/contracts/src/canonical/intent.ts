@@ -15,67 +15,11 @@ import { z } from 'zod';
 import type { TrustBand } from './trust-band.js';
 import type { TrustScore } from './trust-score.js';
 import { trustBandSchema } from './trust-band.js';
-import { trustScoreSchema } from './trust-score.js';
+import { trustScoreSchema, TrustScoreBrand } from './trust-score.js';
 
-// ============================================================================
-// Enums and Constants
-// ============================================================================
-
-/**
- * Action types for categorizing intents.
- *
- * Defines the fundamental operation category for an intent.
- *
- * @enum {string}
- */
-export enum ActionType {
-  /** Read-only data access */
-  READ = 'read',
-  /** Create or modify data */
-  WRITE = 'write',
-  /** Remove data */
-  DELETE = 'delete',
-  /** Run code, scripts, or processes */
-  EXECUTE = 'execute',
-  /** Send messages, emails, or notifications */
-  COMMUNICATE = 'communicate',
-  /** Move data or assets between systems */
-  TRANSFER = 'transfer',
-}
-
-/**
- * Data sensitivity classification levels.
- *
- * Determines access controls and audit requirements.
- *
- * @enum {string}
- */
-export enum DataSensitivity {
-  /** Publicly available information */
-  PUBLIC = 'PUBLIC',
-  /** Internal use only, not public */
-  INTERNAL = 'INTERNAL',
-  /** Sensitive business data, limited access */
-  CONFIDENTIAL = 'CONFIDENTIAL',
-  /** Highly sensitive, strict access controls */
-  RESTRICTED = 'RESTRICTED',
-}
-
-/**
- * Action reversibility classification.
- *
- * Determines rollback capabilities and approval requirements.
- *
- * @enum {string}
- */
-export enum Reversibility {
-  /** Action can be fully undone */
-  REVERSIBLE = 'REVERSIBLE',
-  /** Action can be partially undone or has side effects */
-  PARTIALLY_REVERSIBLE = 'PARTIALLY_REVERSIBLE',
-  /** Action cannot be undone */
-  IRREVERSIBLE = 'IRREVERSIBLE',
-}
+// Re-export enums from v2 to avoid duplication
+export { ActionType, DataSensitivity, Reversibility } from '../v2/enums.js';
+import { ActionType, DataSensitivity, Reversibility } from '../v2/enums.js';
 
 /**
  * Intent lifecycle status.
@@ -525,35 +469,8 @@ export function isActiveStatus(status: IntentStatus): boolean {
   return ACTIVE_INTENT_STATUSES.includes(status);
 }
 
-/**
- * Type guard to check if a value is a valid ActionType.
- *
- * @param value - Value to check
- * @returns True if value is a valid ActionType
- */
-export function isActionType(value: unknown): value is ActionType {
-  return Object.values(ActionType).includes(value as ActionType);
-}
-
-/**
- * Type guard to check if a value is a valid DataSensitivity.
- *
- * @param value - Value to check
- * @returns True if value is a valid DataSensitivity
- */
-export function isDataSensitivity(value: unknown): value is DataSensitivity {
-  return Object.values(DataSensitivity).includes(value as DataSensitivity);
-}
-
-/**
- * Type guard to check if a value is a valid Reversibility.
- *
- * @param value - Value to check
- * @returns True if value is a valid Reversibility
- */
-export function isReversibility(value: unknown): value is Reversibility {
-  return Object.values(Reversibility).includes(value as Reversibility);
-}
+// Note: isActionType, isDataSensitivity, and isReversibility type guards
+// are exported from canonical/validation.ts to avoid duplication
 
 // ============================================================================
 // Zod Schemas

@@ -271,5 +271,17 @@ export class ApprovalRateCalculator {
   }
 }
 
-// Export singleton instance
-export const approvalRateCalculator = new ApprovalRateCalculator();
+// Export lazy singleton getter (avoids initialization during build)
+let _approvalRateCalculator: ApprovalRateCalculator | null = null;
+export function getApprovalRateCalculator(): ApprovalRateCalculator {
+  if (!_approvalRateCalculator) {
+    _approvalRateCalculator = new ApprovalRateCalculator();
+  }
+  return _approvalRateCalculator;
+}
+// Deprecated: Use getApprovalRateCalculator() instead
+export const approvalRateCalculator = new Proxy({} as ApprovalRateCalculator, {
+  get(_target, prop) {
+    return (getApprovalRateCalculator() as any)[prop];
+  },
+});

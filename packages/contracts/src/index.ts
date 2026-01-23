@@ -10,7 +10,8 @@
 export * from './v2/index.js';
 
 // Re-export validators
-export * from './validators/index.js';
+// export * from './validators/index.js';
+export * from './canonical/agent.js';
 
-// Re-export canonical validation utilities
-export * from './canonical/index.js';
+// Re-export canonical validation utilities as namespace to avoid naming conflicts
+export * as Canonical from './canonical/index.js';
