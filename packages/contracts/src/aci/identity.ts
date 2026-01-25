@@ -14,6 +14,7 @@ import { CapabilityLevel, capabilityLevelSchema } from './levels.js';
 import { CertificationTier, certificationTierSchema, RuntimeTier, runtimeTierSchema } from './tiers.js';
 import { type Attestation, attestationSchema } from './attestation.js';
 import { type ParsedACI, parsedACISchema, aciStringSchema } from './aci-string.js';
+import { type SkillCode, skillCodeArraySchema, skillBitmaskSchema } from './skills.js';
 
 // ============================================================================
 // Capability Vector
@@ -32,6 +33,8 @@ import { type ParsedACI, parsedACISchema, aciStringSchema } from './aci-string.j
  * - Trust is computed at runtime from attestations
  * - The ACI is an immutable identifier, not a trust indicator
  * - Same agent can have different trust in different deployments
+ *
+ * Skills use bitmask encoding for efficient matching (see skills.ts).
  */
 export interface CapabilityVector {
   /** Required/granted domains */
@@ -40,8 +43,10 @@ export interface CapabilityVector {
   domainsBitmask?: number;
   /** Minimum level required/granted */
   level: CapabilityLevel;
-  /** Optional skill tags for fine-grained matching */
-  skills?: readonly string[];
+  /** Optional skill codes for fine-grained matching */
+  skills?: readonly SkillCode[];
+  /** Skill bitmask for efficient queries */
+  skillsBitmask?: number;
 }
 
 /**
@@ -51,7 +56,8 @@ export const capabilityVectorSchema = z.object({
   domains: domainCodeArraySchema,
   domainsBitmask: z.number().int().min(0).optional(),
   level: capabilityLevelSchema,
-  skills: z.array(z.string()).optional(),
+  skills: skillCodeArraySchema.optional(),
+  skillsBitmask: skillBitmaskSchema.optional(),
 });
 
 // ============================================================================
@@ -317,8 +323,8 @@ export interface AgentMatchCriteria {
   minCertificationTier?: CertificationTier;
   /** Minimum runtime tier */
   minRuntimeTier?: RuntimeTier;
-  /** Required skills */
-  requiredSkills?: readonly string[];
+  /** Required skills (all must be present) */
+  requiredSkills?: readonly SkillCode[];
   /** Must be active */
   mustBeActive?: boolean;
   /** Must have valid attestations */
@@ -337,7 +343,7 @@ export const agentMatchCriteriaSchema = z.object({
   minLevel: capabilityLevelSchema.optional(),
   minCertificationTier: certificationTierSchema.optional(),
   minRuntimeTier: runtimeTierSchema.optional(),
-  requiredSkills: z.array(z.string()).optional(),
+  requiredSkills: skillCodeArraySchema.optional(),
   mustBeActive: z.boolean().optional(),
   mustHaveValidAttestations: z.boolean().optional(),
   organization: z.string().optional(),

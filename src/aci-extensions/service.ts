@@ -164,7 +164,7 @@ export class ACIExtensionService {
    *
    * @example
    * ```typescript
-   * // ACI: a3i.vorion.agent:FHC-L3-T2@1.0.0#gov,audit
+   * // ACI: a3i.vorion.agent:FHC-L3@1.0.0#gov,audit
    * const extensions = service.loadAgentExtensions(agent.aci);
    * // Returns [cognigateExtension, auditExtension]
    * ```

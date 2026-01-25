@@ -28,18 +28,18 @@
  * } from '@vorion/contracts/aci';
  *
  * // Parse an ACI string
- * const parsed = parseACI('a3i.acme-corp.invoice-bot:ABF-L3-T2@1.0.0');
+ * const parsed = parseACI('a3i.acme-corp.invoice-bot:ABF-L3@1.0.0');
  *
- * // Generate an ACI string
+ * // Generate an ACI string (trust is NOT embedded - computed at runtime)
  * const aci = generateACI({
  *   registry: 'a3i',
  *   organization: 'acme-corp',
  *   agentClass: 'invoice-bot',
  *   domains: ['A', 'B', 'F'],
  *   level: CapabilityLevel.L3_EXECUTE,
- *   certificationTier: CertificationTier.T2_TESTED,
  *   version: '1.0.0',
  * });
+ * // Result: 'a3i.acme-corp.invoice-bot:ABF-L3@1.0.0'
  *
  * // Calculate effective permission
  * const permission = calculateEffectivePermission({
@@ -91,6 +91,50 @@ export {
   domainBitmaskSchema,
   domainStringSchema,
 } from './domains.js';
+
+// ============================================================================
+// Skill Codes and Bitmask
+// ============================================================================
+
+export {
+  // Types
+  type SkillCode,
+  type SkillCategory,
+  type SkillDefinition,
+  // Constants
+  SKILL_CODES,
+  SKILL_DEFINITIONS,
+  SKILL_NAMES,
+  ALL_SKILLS_BITMASK,
+  SKILLS_BY_CATEGORY,
+  LEGACY_ID_TO_SKILL,
+  // Functions
+  encodeSkills,
+  decodeSkills,
+  parseSkillString,
+  formatSkillString,
+  hasSkills,
+  satisfiesSkillRequirements,
+  intersectSkills,
+  unionSkills,
+  differenceSkills,
+  getSkillDefinition,
+  getSkillName,
+  getSkillBit,
+  getSkillCategory,
+  getSkillsInCategory,
+  countSkills,
+  isSkillCode,
+  isSkillCodeArray,
+  legacyIdToSkillCode,
+  legacyIdsToSkillCodes,
+  // Zod Schemas
+  skillCodeSchema,
+  skillDefinitionSchema,
+  skillCodeArraySchema,
+  skillBitmaskSchema,
+  skillStringSchema,
+} from './skills.js';
 
 // ============================================================================
 // Capability Levels (L0-L5)

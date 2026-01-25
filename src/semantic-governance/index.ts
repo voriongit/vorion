@@ -35,7 +35,7 @@
  * const credentialManager = new SemanticCredentialManager();
  * const credential = credentialManager.createCredential(
  *   'did:aci:a3i:vorion:banquet-advisor',
- *   'a3i.vorion.banquet-advisor:FHC-L3-T3@1.2.0',
+ *   'a3i.vorion.banquet-advisor:FHC-L3@1.2.0',
  *   {
  *     inferenceScope: {
  *       globalLevel: InferenceLevel.ENTITY,
@@ -296,7 +296,7 @@ export {
  * ```typescript
  * const { service, credential } = createSemanticGovernance(
  *   'did:aci:a3i:vorion:my-agent',
- *   'a3i.vorion.my-agent:BD-L2-T2@1.0.0',
+ *   'a3i.vorion.my-agent:BD-L2@1.0.0',
  *   {
  *     inferenceScope: { globalLevel: InferenceLevel.STATISTICAL },
  *     dualChannel: { enforced: true, dataPlaneTreatment: 'block' },

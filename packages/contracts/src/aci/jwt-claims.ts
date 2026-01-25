@@ -222,7 +222,7 @@ export interface GenerateJWTClaimsOptions {
  * @example
  * ```typescript
  * const claims = generateJWTClaims({
- *   parsed: parseACI('a3i.acme-corp.invoice-bot:ABF-L3-T2@1.0.0'),
+ *   parsed: parseACI('a3i.acme-corp.invoice-bot:ABF-L3@1.0.0'),
  *   did: 'did:web:agent.acme.com',
  *   issuer: 'did:web:auth.acme.com',
  *   validitySeconds: 3600,
