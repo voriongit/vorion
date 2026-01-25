@@ -31,11 +31,11 @@ import {
 describe('Observation Tiers', () => {
   describe('OBSERVATION_CEILINGS', () => {
     it('should have correct ceiling values per ATSF v2.0 RTA', () => {
-      expect(OBSERVATION_CEILINGS[ObservationTier.BLACK_BOX]).toBe(60);
-      expect(OBSERVATION_CEILINGS[ObservationTier.GRAY_BOX]).toBe(75);
-      expect(OBSERVATION_CEILINGS[ObservationTier.WHITE_BOX]).toBe(90);  // Reduced from 95 (sleeper risk)
-      expect(OBSERVATION_CEILINGS[ObservationTier.ATTESTED_BOX]).toBe(95);  // Reduced from 100 (TEE side-channel)
-      expect(OBSERVATION_CEILINGS[ObservationTier.VERIFIED_BOX]).toBe(100);  // New tier
+      expect(OBSERVATION_CEILINGS[ObservationTier.BLACK_BOX]).toBe(600);
+      expect(OBSERVATION_CEILINGS[ObservationTier.GRAY_BOX]).toBe(750);
+      expect(OBSERVATION_CEILINGS[ObservationTier.WHITE_BOX]).toBe(900);  // Reduced from 950 (sleeper risk)
+      expect(OBSERVATION_CEILINGS[ObservationTier.ATTESTED_BOX]).toBe(950);  // Reduced from 1000 (TEE side-channel)
+      expect(OBSERVATION_CEILINGS[ObservationTier.VERIFIED_BOX]).toBe(1000);  // New tier
     });
   });
 
@@ -61,9 +61,9 @@ describe('Observation Tiers', () => {
 
   describe('getTrustCeiling', () => {
     it('should return correct ceiling for each tier', () => {
-      expect(getTrustCeiling(ObservationTier.BLACK_BOX)).toBe(60);
-      expect(getTrustCeiling(ObservationTier.ATTESTED_BOX)).toBe(95);
-      expect(getTrustCeiling(ObservationTier.VERIFIED_BOX)).toBe(100);
+      expect(getTrustCeiling(ObservationTier.BLACK_BOX)).toBe(600);
+      expect(getTrustCeiling(ObservationTier.ATTESTED_BOX)).toBe(950);
+      expect(getTrustCeiling(ObservationTier.VERIFIED_BOX)).toBe(1000);
     });
   });
 
@@ -100,7 +100,7 @@ describe('Observation Tiers', () => {
     it('should return description with correct ceiling', () => {
       const desc = getTierDescription(ObservationTier.BLACK_BOX);
       expect(desc.name).toBe('Black Box');
-      expect(desc.ceiling).toBe(60);
+      expect(desc.ceiling).toBe(600);
       expect(desc.examples.length).toBeGreaterThan(0);
     });
   });
@@ -132,68 +132,68 @@ describe('Observation Tiers', () => {
 describe('Trust Ceilings', () => {
   describe('applyCeiling', () => {
     it('should cap scores at ceiling', () => {
-      expect(applyCeiling(80, ObservationTier.BLACK_BOX)).toBe(60);
-      expect(applyCeiling(50, ObservationTier.BLACK_BOX)).toBe(50);
+      expect(applyCeiling(800, ObservationTier.BLACK_BOX)).toBe(600);
+      expect(applyCeiling(500, ObservationTier.BLACK_BOX)).toBe(500);
     });
 
-    it('should cap ATTESTED_BOX at 95 (per ATSF v2.0)', () => {
-      expect(applyCeiling(100, ObservationTier.ATTESTED_BOX)).toBe(95);
+    it('should cap ATTESTED_BOX at 950 (per ATSF v2.0)', () => {
+      expect(applyCeiling(1000, ObservationTier.ATTESTED_BOX)).toBe(950);
     });
 
     it('should allow full score for VERIFIED_BOX', () => {
-      expect(applyCeiling(100, ObservationTier.VERIFIED_BOX)).toBe(100);
+      expect(applyCeiling(1000, ObservationTier.VERIFIED_BOX)).toBe(1000);
     });
   });
 
   describe('getCeilingLoss', () => {
     it('should calculate lost trust', () => {
-      expect(getCeilingLoss(80, ObservationTier.BLACK_BOX)).toBe(20);
-      expect(getCeilingLoss(50, ObservationTier.BLACK_BOX)).toBe(0);
+      expect(getCeilingLoss(800, ObservationTier.BLACK_BOX)).toBe(200);
+      expect(getCeilingLoss(500, ObservationTier.BLACK_BOX)).toBe(0);
     });
   });
 
   describe('isAtCeiling', () => {
     it('should detect when score is at ceiling', () => {
-      expect(isAtCeiling(60, ObservationTier.BLACK_BOX)).toBe(true);
-      expect(isAtCeiling(59, ObservationTier.BLACK_BOX)).toBe(false);
+      expect(isAtCeiling(600, ObservationTier.BLACK_BOX)).toBe(true);
+      expect(isAtCeiling(599, ObservationTier.BLACK_BOX)).toBe(false);
     });
   });
 
   describe('getRoomForImprovement', () => {
     it('should calculate available headroom', () => {
-      expect(getRoomForImprovement(50, ObservationTier.BLACK_BOX)).toBe(10);
-      expect(getRoomForImprovement(60, ObservationTier.BLACK_BOX)).toBe(0);
+      expect(getRoomForImprovement(500, ObservationTier.BLACK_BOX)).toBe(100);
+      expect(getRoomForImprovement(600, ObservationTier.BLACK_BOX)).toBe(0);
     });
   });
 
   describe('requiredTierForScore', () => {
     it('should find minimum tier for target score', () => {
-      expect(requiredTierForScore(55)).toBe(ObservationTier.BLACK_BOX);
-      expect(requiredTierForScore(70)).toBe(ObservationTier.GRAY_BOX);
-      expect(requiredTierForScore(85)).toBe(ObservationTier.WHITE_BOX);  // WHITE_BOX now 90
-      expect(requiredTierForScore(92)).toBe(ObservationTier.ATTESTED_BOX);  // ATTESTED now 95
-      expect(requiredTierForScore(100)).toBe(ObservationTier.VERIFIED_BOX);  // Only VERIFIED is 100
+      expect(requiredTierForScore(550)).toBe(ObservationTier.BLACK_BOX);
+      expect(requiredTierForScore(700)).toBe(ObservationTier.GRAY_BOX);
+      expect(requiredTierForScore(850)).toBe(ObservationTier.WHITE_BOX);  // WHITE_BOX now 900
+      expect(requiredTierForScore(920)).toBe(ObservationTier.ATTESTED_BOX);  // ATTESTED now 950
+      expect(requiredTierForScore(1000)).toBe(ObservationTier.VERIFIED_BOX);  // Only VERIFIED is 1000
     });
   });
 
   describe('analyzeCeilingImpact', () => {
     it('should provide comprehensive analysis', () => {
-      const analysis = analyzeCeilingImpact(80, ObservationTier.BLACK_BOX);
+      const analysis = analyzeCeilingImpact(800, ObservationTier.BLACK_BOX);
 
-      expect(analysis.originalScore).toBe(80);
-      expect(analysis.adjustedScore).toBe(60);
-      expect(analysis.ceilingLoss).toBe(20);
+      expect(analysis.originalScore).toBe(800);
+      expect(analysis.adjustedScore).toBe(600);
+      expect(analysis.ceilingLoss).toBe(200);
       expect(analysis.atCeiling).toBe(true);
       expect(analysis.tierUpgradeWouldHelp).toBe(true);
       expect(analysis.nextUnlockingTier).toBe(ObservationTier.GRAY_BOX);
     });
 
     it('should not suggest upgrade when not at ceiling', () => {
-      const analysis = analyzeCeilingImpact(50, ObservationTier.BLACK_BOX);
+      const analysis = analyzeCeilingImpact(500, ObservationTier.BLACK_BOX);
 
       expect(analysis.atCeiling).toBe(false);
       expect(analysis.tierUpgradeWouldHelp).toBe(false);
-      expect(analysis.improvementRoom).toBe(10);
+      expect(analysis.improvementRoom).toBe(100);
     });
   });
 });

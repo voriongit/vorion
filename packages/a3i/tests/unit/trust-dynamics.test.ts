@@ -33,7 +33,7 @@ describe('TrustDynamicsEngine', () => {
       expect(config.oscillationThreshold).toBe(3);
       expect(config.oscillationWindowHours).toBe(24);
       expect(config.reversalPenaltyMultiplier).toBe(2.0);
-      expect(config.circuitBreakerThreshold).toBe(10);
+      expect(config.circuitBreakerThreshold).toBe(100);
     });
 
     it('should allow custom configuration', () => {
@@ -54,9 +54,9 @@ describe('TrustDynamicsEngine', () => {
   describe('Asymmetric Gain (Logarithmic)', () => {
     it('should gain trust slowly with logarithmic formula', () => {
       const result = engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: true,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       // delta = 0.01 * log(1 + (90 - 50)) = 0.01 * log(41) ≈ 0.037
@@ -67,15 +67,15 @@ describe('TrustDynamicsEngine', () => {
 
     it('should have diminishing returns as trust approaches ceiling', () => {
       const lowResult = engine.updateTrust('agent1', {
-        currentScore: 30,
+        currentScore: 300,
         success: true,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       const highResult = engine.updateTrust('agent2', {
-        currentScore: 80,
+        currentScore: 800,
         success: true,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       // Higher starting point = less room = smaller gain
@@ -84,63 +84,63 @@ describe('TrustDynamicsEngine', () => {
 
     it('should not gain past ceiling', () => {
       const result = engine.updateTrust('agent1', {
-        currentScore: 89,
+        currentScore: 890,
         success: true,
-        ceiling: 90,
+        ceiling: 900,
       });
 
-      expect(result.newScore).toBeLessThanOrEqual(90);
+      expect(result.newScore).toBeLessThanOrEqual(900);
     });
 
     it('should have zero gain when at ceiling', () => {
       const result = engine.updateTrust('agent1', {
-        currentScore: 90,
+        currentScore: 900,
         success: true,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       expect(result.delta).toBe(0);
-      expect(result.newScore).toBe(90);
+      expect(result.newScore).toBe(900);
     });
   });
 
   describe('Asymmetric Loss (Exponential)', () => {
     it('should lose trust quickly with exponential formula', () => {
       const result = engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       // delta = -0.10 * 50 = -5
-      expect(result.delta).toBe(-5);
-      expect(result.newScore).toBe(45);
+      expect(result.delta).toBe(-50);
+      expect(result.newScore).toBe(450);
     });
 
     it('should lose proportionally more at higher trust levels', () => {
       const highResult = engine.updateTrust('agent1', {
-        currentScore: 80,
+        currentScore: 800,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       const lowResult = engine.updateTrust('agent2', {
-        currentScore: 40,
+        currentScore: 400,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       // Higher trust = bigger absolute loss
       expect(Math.abs(highResult.delta)).toBeGreaterThan(Math.abs(lowResult.delta));
-      expect(highResult.delta).toBe(-8); // -0.10 * 80
-      expect(lowResult.delta).toBe(-4);  // -0.10 * 40
+      expect(highResult.delta).toBe(-80); // -0.10 * 80
+      expect(lowResult.delta).toBe(-40);  // -0.10 * 40
     });
 
     it('should not go below zero', () => {
       const result = engine.updateTrust('agent1', {
-        currentScore: 5,
+        currentScore: 50,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       expect(result.newScore).toBeGreaterThanOrEqual(0);
@@ -150,23 +150,23 @@ describe('TrustDynamicsEngine', () => {
   describe('Outcome Reversals', () => {
     it('should apply 2x penalty for reversals', () => {
       const normalResult = engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
         isReversal: false,
       });
 
       const reversalResult = engine.updateTrust('agent2', {
-        currentScore: 50,
+        currentScore: 500,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
         isReversal: true,
       });
 
       // Reversal should have 2x the loss
       expect(Math.abs(reversalResult.delta)).toBe(Math.abs(normalResult.delta) * 2);
-      expect(normalResult.delta).toBe(-5);   // -0.10 * 50
-      expect(reversalResult.delta).toBe(-10); // -0.20 * 50
+      expect(normalResult.delta).toBe(-50);   // -0.10 * 50
+      expect(reversalResult.delta).toBe(-100); // -0.20 * 50
     });
   });
 
@@ -175,9 +175,9 @@ describe('TrustDynamicsEngine', () => {
       const now = new Date('2024-01-01T12:00:00Z');
 
       engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
         now,
       });
 
@@ -189,23 +189,23 @@ describe('TrustDynamicsEngine', () => {
 
       // First, cause a loss to trigger cooldown
       engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
         now,
       });
 
       // Try to gain trust immediately after
       const result = engine.updateTrust('agent1', {
-        currentScore: 45,
+        currentScore: 450,
         success: true,
-        ceiling: 90,
+        ceiling: 900,
         now,
       });
 
       expect(result.blockedByCooldown).toBe(true);
       expect(result.delta).toBe(0);
-      expect(result.newScore).toBe(45);
+      expect(result.newScore).toBe(450);
     });
 
     it('should allow trust gain after cooldown expires', () => {
@@ -214,17 +214,17 @@ describe('TrustDynamicsEngine', () => {
 
       // Trigger cooldown
       engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
         now: start,
       });
 
       // Try gain after cooldown
       const result = engine.updateTrust('agent1', {
-        currentScore: 45,
+        currentScore: 450,
         success: true,
-        ceiling: 90,
+        ceiling: 900,
         now: afterCooldown,
       });
 
@@ -237,9 +237,9 @@ describe('TrustDynamicsEngine', () => {
       const dayLater = new Date('2024-01-02T12:00:00Z');
 
       engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
         now: start,
       });
 
@@ -251,9 +251,9 @@ describe('TrustDynamicsEngine', () => {
       const now = new Date('2024-01-01T12:00:00Z');
 
       engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
         isReversal: true,
         now,
       });
@@ -275,31 +275,31 @@ describe('TrustDynamicsEngine', () => {
 
       // Direction change 1: gain → loss
       engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: true,
-        ceiling: 90,
+        ceiling: 900,
         now: baseTime,
       });
       engine.updateTrust('agent1', {
-        currentScore: 50.5,
+        currentScore: 505,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
         now: new Date(baseTime.getTime() + 1000),
       });
 
       // Direction change 2: loss → gain (blocked by cooldown, but tracked)
       engine.updateTrust('agent1', {
-        currentScore: 45,
+        currentScore: 450,
         success: true,
-        ceiling: 90,
+        ceiling: 900,
         now: new Date(baseTime.getTime() + 2000),
       });
 
       // Direction change 3: gain → loss
       engine.updateTrust('agent1', {
-        currentScore: 45,
+        currentScore: 450,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
         now: new Date(baseTime.getTime() + 3000),
       });
 
@@ -316,12 +316,12 @@ describe('TrustDynamicsEngine', () => {
       const now = new Date('2024-01-01T12:00:00Z');
 
       // Create rapid oscillations
-      let score = 50;
+      let score = 500;
       for (let i = 0; i < 5; i++) {
         const result = engine.updateTrust('agent1', {
           currentScore: score,
           success: i % 2 === 0,
-          ceiling: 90,
+          ceiling: 900,
           now: new Date(now.getTime() + i * 1000),
         });
         score = result.newScore;
@@ -341,7 +341,7 @@ describe('TrustDynamicsEngine', () => {
       const result = engine.updateTrust('agent1', {
         currentScore: 15,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       // After loss: 15 - (0.10 * 15) = 13.5 → still above 10
@@ -349,7 +349,7 @@ describe('TrustDynamicsEngine', () => {
       const result2 = engine.updateTrust('agent1', {
         currentScore: 8,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       expect(result2.circuitBreakerTripped).toBe(true);
@@ -359,16 +359,16 @@ describe('TrustDynamicsEngine', () => {
     it('should block all updates when circuit breaker is tripped', () => {
       // Trip the circuit breaker
       engine.updateTrust('agent1', {
-        currentScore: 5,
+        currentScore: 50,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       // Try to gain trust
       const result = engine.updateTrust('agent1', {
         currentScore: 20,
         success: true,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       expect(result.circuitBreakerTripped).toBe(true);
@@ -377,9 +377,9 @@ describe('TrustDynamicsEngine', () => {
 
     it('should require admin override for immediate circuit breaker reset', () => {
       engine.updateTrust('agent1', {
-        currentScore: 5,
+        currentScore: 50,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       // Without admin override, the reset behavior depends on internal time tracking
@@ -425,9 +425,9 @@ describe('TrustDynamicsEngine', () => {
 
     it('should maintain separate state per agent', () => {
       engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       expect(engine.isInCooldown('agent1')).toBe(true);
@@ -436,9 +436,9 @@ describe('TrustDynamicsEngine', () => {
 
     it('should clear all state', () => {
       engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       engine.clearAllState();
@@ -450,9 +450,9 @@ describe('TrustDynamicsEngine', () => {
   describe('Update Result', () => {
     it('should return complete result object', () => {
       const result = engine.updateTrust('agent1', {
-        currentScore: 50,
+        currentScore: 500,
         success: true,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       expect(result).toHaveProperty('newScore');
@@ -469,7 +469,7 @@ describe('TrustDynamicsEngine', () => {
       const result = engine.updateTrust('agent1', {
         currentScore: 0,
         success: false,
-        ceiling: 90,
+        ceiling: 900,
       });
 
       // Note: -0.10 * 0 = -0 in JavaScript, so we check equality more flexibly
@@ -498,3 +498,7 @@ describe('TrustDynamicsEngine', () => {
     });
   });
 });
+
+
+
+

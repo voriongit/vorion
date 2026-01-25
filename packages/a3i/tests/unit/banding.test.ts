@@ -23,27 +23,27 @@ import {
 describe('Trust Bands', () => {
   describe('getBand', () => {
     it('should map scores to correct bands', () => {
-      expect(getBand(10)).toBe(TrustBand.T0_UNTRUSTED);
-      expect(getBand(30)).toBe(TrustBand.T1_SUPERVISED);
-      expect(getBand(50)).toBe(TrustBand.T2_CONSTRAINED);
-      expect(getBand(65)).toBe(TrustBand.T3_TRUSTED);
-      expect(getBand(80)).toBe(TrustBand.T4_AUTONOMOUS);
-      expect(getBand(95)).toBe(TrustBand.T5_MISSION_CRITICAL);
+      expect(getBand(100)).toBe(TrustBand.T0_UNTRUSTED);
+      expect(getBand(300)).toBe(TrustBand.T1_SUPERVISED);
+      expect(getBand(500)).toBe(TrustBand.T2_CONSTRAINED);
+      expect(getBand(650)).toBe(TrustBand.T3_TRUSTED);
+      expect(getBand(800)).toBe(TrustBand.T4_AUTONOMOUS);
+      expect(getBand(950)).toBe(TrustBand.T5_MISSION_CRITICAL);
     });
 
     it('should handle boundary values', () => {
       expect(getBand(0)).toBe(TrustBand.T0_UNTRUSTED);
-      expect(getBand(20)).toBe(TrustBand.T0_UNTRUSTED);
-      expect(getBand(21)).toBe(TrustBand.T1_SUPERVISED);
-      expect(getBand(100)).toBe(TrustBand.T5_MISSION_CRITICAL);
+      expect(getBand(200)).toBe(TrustBand.T0_UNTRUSTED);
+      expect(getBand(201)).toBe(TrustBand.T1_SUPERVISED);
+      expect(getBand(1000)).toBe(TrustBand.T5_MISSION_CRITICAL);
     });
   });
 
   describe('getBandRange', () => {
     it('should return correct range for each band', () => {
-      expect(getBandRange(TrustBand.T0_UNTRUSTED)).toEqual({ min: 0, max: 20 });
-      expect(getBandRange(TrustBand.T3_TRUSTED)).toEqual({ min: 56, max: 70 });
-      expect(getBandRange(TrustBand.T5_MISSION_CRITICAL)).toEqual({ min: 86, max: 100 });
+      expect(getBandRange(TrustBand.T0_UNTRUSTED)).toEqual({ min: 0, max: 200 });
+      expect(getBandRange(TrustBand.T3_TRUSTED)).toEqual({ min: 551, max: 700 });
+      expect(getBandRange(TrustBand.T5_MISSION_CRITICAL)).toEqual({ min: 851, max: 1000 });
     });
   });
 
@@ -95,30 +95,30 @@ describe('Hysteresis', () => {
 
   describe('calculateBandWithHysteresis', () => {
     it('should prevent oscillation near thresholds', () => {
-      // Score of 42 is just above T1 max (40), but within hysteresis of 3
+      // Score of 402 is just above T1 max (400), but within hysteresis of 3
       // Should stay at T1 if currently T1
       const result = hysteresis.calculateBandWithHysteresis(
         TrustBand.T1_SUPERVISED,
-        42
+        402
       );
       expect(result).toBe(TrustBand.T1_SUPERVISED);
     });
 
     it('should allow transitions outside hysteresis zone', () => {
-      // Score of 50 is well above T1 max (40) + hysteresis (3)
+      // Score of 500 is well above T1 max (400) + hysteresis (3)
       const result = hysteresis.calculateBandWithHysteresis(
         TrustBand.T1_SUPERVISED,
-        50
+        500
       );
       expect(result).toBe(TrustBand.T2_CONSTRAINED);
     });
 
     it('should prevent demotion in hysteresis zone', () => {
-      // Score of 53 is within T2 range but close to T1
-      // With hysteresis, should stay T2 if T2 min is 41
+      // Score of 400 is just below T2 min (401) with hysteresis of 3
+      // Should stay T2 if currently T2
       const result = hysteresis.calculateBandWithHysteresis(
         TrustBand.T2_CONSTRAINED,
-        40
+        400
       );
       expect(result).toBe(TrustBand.T2_CONSTRAINED);
     });
@@ -156,9 +156,9 @@ describe('Hysteresis', () => {
 
   describe('getPromotionThreshold', () => {
     it('should return correct threshold', () => {
-      // T2 max is 55, hysteresis is 3, so threshold is 58
+      // T2 max is 550, hysteresis is 3, so threshold is 553
       const threshold = hysteresis.getPromotionThreshold(TrustBand.T2_CONSTRAINED);
-      expect(threshold).toBe(58);
+      expect(threshold).toBe(553);
     });
 
     it('should return null for max band', () => {
@@ -168,9 +168,9 @@ describe('Hysteresis', () => {
 
   describe('getDemotionThreshold', () => {
     it('should return correct threshold', () => {
-      // T2 min is 41, hysteresis is 3, so threshold is 38
+      // T2 min is 401, hysteresis is 3, so threshold is 398
       const threshold = hysteresis.getDemotionThreshold(TrustBand.T2_CONSTRAINED);
-      expect(threshold).toBe(38);
+      expect(threshold).toBe(398);
     });
 
     it('should return null for min band', () => {
@@ -183,17 +183,17 @@ describe('BandCalculator', () => {
   let calculator: BandCalculator;
 
   beforeEach(() => {
-    calculator = createBandCalculator({ promotionDelay: 7, hysteresis: 3 });
+    calculator = createBandCalculator({ promotionDelay: 7, hysteresis: 30 });
   });
 
   describe('evaluateTransition', () => {
     it('should allow immediate demotion', () => {
-      calculator.recordScoreSnapshot('agent-1', TrustBand.T3_TRUSTED, 65);
+      calculator.recordScoreSnapshot('agent-1', TrustBand.T3_TRUSTED, 650);
 
       const result = calculator.evaluateTransition(
         'agent-1',
         TrustBand.T3_TRUSTED,
-        35 // Clear demotion
+        350 // Clear demotion
       );
 
       expect(result.allowed).toBe(true);
@@ -203,12 +203,12 @@ describe('BandCalculator', () => {
 
     it('should block promotion without time requirement', () => {
       // Record that agent just entered T2
-      calculator.recordScoreSnapshot('agent-1', TrustBand.T2_CONSTRAINED, 50);
+      calculator.recordScoreSnapshot('agent-1', TrustBand.T2_CONSTRAINED, 500);
 
       const result = calculator.evaluateTransition(
         'agent-1',
         TrustBand.T2_CONSTRAINED,
-        65 // Would be T3
+        650 // Would be T3
       );
 
       expect(result.allowed).toBe(false);
@@ -219,12 +219,12 @@ describe('BandCalculator', () => {
     it('should allow promotion after time requirement', () => {
       // Record that agent has been at T2 for 10 days
       const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
-      calculator.recordScoreSnapshot('agent-1', TrustBand.T2_CONSTRAINED, 50, tenDaysAgo);
+      calculator.recordScoreSnapshot('agent-1', TrustBand.T2_CONSTRAINED, 500, tenDaysAgo);
 
       const result = calculator.evaluateTransition(
         'agent-1',
         TrustBand.T2_CONSTRAINED,
-        65 // Clear promotion
+        650 // Clear promotion
       );
 
       expect(result.allowed).toBe(true);
@@ -234,13 +234,13 @@ describe('BandCalculator', () => {
 
     it('should block transition within hysteresis zone', () => {
       const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
-      calculator.recordScoreSnapshot('agent-1', TrustBand.T2_CONSTRAINED, 50, tenDaysAgo);
+      calculator.recordScoreSnapshot('agent-1', TrustBand.T2_CONSTRAINED, 500, tenDaysAgo);
 
-      // Score of 57 is above T2 max (55) but within hysteresis (3)
+      // Score of 570 is above T2 max (550) but within hysteresis (30)
       const result = calculator.evaluateTransition(
         'agent-1',
         TrustBand.T2_CONSTRAINED,
-        57
+        570
       );
 
       expect(result.allowed).toBe(false);
