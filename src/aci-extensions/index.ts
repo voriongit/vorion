@@ -36,7 +36,7 @@
  * // Process a capability request
  * const agent = {
  *   did: 'did:web:agents.vorion.org:banquet-advisor',
- *   aci: 'a3i.vorion.banquet-advisor:FHC-L3-T2@1.2.0#gov,audit',
+ *   aci: 'a3i.vorion.banquet-advisor:FHC-L3@1.2.0#gov,audit',
  *   publisher: 'vorion',
  *   name: 'Banquet Advisor',
  *   trustTier: 2,

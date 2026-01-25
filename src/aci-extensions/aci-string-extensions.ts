@@ -13,13 +13,13 @@
  * ```
  * // ACI string formats:
  * // Without extensions:
- * //   a3i.vorion.banquet-advisor:FHC-L3-T2@1.2.0
+ * //   a3i.vorion.banquet-advisor:FHC-L3@1.2.0
  * //
  * // With single extension:
- * //   a3i.vorion.banquet-advisor:FHC-L3-T2@1.2.0#gov
+ * //   a3i.vorion.banquet-advisor:FHC-L3@1.2.0#gov
  * //
  * // With multiple extensions:
- * //   a3i.vorion.banquet-advisor:FHC-L3-T2@1.2.0#gov,audit,hipaa
+ * //   a3i.vorion.banquet-advisor:FHC-L3@1.2.0#gov,audit,hipaa
  * ```
  */
 
@@ -59,10 +59,11 @@ const SHORTCODE_REGEX = /^[a-z]{1,10}$/;
 
 /**
  * Regular expression for validating ACI string with optional extensions
- * Matches: namespace.publisher.name:DOMAINS-L{level}-T{tier}@version[#extensions]
+ * Matches: namespace.publisher.name:DOMAINS-L{level}@version[#extensions]
+ * Note: Trust tier is NOT part of ACI - it's computed at runtime
  */
 const ACI_WITH_EXTENSIONS_REGEX =
-  /^[a-z0-9]+\.[a-z0-9-]+\.[a-z0-9-]+:[A-Z]+-L[0-5]-T[0-5]@\d+\.\d+\.\d+(#[a-z]+(,[a-z]+)*)?$/;
+  /^[a-z0-9]+\.[a-z0-9-]+\.[a-z0-9-]+:[A-Z]+-L[0-5]@\d+\.\d+\.\d+(#[a-z]+(,[a-z]+)*)?$/;
 
 /**
  * Parse extension suffix from an ACI string
@@ -76,16 +77,16 @@ const ACI_WITH_EXTENSIONS_REGEX =
  * @example
  * ```typescript
  * // Without extensions
- * parseExtensions('a3i.vorion.agent:FHC-L3-T2@1.0.0');
- * // { core: 'a3i.vorion.agent:FHC-L3-T2@1.0.0', extensions: [] }
+ * parseExtensions('a3i.vorion.agent:FHC-L3@1.0.0');
+ * // { core: 'a3i.vorion.agent:FHC-L3@1.0.0', extensions: [] }
  *
  * // With single extension
- * parseExtensions('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov');
- * // { core: 'a3i.vorion.agent:FHC-L3-T2@1.0.0', extensions: ['gov'] }
+ * parseExtensions('a3i.vorion.agent:FHC-L3@1.0.0#gov');
+ * // { core: 'a3i.vorion.agent:FHC-L3@1.0.0', extensions: ['gov'] }
  *
  * // With multiple extensions
- * parseExtensions('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov,audit,hipaa');
- * // { core: 'a3i.vorion.agent:FHC-L3-T2@1.0.0', extensions: ['gov', 'audit', 'hipaa'] }
+ * parseExtensions('a3i.vorion.agent:FHC-L3@1.0.0#gov,audit,hipaa');
+ * // { core: 'a3i.vorion.agent:FHC-L3@1.0.0', extensions: ['gov', 'audit', 'hipaa'] }
  * ```
  */
 export function parseExtensions(aci: string): ParsedExtensions {
@@ -120,16 +121,16 @@ export function parseExtensions(aci: string): ParsedExtensions {
  * @example
  * ```typescript
  * // Add to string without extensions
- * addExtension('a3i.vorion.agent:FHC-L3-T2@1.0.0', 'gov');
- * // 'a3i.vorion.agent:FHC-L3-T2@1.0.0#gov'
+ * addExtension('a3i.vorion.agent:FHC-L3@1.0.0', 'gov');
+ * // 'a3i.vorion.agent:FHC-L3@1.0.0#gov'
  *
  * // Add to string with existing extensions
- * addExtension('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov', 'audit');
- * // 'a3i.vorion.agent:FHC-L3-T2@1.0.0#gov,audit'
+ * addExtension('a3i.vorion.agent:FHC-L3@1.0.0#gov', 'audit');
+ * // 'a3i.vorion.agent:FHC-L3@1.0.0#gov,audit'
  *
  * // Extension already present
- * addExtension('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov', 'gov');
- * // 'a3i.vorion.agent:FHC-L3-T2@1.0.0#gov'
+ * addExtension('a3i.vorion.agent:FHC-L3@1.0.0#gov', 'gov');
+ * // 'a3i.vorion.agent:FHC-L3@1.0.0#gov'
  * ```
  */
 export function addExtension(aci: string, extension: string): string {
@@ -156,8 +157,8 @@ export function addExtension(aci: string, extension: string): string {
  *
  * @example
  * ```typescript
- * addExtensions('a3i.vorion.agent:FHC-L3-T2@1.0.0', ['gov', 'audit']);
- * // 'a3i.vorion.agent:FHC-L3-T2@1.0.0#gov,audit'
+ * addExtensions('a3i.vorion.agent:FHC-L3@1.0.0', ['gov', 'audit']);
+ * // 'a3i.vorion.agent:FHC-L3@1.0.0#gov,audit'
  * ```
  */
 export function addExtensions(aci: string, extensionsToAdd: string[]): string {
@@ -181,16 +182,16 @@ export function addExtensions(aci: string, extensionsToAdd: string[]): string {
  * @example
  * ```typescript
  * // Remove from multiple extensions
- * removeExtension('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov,audit', 'gov');
- * // 'a3i.vorion.agent:FHC-L3-T2@1.0.0#audit'
+ * removeExtension('a3i.vorion.agent:FHC-L3@1.0.0#gov,audit', 'gov');
+ * // 'a3i.vorion.agent:FHC-L3@1.0.0#audit'
  *
  * // Remove last extension
- * removeExtension('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov', 'gov');
- * // 'a3i.vorion.agent:FHC-L3-T2@1.0.0'
+ * removeExtension('a3i.vorion.agent:FHC-L3@1.0.0#gov', 'gov');
+ * // 'a3i.vorion.agent:FHC-L3@1.0.0'
  *
  * // Extension not present
- * removeExtension('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov', 'audit');
- * // 'a3i.vorion.agent:FHC-L3-T2@1.0.0#gov'
+ * removeExtension('a3i.vorion.agent:FHC-L3@1.0.0#gov', 'audit');
+ * // 'a3i.vorion.agent:FHC-L3@1.0.0#gov'
  * ```
  */
 export function removeExtension(aci: string, extension: string): string {
@@ -231,13 +232,13 @@ export function removeExtensions(aci: string, extensionsToRemove: string[]): str
  *
  * @example
  * ```typescript
- * hasExtension('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov,audit', 'gov');
+ * hasExtension('a3i.vorion.agent:FHC-L3@1.0.0#gov,audit', 'gov');
  * // true
  *
- * hasExtension('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov', 'audit');
+ * hasExtension('a3i.vorion.agent:FHC-L3@1.0.0#gov', 'audit');
  * // false
  *
- * hasExtension('a3i.vorion.agent:FHC-L3-T2@1.0.0', 'gov');
+ * hasExtension('a3i.vorion.agent:FHC-L3@1.0.0', 'gov');
  * // false
  * ```
  */
@@ -326,10 +327,10 @@ export function isValidShortcode(shortcode: string): boolean {
  *
  * @example
  * ```typescript
- * isValidACIWithExtensions('a3i.vorion.agent:FHC-L3-T2@1.0.0');           // true
- * isValidACIWithExtensions('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov');       // true
- * isValidACIWithExtensions('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov,audit'); // true
- * isValidACIWithExtensions('invalid-aci-string');                          // false
+ * isValidACIWithExtensions('a3i.vorion.agent:FHC-L3@1.0.0');           // true
+ * isValidACIWithExtensions('a3i.vorion.agent:FHC-L3@1.0.0#gov');       // true
+ * isValidACIWithExtensions('a3i.vorion.agent:FHC-L3@1.0.0#gov,audit'); // true
+ * isValidACIWithExtensions('invalid-aci-string');                      // false
  * ```
  */
 export function isValidACIWithExtensions(aci: string): boolean {
@@ -358,11 +359,11 @@ export function getExtensionCount(aci: string): number {
  *
  * @example
  * ```typescript
- * replaceExtensions('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov', ['audit', 'hipaa']);
- * // 'a3i.vorion.agent:FHC-L3-T2@1.0.0#audit,hipaa'
+ * replaceExtensions('a3i.vorion.agent:FHC-L3@1.0.0#gov', ['audit', 'hipaa']);
+ * // 'a3i.vorion.agent:FHC-L3@1.0.0#audit,hipaa'
  *
- * replaceExtensions('a3i.vorion.agent:FHC-L3-T2@1.0.0#gov', []);
- * // 'a3i.vorion.agent:FHC-L3-T2@1.0.0'
+ * replaceExtensions('a3i.vorion.agent:FHC-L3@1.0.0#gov', []);
+ * // 'a3i.vorion.agent:FHC-L3@1.0.0'
  * ```
  */
 export function replaceExtensions(aci: string, newExtensions: string[]): string {
