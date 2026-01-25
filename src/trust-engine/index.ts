@@ -4,6 +4,10 @@
  * Calculates and maintains trust scores for entities based on behavioral signals.
  * Persists to PostgreSQL for durability.
  *
+ * Supports the dual-layer certification/runtime model:
+ * - Certification Layer (ACI): Portable attestations that travel with agents
+ * - Runtime Layer (Vorion): Deployment-specific trust enforcement
+ *
  * @packageDocumentation
  */
 
@@ -26,28 +30,69 @@ import type {
   ID,
 } from '../common/types.js';
 
+// ACI Integration imports
+import {
+  CertificationTier,
+  RuntimeTier,
+  CapabilityLevel,
+  ParsedACI,
+  parseACI,
+  calculateEffectivePermission,
+} from '../../packages/contracts/src/aci/index.js';
+
+import {
+  type ACITrustContext,
+  type Attestation,
+  type PermissionCheckResult,
+  calculateEffectiveFromACI,
+  attestationToTrustSignal,
+  applyACIFloor,
+  enforceACICeiling,
+  calculateEffectiveTier,
+  calculateEffectiveScore,
+  scoreToTier,
+} from './aci-integration.js';
+
+import {
+  ObservabilityClass,
+  getObservabilityCeiling,
+  applyObservabilityCeiling,
+  determineObservabilityClass,
+  type ObservabilityMetadata,
+} from './observability.js';
+
+import {
+  DeploymentContext,
+  getContextCeiling,
+  applyContextCeiling,
+  evaluateContextPolicy,
+  detectDeploymentContext,
+} from './context.js';
+
 const logger = createLogger({ component: 'trust-engine' });
 
 /**
  * Trust level thresholds
  */
 export const TRUST_THRESHOLDS: Record<TrustLevel, { min: number; max: number }> = {
-  0: { min: 0, max: 199 },
-  1: { min: 200, max: 399 },
-  2: { min: 400, max: 599 },
-  3: { min: 600, max: 799 },
-  4: { min: 800, max: 1000 },
+  0: { min: 0, max: 99 },
+  1: { min: 100, max: 299 },
+  2: { min: 300, max: 499 },
+  3: { min: 500, max: 699 },
+  4: { min: 700, max: 899 },
+  5: { min: 900, max: 1000 },
 };
 
 /**
  * Trust level names
  */
 export const TRUST_LEVEL_NAMES: Record<TrustLevel, string> = {
-  0: 'Untrusted',
-  1: 'Provisional',
-  2: 'Trusted',
-  3: 'Verified',
-  4: 'Privileged',
+  0: 'Sandbox',
+  1: 'Supervised',
+  2: 'Constrained',
+  3: 'Trusted',
+  4: 'Autonomous',
+  5: 'Sovereign',
 };
 
 /**
@@ -653,6 +698,288 @@ export class TrustEngine {
     }
     return null; // Already at or past final milestone
   }
+
+  // ==========================================================================
+  // ACI Integration Methods
+  // ==========================================================================
+
+  /**
+   * Get trust context with ACI integration
+   *
+   * Combines ACI certification layer with Vorion runtime layer to produce
+   * a complete trust context. The effective tier/score is the minimum of
+   * all contributing factors.
+   *
+   * @param entityId - The entity to get trust context for
+   * @param aci - The ACI string for the entity
+   * @returns Complete ACI trust context with effective permissions
+   */
+  async getACITrustContext(entityId: ID, aci: string): Promise<ACITrustContext> {
+    const parsedACI = parseACI(aci);
+    const trustRecord = await this.getScore(entityId);
+    const runtimeScore = trustRecord?.score ?? 200;
+    const runtimeTier = scoreToTier(runtimeScore);
+
+    // Get observability and context from entity metadata or config
+    const observability = await this.getObservabilityClass(entityId);
+    const context = await this.getDeploymentContext(entityId);
+
+    const observabilityCeiling = getObservabilityCeiling(observability);
+    const contextPolicyCeiling = getContextCeiling(context);
+
+    const effectiveTier = calculateEffectiveTier(
+      parsedACI,
+      runtimeTier,
+      observabilityCeiling,
+      contextPolicyCeiling
+    );
+
+    const effectiveScore = calculateEffectiveScore(
+      parsedACI,
+      runtimeScore,
+      observabilityCeiling,
+      contextPolicyCeiling
+    );
+
+    logger.debug(
+      {
+        entityId,
+        certificationTier: parsedACI.certificationTier,
+        runtimeTier,
+        observabilityCeiling,
+        contextPolicyCeiling,
+        effectiveTier,
+        effectiveScore,
+      },
+      'Built ACI trust context'
+    );
+
+    return {
+      aci: parsedACI,
+      certificationTier: parsedACI.certificationTier,
+      competenceLevel: parsedACI.level,
+      certifiedDomains: [...parsedACI.domains],
+      runtimeTier,
+      runtimeScore,
+      observabilityCeiling,
+      contextPolicyCeiling,
+      effectiveTier,
+      effectiveScore,
+    };
+  }
+
+  /**
+   * Apply ACI attestation as trust signal
+   *
+   * Converts an ACI attestation into a trust signal and applies it to
+   * the entity's trust record. Also enforces the certification floor -
+   * the entity's score cannot fall below their certified tier minimum.
+   *
+   * @param entityId - The entity to apply attestation to
+   * @param attestation - The ACI attestation record
+   */
+  async applyAttestation(entityId: ID, attestation: Attestation): Promise<void> {
+    const signal = attestationToTrustSignal(attestation);
+
+    // Record the attestation as a trust signal
+    await this.recordSignal({
+      id: signal.id,
+      entityId: signal.entityId,
+      type: signal.type,
+      value: signal.value,
+      weight: signal.weight,
+      source: signal.source,
+      timestamp: signal.timestamp,
+      metadata: signal.metadata,
+    });
+
+    // Apply floor from certification
+    const trustRecord = await this.getScore(entityId);
+    if (trustRecord) {
+      const flooredScore = applyACIFloor(trustRecord.score, attestation.trustTier);
+      if (flooredScore > trustRecord.score) {
+        await this.setScore(entityId, flooredScore, 'ACI attestation floor');
+      }
+    }
+
+    logger.info(
+      {
+        entityId,
+        attestationId: attestation.id,
+        trustTier: attestation.trustTier,
+        issuer: attestation.issuer,
+      },
+      'Applied ACI attestation'
+    );
+  }
+
+  /**
+   * Check if action is allowed under effective permission
+   *
+   * Evaluates whether an entity has sufficient effective trust to perform
+   * an action requiring a specific tier and domains.
+   *
+   * @param entityId - The entity requesting the action
+   * @param aci - The entity's ACI string
+   * @param requiredTier - Minimum tier required for the action
+   * @param requiredDomains - Domains required for the action
+   * @returns Permission check result with reason if denied
+   */
+  async checkEffectivePermission(
+    entityId: ID,
+    aci: string,
+    requiredTier: RuntimeTier,
+    requiredDomains: string[]
+  ): Promise<PermissionCheckResult> {
+    const ctx = await this.getACITrustContext(entityId, aci);
+    const effective = calculateEffectiveFromACI(ctx);
+
+    const tierAllowed = effective.tier >= requiredTier;
+    const domainsAllowed = requiredDomains.every((d) =>
+      effective.domains.includes(d)
+    );
+
+    const allowed = tierAllowed && domainsAllowed;
+
+    let reason: string | undefined;
+    if (!tierAllowed) {
+      reason = `Requires T${requiredTier}, effective is T${effective.tier}`;
+    } else if (!domainsAllowed) {
+      const missingDomains = requiredDomains.filter(
+        (d) => !effective.domains.includes(d)
+      );
+      reason = `Missing required domains: ${missingDomains.join(', ')}`;
+    }
+
+    logger.debug(
+      {
+        entityId,
+        requiredTier,
+        requiredDomains,
+        effectiveTier: effective.tier,
+        certifiedDomains: effective.domains,
+        allowed,
+        reason,
+      },
+      'Checked effective permission'
+    );
+
+    return {
+      allowed,
+      effectiveTier: effective.tier,
+      effectiveScore: effective.score,
+      reason,
+      ceilingReason: effective.ceilingReason,
+    };
+  }
+
+  /**
+   * Set trust score directly with reason
+   *
+   * Used internally for applying floors and ceilings from ACI.
+   *
+   * @param entityId - The entity to update
+   * @param score - The new trust score
+   * @param reason - Reason for the change
+   */
+  async setScore(entityId: ID, score: TrustScore, reason: string): Promise<void> {
+    const db = await this.ensureInitialized();
+
+    const level = this.scoreToLevel(score);
+    const now = new Date();
+
+    // Get current record for history
+    const current = await db
+      .select()
+      .from(trustRecords)
+      .where(eq(trustRecords.entityId, entityId))
+      .limit(1);
+
+    if (current.length === 0) {
+      // Entity doesn't exist, create it
+      await this.initializeEntity(entityId, level);
+      return;
+    }
+
+    const previousScore = current[0]!.score;
+    const previousLevel = parseInt(current[0]!.level) as TrustLevel;
+
+    // Update record
+    await db
+      .update(trustRecords)
+      .set({
+        score,
+        level: level.toString() as '0' | '1' | '2' | '3' | '4',
+        lastCalculatedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(trustRecords.entityId, entityId));
+
+    // Record history
+    const historyEntry: NewTrustHistory = {
+      entityId,
+      score,
+      previousScore,
+      level: level.toString() as '0' | '1' | '2' | '3' | '4',
+      previousLevel: previousLevel.toString() as '0' | '1' | '2' | '3' | '4',
+      reason,
+      timestamp: now,
+    };
+
+    await db.insert(trustHistory).values(historyEntry);
+
+    logger.info(
+      { entityId, previousScore, newScore: score, reason },
+      'Trust score updated'
+    );
+  }
+
+  /**
+   * Get observability class for an entity
+   *
+   * Retrieves or determines the observability class from entity metadata.
+   *
+   * @param entityId - The entity to check
+   * @returns The entity's observability class
+   */
+  async getObservabilityClass(entityId: ID): Promise<ObservabilityClass> {
+    const db = await this.ensureInitialized();
+
+    // Try to get from entity metadata (stored in trust record metadata or separate table)
+    const record = await db
+      .select()
+      .from(trustRecords)
+      .where(eq(trustRecords.entityId, entityId))
+      .limit(1);
+
+    if (record.length > 0) {
+      // Check if observability is stored in record metadata
+      // For now, determine from any available metadata
+      const metadata = (record[0] as any)?.metadata as ObservabilityMetadata | undefined;
+      if (metadata) {
+        return determineObservabilityClass(metadata);
+      }
+    }
+
+    // Default to most restrictive if unknown
+    return ObservabilityClass.BLACK_BOX;
+  }
+
+  /**
+   * Get deployment context for an entity
+   *
+   * Retrieves or determines the deployment context for trust calculations.
+   *
+   * @param entityId - The entity to check (may have context override)
+   * @returns The applicable deployment context
+   */
+  async getDeploymentContext(_entityId: ID): Promise<DeploymentContext> {
+    // First check for entity-specific context override
+    // (could be stored in entity metadata or configuration)
+
+    // For now, detect from environment
+    return detectDeploymentContext();
+  }
 }
 
 /**
@@ -728,3 +1055,80 @@ export function getNextDecayMilestone(
   }
   return null;
 }
+
+// ============================================================================
+// ACI Integration Re-exports
+// ============================================================================
+
+// Re-export from @vorion/contracts/aci
+export type { CertificationTier, RuntimeTier, CapabilityLevel, ParsedACI };
+export { parseACI, calculateEffectivePermission };
+
+// Re-export from aci-integration.ts
+export type {
+  ACITrustContext,
+  Attestation,
+  EffectivePermission,
+  PermissionCheckResult,
+} from './aci-integration.js';
+
+export {
+  AttestationSchema,
+  calculateEffectiveFromACI,
+  attestationToTrustSignal,
+  applyACIFloor,
+  enforceACICeiling,
+  calculateEffectiveTier,
+  calculateEffectiveScore,
+  scoreToTier,
+  certificationTierToMinScore,
+  certificationTierToMaxScore,
+  certificationTierToScore,
+  tierToMinScore,
+  competenceLevelToCeiling,
+  determineCeilingReason,
+} from './aci-integration.js';
+
+// Re-export from observability.ts
+export {
+  ObservabilityClass,
+  OBSERVABILITY_CEILINGS,
+  OBSERVABILITY_CLASS_NAMES,
+  ObservabilityClassSchema,
+  ObservabilityMetadataSchema,
+  getObservabilityCeiling,
+  getObservabilityMaxScore,
+  applyObservabilityCeiling,
+  isTierAllowedForObservability,
+  getRequiredObservabilityForTier,
+  determineObservabilityClass,
+  describeObservabilityConstraints,
+} from './observability.js';
+
+export type {
+  ObservabilityCeiling,
+  ObservabilityMetadata,
+} from './observability.js';
+
+// Re-export from context.ts
+export {
+  DeploymentContext,
+  CONTEXT_CEILINGS,
+  CONTEXT_NAMES,
+  DeploymentContextSchema,
+  ContextConfigSchema,
+  getContextCeiling,
+  getContextMaxScore,
+  applyContextCeiling,
+  requiresHumanApproval,
+  requiresAttestation,
+  evaluateContextPolicy,
+  describeContextConstraints,
+  detectDeploymentContext,
+} from './context.js';
+
+export type {
+  ContextCeiling,
+  ContextPolicyResult,
+  ContextConfig,
+} from './context.js';

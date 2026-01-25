@@ -21,6 +21,10 @@
     "./validators": {
       "types": "./dist/validators/index.d.ts",
       "import": "./dist/validators/index.js"
+    },
+    "./aci": {
+      "types": "./dist/aci/index.d.ts",
+      "import": "./dist/aci/index.js"
     }
   },
   "files": [
