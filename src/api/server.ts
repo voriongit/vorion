@@ -936,26 +936,42 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Proof routes
-      api.get('/proofs/:id', async (_request, _reply) => {
+      api.get('/proofs/:id', async (request, reply) => {
         // TODO: Implement proof retrieval
-        return { message: 'Proof retrieval - not implemented' };
+        return reply.status(501).send({
+          success: false,
+          error: { code: 'NOT_IMPLEMENTED', message: 'Proof retrieval not implemented' },
+          meta: { requestId: request.id, timestamp: new Date().toISOString() },
+        });
       });
 
-      api.post('/proofs/:id/verify', async (_request, _reply) => {
+      api.post('/proofs/:id/verify', async (request, reply) => {
         // TODO: Implement proof verification
-        return { message: 'Proof verification - not implemented' };
+        return reply.status(501).send({
+          success: false,
+          error: { code: 'NOT_IMPLEMENTED', message: 'Proof verification not implemented' },
+          meta: { requestId: request.id, timestamp: new Date().toISOString() },
+        });
       });
 
       // Trust routes
-      api.get('/trust/:entityId', async (_request, _reply) => {
+      api.get('/trust/:entityId', async (request, reply) => {
         // TODO: Implement trust retrieval
-        return { message: 'Trust retrieval - not implemented' };
+        return reply.status(501).send({
+          success: false,
+          error: { code: 'NOT_IMPLEMENTED', message: 'Trust retrieval not implemented' },
+          meta: { requestId: request.id, timestamp: new Date().toISOString() },
+        });
       });
 
       // Constraint routes
-      api.post('/constraints/validate', async (_request, _reply) => {
+      api.post('/constraints/validate', async (request, reply) => {
         // TODO: Implement constraint validation
-        return { message: 'Constraint validation - not implemented' };
+        return reply.status(501).send({
+          success: false,
+          error: { code: 'NOT_IMPLEMENTED', message: 'Constraint validation not implemented' },
+          meta: { requestId: request.id, timestamp: new Date().toISOString() },
+        });
       });
 
       // ========== Escalation Routes ==========

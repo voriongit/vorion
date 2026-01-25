@@ -67,6 +67,16 @@ vi.mock('../../../src/common/db.js', () => ({
   getDatabase: vi.fn(() => mockDb),
 }));
 
+vi.mock('../../../src/common/redis.js', () => ({
+  getRedis: vi.fn(() => ({
+    get: vi.fn().mockResolvedValue(null),
+    setex: vi.fn().mockResolvedValue('OK'),
+    del: vi.fn().mockResolvedValue(1),
+    exists: vi.fn().mockResolvedValue(0),
+    ping: vi.fn().mockResolvedValue('PONG'),
+  })),
+}));
+
 describe('Audit Module', () => {
   beforeEach(() => {
     vi.clearAllMocks();
