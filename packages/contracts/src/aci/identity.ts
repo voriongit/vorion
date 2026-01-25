@@ -25,6 +25,14 @@ import { type ParsedACI, parsedACISchema, aciStringSchema } from './aci-string.j
  * Represents a set of capability requirements or grants that can be
  * compared against other vectors for authorization decisions.
  */
+/**
+ * Capability vector describes what an agent CAN DO.
+ *
+ * NOTE: Trust/certification tier is NOT included here because:
+ * - Trust is computed at runtime from attestations
+ * - The ACI is an immutable identifier, not a trust indicator
+ * - Same agent can have different trust in different deployments
+ */
 export interface CapabilityVector {
   /** Required/granted domains */
   domains: readonly DomainCode[];
@@ -32,8 +40,6 @@ export interface CapabilityVector {
   domainsBitmask?: number;
   /** Minimum level required/granted */
   level: CapabilityLevel;
-  /** Minimum certification tier required/granted */
-  certificationTier: CertificationTier;
   /** Optional skill tags for fine-grained matching */
   skills?: readonly string[];
 }
@@ -45,7 +51,6 @@ export const capabilityVectorSchema = z.object({
   domains: domainCodeArraySchema,
   domainsBitmask: z.number().int().min(0).optional(),
   level: capabilityLevelSchema,
-  certificationTier: certificationTierSchema,
   skills: z.array(z.string()).optional(),
 });
 
@@ -217,6 +222,12 @@ export const agentIdentitySchema = z.object({
  * Used for listings, search results, and contexts where the full
  * identity is not needed.
  */
+/**
+ * Summarized agent identity for quick lookups.
+ *
+ * NOTE: certificationTier is OPTIONAL because it comes from attestations,
+ * not the ACI. Use getHighestAttestationTier() to compute it.
+ */
 export interface AgentIdentitySummary {
   /** Full ACI string */
   aci: string;
@@ -226,8 +237,11 @@ export interface AgentIdentitySummary {
   domains: readonly DomainCode[];
   /** Capability level */
   level: CapabilityLevel;
-  /** Certification tier */
-  certificationTier: CertificationTier;
+  /**
+   * Certification tier from attestations (optional).
+   * Compute from valid attestations; defaults to T0 if none.
+   */
+  certificationTier?: CertificationTier;
   /** Runtime tier (if available) */
   runtimeTier?: RuntimeTier;
   /** Agent name/description */
@@ -349,17 +363,16 @@ export function createAgentIdentity(
 
   // If parsedACI not provided, we'd need to parse it
   // For now, require the caller to provide it or handle parsing externally
+  // NOTE: Trust tier is NOT included - it comes from attestations at runtime
   const capabilities: CapabilityVector = parsedACI
     ? {
         domains: parsedACI.domains,
         domainsBitmask: parsedACI.domainsBitmask,
         level: parsedACI.level,
-        certificationTier: parsedACI.certificationTier,
       }
     : {
         domains: [],
         level: CapabilityLevel.L0_OBSERVE,
-        certificationTier: CertificationTier.T0_UNVERIFIED,
       };
 
   return {
@@ -384,13 +397,27 @@ export function createAgentIdentity(
  * @param identity - Full agent identity
  * @returns Agent identity summary
  */
+/**
+ * Converts an AgentIdentity to a summary view.
+ *
+ * @param identity - Full agent identity
+ * @returns Summarized view
+ */
 export function toAgentIdentitySummary(identity: AgentIdentity): AgentIdentitySummary {
+  // Compute certification tier from valid attestations
+  const now = new Date();
+  const validAttestations = identity.attestations.filter((a) => a.expiresAt > now);
+  const certificationTier =
+    validAttestations.length > 0
+      ? (Math.max(...validAttestations.map((a) => a.certificationTier)) as CertificationTier)
+      : undefined;
+
   return {
     aci: identity.aci,
     did: identity.did,
     domains: identity.capabilities.domains,
     level: identity.capabilities.level,
-    certificationTier: identity.capabilities.certificationTier,
+    certificationTier,
     runtimeTier: identity.runtimeTier,
     name: identity.metadata?.description,
     active: identity.active,
@@ -431,12 +458,19 @@ export function matchesAgentCriteria(
     return false;
   }
 
-  // Check minimum certification tier
-  if (
-    criteria.minCertificationTier !== undefined &&
-    identity.capabilities.certificationTier < criteria.minCertificationTier
-  ) {
-    return false;
+  // Check minimum certification tier (computed from attestations)
+  if (criteria.minCertificationTier !== undefined) {
+    const now = new Date();
+    const validAttestations = identity.attestations.filter(
+      (a) => a.status === 'active' && a.expiresAt > now
+    );
+    const highestTier =
+      validAttestations.length > 0
+        ? Math.max(...validAttestations.map((a) => a.certificationTier))
+        : 0; // Default to T0 if no attestations
+    if (highestTier < criteria.minCertificationTier) {
+      return false;
+    }
   }
 
   // Check minimum runtime tier
@@ -488,9 +522,13 @@ export function matchesAgentCriteria(
 /**
  * Compares two capability vectors.
  *
+ * NOTE: Certification tier is NOT compared here because it's not part
+ * of CapabilityVector. Trust comes from attestations at runtime.
+ * Use separate attestation comparison if needed.
+ *
  * @param a - First capability vector
  * @param b - Second capability vector
- * @returns True if a satisfies or exceeds b
+ * @returns True if a satisfies or exceeds b (domains + level only)
  */
 export function capabilityVectorSatisfies(
   a: CapabilityVector,
@@ -508,10 +546,7 @@ export function capabilityVectorSatisfies(
     return false;
   }
 
-  // Check certification tier
-  if (a.certificationTier < b.certificationTier) {
-    return false;
-  }
+  // NOTE: Certification tier comparison removed - trust comes from attestations
 
   // Check skills (if specified)
   if (b.skills && b.skills.length > 0) {

@@ -1,10 +1,19 @@
 /**
  * ACI Integration for Trust Engine
  *
- * Bridges ACI certification layer with Vorion runtime layer.
- * Implements the dual-layer trust model where:
- * - Certification Layer: Portable attestations (ACI) that travel with agents
- * - Runtime Layer: Deployment-specific trust enforcement (Vorion)
+ * Bridges ACI identity layer with Vorion runtime trust enforcement.
+ *
+ * **CRITICAL DESIGN PRINCIPLE:**
+ * The ACI is an IMMUTABLE identifier. Trust is NOT embedded in the ACI.
+ * Trust is computed at RUNTIME from:
+ * 1. Attestations (external certifications linked to the ACI identity)
+ * 2. Behavioral signals (runtime observations)
+ * 3. Deployment context policies
+ *
+ * This separation ensures:
+ * - ACI remains stable (like a passport number)
+ * - Trust can evolve independently
+ * - Same agent can have different trust in different deployments
  *
  * @packageDocumentation
  */
@@ -15,7 +24,8 @@ import {
   RuntimeTier,
   CapabilityLevel,
   parseACI,
-  calculateEffectivePermission,
+  getACIIdentity,
+  type ACIIdentity,
 } from '../../packages/contracts/src/aci/index.js';
 import type { TrustLevel, TrustScore, ID } from '../common/types.js';
 import { createLogger } from '../common/logger.js';
@@ -34,6 +44,11 @@ const logger = createLogger({ component: 'aci-integration' });
 function certificationToRuntimeTier(certTier: CertificationTier): RuntimeTier {
   return certTier as unknown as RuntimeTier;
 }
+
+/**
+ * Default certification tier when no attestation exists
+ */
+const DEFAULT_CERTIFICATION_TIER: CertificationTier = 0; // T0: Unverified
 
 // ============================================================================
 // Types and Interfaces
@@ -63,18 +78,30 @@ export interface Attestation {
 
 /**
  * ACI Trust Context
- * Combines certification and runtime trust information
+ *
+ * Combines identity (from ACI) with trust (from attestations + runtime).
+ *
+ * IMPORTANT: The certificationTier comes from ATTESTATIONS, not the ACI itself.
+ * The ACI is just an identifier; trust is computed at runtime.
  */
 export interface ACITrustContext {
-  // ACI Certification (portable)
-  /** Parsed ACI string */
+  // ACI Identity (immutable)
+  /** Parsed ACI string (identifier only, no trust info) */
   aci: ParsedACI;
-  /** Certification tier from ACI (T0-T5) */
-  certificationTier: CertificationTier;
+  /** Unique identity portion: registry.organization.agentClass */
+  identity: ACIIdentity;
   /** Competence/capability level from ACI */
   competenceLevel: CapabilityLevel;
-  /** Domains the agent is certified for */
-  certifiedDomains: string[];
+  /** Domains the agent operates in (from ACI) */
+  operationalDomains: string[];
+
+  // Certification (from attestations, NOT from ACI)
+  /** Certification tier from attestations (T0-T5) - defaults to T0 if no attestation */
+  certificationTier: CertificationTier;
+  /** Whether a valid attestation exists for this agent */
+  hasValidAttestation: boolean;
+  /** Attestation expiry (if any) */
+  attestationExpiresAt?: Date;
 
   // Vorion Runtime (deployment-specific)
   /** Current runtime trust tier based on behavioral signals */
@@ -294,8 +321,13 @@ export function determineCeilingReason(
   ctx: ACITrustContext,
   effectiveTier: RuntimeTier
 ): string | undefined {
-  if (effectiveTier === certificationToRuntimeTier(ctx.certificationTier)) {
-    return 'Limited by ACI certification tier';
+  const certTierAsRuntime = certificationToRuntimeTier(ctx.certificationTier);
+
+  if (effectiveTier === certTierAsRuntime) {
+    if (!ctx.hasValidAttestation) {
+      return 'Limited by lack of attestation (default T0)';
+    }
+    return 'Limited by attestation certification tier';
   }
   if (effectiveTier === competenceLevelToCeiling(ctx.competenceLevel)) {
     return 'Limited by competence level';
@@ -316,18 +348,20 @@ export function determineCeilingReason(
  * Calculate effective permission from ACI context
  *
  * The effective tier is the minimum of:
- * 1. Certification tier (what the agent is certified for)
+ * 1. Certification tier (from attestations, NOT the ACI itself)
  * 2. Competence ceiling (what the agent's capability allows)
  * 3. Runtime tier (what behavioral signals indicate)
  * 4. Observability ceiling (what we can verify)
  * 5. Context policy ceiling (what the deployment allows)
+ *
+ * IMPORTANT: Trust is computed at runtime, not encoded in the ACI.
  *
  * @param ctx - ACI Trust Context with all trust dimensions
  * @returns Effective permission with tier, score, and ceiling reason
  */
 export function calculateEffectiveFromACI(ctx: ACITrustContext): EffectivePermission {
   const effectiveTier = Math.min(
-    ctx.certificationTier,
+    certificationToRuntimeTier(ctx.certificationTier),
     competenceLevelToCeiling(ctx.competenceLevel),
     ctx.runtimeTier,
     ctx.observabilityCeiling,
@@ -336,7 +370,9 @@ export function calculateEffectiveFromACI(ctx: ACITrustContext): EffectivePermis
 
   logger.debug(
     {
+      identity: ctx.identity,
       certificationTier: ctx.certificationTier,
+      hasValidAttestation: ctx.hasValidAttestation,
       competenceCeiling: competenceLevelToCeiling(ctx.competenceLevel),
       runtimeTier: ctx.runtimeTier,
       observabilityCeiling: ctx.observabilityCeiling,
@@ -349,10 +385,94 @@ export function calculateEffectiveFromACI(ctx: ACITrustContext): EffectivePermis
   return {
     tier: effectiveTier,
     score: tierToMinScore(effectiveTier),
-    domains: ctx.certifiedDomains,
+    domains: [...ctx.operationalDomains],
     level: ctx.competenceLevel,
     ceilingReason: determineCeilingReason(ctx, effectiveTier),
   };
+}
+
+/**
+ * Create an ACI Trust Context from a parsed ACI and attestation lookup.
+ *
+ * @param parsedACI - The parsed ACI (identity only, no trust)
+ * @param attestation - Optional attestation for this agent
+ * @param runtimeScore - Current runtime trust score
+ * @param observabilityCeiling - Ceiling from observability class
+ * @param contextCeiling - Ceiling from deployment context
+ * @returns Complete ACI Trust Context
+ */
+export function createACITrustContext(
+  parsedACI: ParsedACI,
+  attestation: Attestation | null,
+  runtimeScore: TrustScore,
+  observabilityCeiling: RuntimeTier,
+  contextCeiling: RuntimeTier
+): ACITrustContext {
+  const identity = getACIIdentity(parsedACI);
+
+  // Certification tier comes from attestation, NOT the ACI
+  const certificationTier = attestation?.trustTier ?? DEFAULT_CERTIFICATION_TIER;
+  const hasValidAttestation = attestation !== null && attestation.expiresAt > new Date();
+
+  const runtimeTier = scoreToTier(runtimeScore);
+
+  // Calculate effective values
+  const effectiveTier = Math.min(
+    certificationToRuntimeTier(certificationTier),
+    competenceLevelToCeiling(parsedACI.level),
+    runtimeTier,
+    observabilityCeiling,
+    contextCeiling
+  ) as RuntimeTier;
+
+  const effectiveScore = calculateEffectiveScoreFromFactors(
+    runtimeScore,
+    certificationTier,
+    observabilityCeiling,
+    contextCeiling
+  );
+
+  return {
+    aci: parsedACI,
+    identity,
+    competenceLevel: parsedACI.level,
+    operationalDomains: [...parsedACI.domains],
+    certificationTier,
+    hasValidAttestation,
+    attestationExpiresAt: attestation?.expiresAt,
+    runtimeTier,
+    runtimeScore,
+    observabilityCeiling,
+    contextPolicyCeiling: contextCeiling,
+    effectiveTier,
+    effectiveScore,
+  };
+}
+
+/**
+ * Calculate effective score from multiple factors.
+ */
+function calculateEffectiveScoreFromFactors(
+  runtimeScore: TrustScore,
+  certificationTier: CertificationTier,
+  observabilityCeiling: RuntimeTier,
+  contextCeiling: RuntimeTier
+): TrustScore {
+  // Apply floor from certification
+  let score = applyACIFloor(runtimeScore, certificationTier);
+
+  // Apply ceiling from certification
+  score = enforceACICeiling(score, certificationTier);
+
+  // Apply observability ceiling
+  const observabilityMax = TIER_TO_MAX_SCORE[observabilityCeiling];
+  score = Math.min(score, observabilityMax);
+
+  // Apply context policy ceiling
+  const contextMax = TIER_TO_MAX_SCORE[contextCeiling];
+  score = Math.min(score, contextMax);
+
+  return score as TrustScore;
 }
 
 /**
@@ -441,20 +561,25 @@ export function enforceACICeiling(
 /**
  * Calculate effective tier combining multiple factors
  *
- * @param parsedACI - Parsed ACI data
- * @param runtimeTier - Current runtime tier
+ * IMPORTANT: certificationTier now comes from attestations, NOT the ACI.
+ *
+ * @param certificationTier - Tier from attestation (or DEFAULT_CERTIFICATION_TIER if none)
+ * @param competenceLevel - Agent's capability level from ACI
+ * @param runtimeTier - Current runtime tier from behavioral scoring
  * @param observabilityCeiling - Ceiling from observability class
  * @param contextCeiling - Ceiling from deployment context
  * @returns Effective tier after all ceilings applied
  */
 export function calculateEffectiveTier(
-  parsedACI: ParsedACI,
+  certificationTier: CertificationTier,
+  competenceLevel: CapabilityLevel,
   runtimeTier: RuntimeTier,
   observabilityCeiling: RuntimeTier,
   contextCeiling: RuntimeTier
 ): RuntimeTier {
   return Math.min(
-    certificationToRuntimeTier(parsedACI.certificationTier),
+    certificationToRuntimeTier(certificationTier),
+    competenceLevelToCeiling(competenceLevel),
     runtimeTier,
     observabilityCeiling,
     contextCeiling
@@ -464,23 +589,25 @@ export function calculateEffectiveTier(
 /**
  * Calculate effective score combining multiple factors
  *
- * @param parsedACI - Parsed ACI data
- * @param runtimeScore - Current runtime score
+ * IMPORTANT: certificationTier now comes from attestations, NOT the ACI.
+ *
+ * @param certificationTier - Tier from attestation (or DEFAULT_CERTIFICATION_TIER if none)
+ * @param runtimeScore - Current runtime score from behavioral scoring
  * @param observabilityCeiling - Ceiling from observability class
  * @param contextCeiling - Ceiling from deployment context
  * @returns Effective score after all ceilings and floors applied
  */
 export function calculateEffectiveScore(
-  parsedACI: ParsedACI,
+  certificationTier: CertificationTier,
   runtimeScore: TrustScore,
   observabilityCeiling: RuntimeTier,
   contextCeiling: RuntimeTier
 ): TrustScore {
-  // Apply floor from certification
-  let score = applyACIFloor(runtimeScore, parsedACI.certificationTier);
+  // Apply floor from certification (attestation-based)
+  let score = applyACIFloor(runtimeScore, certificationTier);
 
-  // Apply ceiling from certification
-  score = enforceACICeiling(score, parsedACI.certificationTier);
+  // Apply ceiling from certification (attestation-based)
+  score = enforceACICeiling(score, certificationTier);
 
   // Apply observability ceiling
   const observabilityMax = TIER_TO_MAX_SCORE[observabilityCeiling];
@@ -491,4 +618,38 @@ export function calculateEffectiveScore(
   score = Math.min(score, contextMax);
 
   return score as TrustScore;
+}
+
+/**
+ * Look up the certification tier for an ACI identity from attestations.
+ *
+ * @param identity - The ACI identity to look up
+ * @param attestations - List of known attestations
+ * @returns The highest valid certification tier, or DEFAULT_CERTIFICATION_TIER
+ */
+export function lookupCertificationTier(
+  identity: ACIIdentity,
+  attestations: Attestation[]
+): CertificationTier {
+  const now = new Date();
+
+  // Find valid attestations for this identity
+  const validAttestations = attestations.filter(
+    (a) => a.subject === identity && a.expiresAt > now
+  );
+
+  if (validAttestations.length === 0) {
+    logger.debug({ identity }, 'No valid attestations found, using default tier');
+    return DEFAULT_CERTIFICATION_TIER;
+  }
+
+  // Return highest tier among valid attestations
+  const maxTier = Math.max(...validAttestations.map((a) => a.trustTier)) as CertificationTier;
+
+  logger.debug(
+    { identity, attestationCount: validAttestations.length, maxTier },
+    'Found valid attestations for identity'
+  );
+
+  return maxTier;
 }

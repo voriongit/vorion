@@ -193,6 +193,7 @@ export {
 export {
   // Types
   type ParsedACI,
+  type ACIIdentity,
   type ACIParseErrorCode,
   type GenerateACIOptions,
   type ACIValidationError,
@@ -201,10 +202,12 @@ export {
   // Constants
   ACI_REGEX,
   ACI_PARTIAL_REGEX,
+  ACI_LEGACY_REGEX,
   // Classes
   ACIParseError,
   // Functions
   parseACI,
+  parseLegacyACI,
   tryParseACI,
   safeParseACI,
   generateACI,
@@ -213,7 +216,10 @@ export {
   isValidACI,
   isACIString,
   updateACI,
+  addACIExtensions,
+  removeACIExtensions,
   incrementACIVersion,
+  getACIIdentity,
   // Zod Schemas
   parsedACISchema,
   aciStringSchema,

@@ -60,9 +60,13 @@ export const standardJWTClaimsSchema = z.object({
  *
  * These claims encode agent capabilities in JWT tokens for use in
  * authentication and authorization flows.
+ *
+ * NOTE: `aci_trust` is OPTIONAL because trust tier is NOT embedded in the ACI.
+ * Trust comes from attestations at runtime. If attestations are included,
+ * the highest valid attestation tier should be used for `aci_trust`.
  */
 export interface ACIJWTClaims extends StandardJWTClaims {
-  /** Full ACI string */
+  /** Full ACI string (immutable identifier, no trust info) */
   aci: string;
   /** Domain bitmask for efficient validation */
   aci_domains: number;
@@ -70,8 +74,12 @@ export interface ACIJWTClaims extends StandardJWTClaims {
   aci_domains_list: DomainCode[];
   /** Capability level */
   aci_level: CapabilityLevel;
-  /** Certification tier */
-  aci_trust: CertificationTier;
+  /**
+   * Certification tier from attestations (OPTIONAL).
+   * This is NOT from the ACI itself - it comes from valid attestations.
+   * Defaults to T0 if no attestations exist.
+   */
+  aci_trust?: CertificationTier;
   /** Registry */
   aci_registry: string;
   /** Organization */
@@ -84,7 +92,7 @@ export interface ACIJWTClaims extends StandardJWTClaims {
   aci_did?: string;
   /** Runtime tier in current context (optional) */
   aci_runtime_tier?: RuntimeTier;
-  /** Attestation summaries (optional) */
+  /** Attestation summaries - source of aci_trust value */
   aci_attestations?: ACIAttestationClaim[];
   /** Effective permission ceiling (optional) */
   aci_permission_ceiling?: number;
@@ -95,10 +103,16 @@ export interface ACIJWTClaims extends StandardJWTClaims {
 /**
  * Attestation claim for JWT.
  */
+/**
+ * Attestation claim for JWT.
+ * Attestations are the SOURCE of trust tier, not the ACI.
+ */
 export interface ACIAttestationClaim {
   /** Issuer DID */
   iss: string;
-  /** Attestation scope */
+  /** Certified trust tier from this attestation */
+  tier: CertificationTier;
+  /** Attestation scope (domains covered) */
   scope: string;
   /** Issued at (Unix timestamp) */
   iat: number;
@@ -131,6 +145,7 @@ export interface ACIConstraintsClaim {
  */
 export const aciAttestationClaimSchema = z.object({
   iss: z.string().min(1),
+  tier: certificationTierSchema,
   scope: z.string().min(1),
   iat: z.number().int().positive(),
   exp: z.number().int().positive(),
@@ -157,7 +172,8 @@ export const aciJWTClaimsSchema = standardJWTClaimsSchema.extend({
   aci_domains: z.number().int().min(0),
   aci_domains_list: domainCodeArraySchema,
   aci_level: capabilityLevelSchema,
-  aci_trust: certificationTierSchema,
+  // aci_trust is optional - comes from attestations, not the ACI itself
+  aci_trust: certificationTierSchema.optional(),
   aci_registry: z.string().min(1),
   aci_org: z.string().min(1),
   aci_class: z.string().min(1),
@@ -238,12 +254,16 @@ export function generateJWTClaims(options: GenerateJWTClaimsOptions): ACIJWTClai
     exp: now + validitySeconds,
     jti: crypto.randomUUID(),
 
-    // ACI claims
+    // ACI claims (identity only - trust comes from attestations)
     aci: parsed.aci,
     aci_domains: parsed.domainsBitmask,
     aci_domains_list: [...parsed.domains],
     aci_level: parsed.level,
-    aci_trust: parsed.certificationTier,
+    // NOTE: aci_trust is derived from attestations, not the ACI
+    // Compute highest valid attestation tier if attestations provided
+    aci_trust: attestations && attestations.length > 0
+      ? (Math.max(...attestations.map((a) => a.tier)) as CertificationTier)
+      : undefined,
     aci_registry: parsed.registry,
     aci_org: parsed.organization,
     aci_class: parsed.agentClass,
@@ -259,9 +279,12 @@ export function generateJWTClaims(options: GenerateJWTClaimsOptions): ACIJWTClai
 /**
  * Generates minimal JWT claims from a parsed ACI.
  *
+ * NOTE: aci_trust is NOT included because trust comes from attestations,
+ * not the ACI itself. Use generateJWTClaims with attestations for full claims.
+ *
  * @param parsed - Parsed ACI
  * @param did - Optional agent DID
- * @returns Minimal ACI JWT claims
+ * @returns Minimal ACI JWT claims (without trust tier)
  */
 export function generateMinimalJWTClaims(parsed: ParsedACI, did?: string): ACIJWTClaims {
   const now = Math.floor(Date.now() / 1000);
@@ -272,7 +295,7 @@ export function generateMinimalJWTClaims(parsed: ParsedACI, did?: string): ACIJW
     aci_domains: parsed.domainsBitmask,
     aci_domains_list: [...parsed.domains],
     aci_level: parsed.level,
-    aci_trust: parsed.certificationTier,
+    // aci_trust intentionally omitted - comes from attestations at runtime
     aci_registry: parsed.registry,
     aci_org: parsed.organization,
     aci_class: parsed.agentClass,
@@ -414,6 +437,9 @@ export function validateJWTClaims(
 /**
  * Extracts capability information from JWT claims.
  *
+ * NOTE: certificationTier is optional because it comes from attestations,
+ * not the ACI. If no attestations are present, it will be undefined.
+ *
  * @param claims - ACI JWT claims
  * @returns Capability information
  */
@@ -421,14 +447,14 @@ export function extractCapabilityFromClaims(claims: ACIJWTClaims): {
   domains: DomainCode[];
   domainsBitmask: number;
   level: CapabilityLevel;
-  certificationTier: CertificationTier;
+  certificationTier?: CertificationTier;
   runtimeTier?: RuntimeTier;
 } {
   return {
     domains: claims.aci_domains_list,
     domainsBitmask: claims.aci_domains,
     level: claims.aci_level,
-    certificationTier: claims.aci_trust,
+    certificationTier: claims.aci_trust, // Optional - from attestations
     runtimeTier: claims.aci_runtime_tier,
   };
 }
@@ -502,12 +528,13 @@ export function claimsMeetRequirements(
     return false;
   }
 
-  // Check certification tier
-  if (
-    requirements.minCertificationTier !== undefined &&
-    claims.aci_trust < requirements.minCertificationTier
-  ) {
-    return false;
+  // Check certification tier (comes from attestations, may be undefined)
+  if (requirements.minCertificationTier !== undefined) {
+    // If no attestation-based trust, treat as T0 (unverified)
+    const effectiveTrust = claims.aci_trust ?? CertificationTier.T0_UNVERIFIED;
+    if (effectiveTrust < requirements.minCertificationTier) {
+      return false;
+    }
   }
 
   // Check runtime tier

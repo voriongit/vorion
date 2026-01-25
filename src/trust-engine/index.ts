@@ -37,7 +37,7 @@ import {
   CapabilityLevel,
   ParsedACI,
   parseACI,
-  calculateEffectivePermission,
+  type ACIIdentity,
 } from '../../packages/contracts/src/aci/index.js';
 
 import {
@@ -706,15 +706,23 @@ export class TrustEngine {
   /**
    * Get trust context with ACI integration
    *
-   * Combines ACI certification layer with Vorion runtime layer to produce
-   * a complete trust context. The effective tier/score is the minimum of
-   * all contributing factors.
+   * Combines ACI identity with attestation-based certification and Vorion
+   * runtime layer to produce a complete trust context. The effective tier/score
+   * is the minimum of all contributing factors.
+   *
+   * IMPORTANT: Trust tier comes from attestations, NOT the ACI itself.
+   * The ACI is just an identifier; trust is computed at runtime.
    *
    * @param entityId - The entity to get trust context for
    * @param aci - The ACI string for the entity
+   * @param attestation - Optional attestation for this entity
    * @returns Complete ACI trust context with effective permissions
    */
-  async getACITrustContext(entityId: ID, aci: string): Promise<ACITrustContext> {
+  async getACITrustContext(
+    entityId: ID,
+    aci: string,
+    attestation?: Attestation
+  ): Promise<ACITrustContext> {
     const parsedACI = parseACI(aci);
     const trustRecord = await this.getScore(entityId);
     const runtimeScore = trustRecord?.score ?? 200;
@@ -727,15 +735,21 @@ export class TrustEngine {
     const observabilityCeiling = getObservabilityCeiling(observability);
     const contextPolicyCeiling = getContextCeiling(context);
 
+    // Certification tier comes from attestation, NOT the ACI
+    const certificationTier = attestation?.trustTier ?? (0 as CertificationTier);
+    const hasValidAttestation = attestation !== null && attestation !== undefined &&
+      attestation.expiresAt > new Date();
+
     const effectiveTier = calculateEffectiveTier(
-      parsedACI,
+      certificationTier,
+      parsedACI.level,
       runtimeTier,
       observabilityCeiling,
       contextPolicyCeiling
     );
 
     const effectiveScore = calculateEffectiveScore(
-      parsedACI,
+      certificationTier,
       runtimeScore,
       observabilityCeiling,
       contextPolicyCeiling
@@ -744,7 +758,9 @@ export class TrustEngine {
     logger.debug(
       {
         entityId,
-        certificationTier: parsedACI.certificationTier,
+        identity: `${parsedACI.registry}.${parsedACI.organization}.${parsedACI.agentClass}`,
+        certificationTier,
+        hasValidAttestation,
         runtimeTier,
         observabilityCeiling,
         contextPolicyCeiling,
@@ -756,13 +772,16 @@ export class TrustEngine {
 
     return {
       aci: parsedACI,
-      certificationTier: parsedACI.certificationTier,
+      identity: `${parsedACI.registry}.${parsedACI.organization}.${parsedACI.agentClass}` as ACIIdentity,
       competenceLevel: parsedACI.level,
-      certifiedDomains: [...parsedACI.domains],
+      operationalDomains: [...parsedACI.domains],
+      certificationTier,
+      hasValidAttestation,
+      attestationExpiresAt: attestation?.expiresAt,
       runtimeTier,
       runtimeScore,
       observabilityCeiling,
-      contextPolicyCeiling,
+      contextPolicyCeiling: contextPolicyCeiling,
       effectiveTier,
       effectiveScore,
     };
@@ -1061,8 +1080,8 @@ export function getNextDecayMilestone(
 // ============================================================================
 
 // Re-export from @vorion/contracts/aci
-export type { CertificationTier, RuntimeTier, CapabilityLevel, ParsedACI };
-export { parseACI, calculateEffectivePermission };
+export type { CertificationTier, RuntimeTier, CapabilityLevel, ParsedACI, ACIIdentity };
+export { parseACI };
 
 // Re-export from aci-integration.ts
 export type {

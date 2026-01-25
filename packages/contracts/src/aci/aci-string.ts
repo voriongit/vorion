@@ -4,9 +4,19 @@
  * Provides parsing, generation, and validation for Agent Classification
  * Identifier (ACI) strings. ACI strings follow the format:
  *
- *   `{registry}.{organization}.{agentClass}:{domains}-L{level}-T{tier}@{version}`
+ *   `{registry}.{organization}.{agentClass}:{domains}-L{level}@{version}[#extensions]`
  *
- * Example: `a3i.acme-corp.invoice-bot:ABF-L3-T2@1.0.0`
+ * Example: `a3i.acme-corp.invoice-bot:ABF-L3@1.0.0`
+ *
+ * **CRITICAL DESIGN PRINCIPLE:**
+ * The ACI is an IMMUTABLE identifier (like a certificate or passport number).
+ * Trust is NOT encoded in the ACI - it is computed at RUNTIME based on:
+ * - Attestations (stored separately)
+ * - Behavioral signals
+ * - Deployment context policies
+ *
+ * The optional extensions (section 5+) are mutable and can be defined by
+ * industry or community standards.
  *
  * @module @vorion/contracts/aci/aci-string
  */
@@ -19,7 +29,6 @@ import {
   isDomainCode,
 } from './domains.js';
 import { CapabilityLevel, isCapabilityLevel } from './levels.js';
-import { CertificationTier, isCertificationTier } from './tiers.js';
 
 // ============================================================================
 // ACI Regex Pattern
@@ -28,7 +37,7 @@ import { CertificationTier, isCertificationTier } from './tiers.js';
 /**
  * Regular expression for parsing ACI strings.
  *
- * Format: `{registry}.{organization}.{agentClass}:{domains}-L{level}-T{tier}@{version}`
+ * Format: `{registry}.{organization}.{agentClass}:{domains}-L{level}@{version}[#extensions]`
  *
  * Groups:
  * 1. registry - Certifying registry (e.g., 'a3i')
@@ -36,15 +45,25 @@ import { CertificationTier, isCertificationTier } from './tiers.js';
  * 3. agentClass - Agent classification (e.g., 'invoice-bot')
  * 4. domains - Capability domain codes (e.g., 'ABF')
  * 5. level - Autonomy level (0-5)
- * 6. tier - Trust tier (0-5)
- * 7. version - Semantic version (e.g., '1.0.0')
+ * 6. version - Semantic version (e.g., '1.0.0')
+ * 7. extensions - Optional comma-separated extensions (e.g., 'gov,audit')
+ *
+ * NOTE: Trust tier is NOT part of the ACI. Trust is computed at runtime
+ * from attestations, behavioral signals, and deployment context.
  */
-export const ACI_REGEX = /^([a-z0-9]+)\.([a-z0-9-]+)\.([a-z0-9-]+):([A-Z]+)-L([0-5])-T([0-5])@(\d+\.\d+\.\d+)$/;
+export const ACI_REGEX = /^([a-z0-9]+)\.([a-z0-9-]+)\.([a-z0-9-]+):([A-Z]+)-L([0-5])@(\d+\.\d+\.\d+)(?:#([a-z0-9,_-]+))?$/;
 
 /**
  * Looser regex for partial ACI validation.
  */
-export const ACI_PARTIAL_REGEX = /^([a-z0-9]+)\.([a-z0-9-]+)\.([a-z0-9-]+):([A-Z]+)-L([0-5])-T([0-5])(@\d+\.\d+\.\d+)?$/;
+export const ACI_PARTIAL_REGEX = /^([a-z0-9]+)\.([a-z0-9-]+)\.([a-z0-9-]+):([A-Z]+)-L([0-5])(@\d+\.\d+\.\d+)?(?:#([a-z0-9,_-]+))?$/;
+
+/**
+ * Legacy regex for parsing old-format ACI strings that include trust tier.
+ * Used for migration/compatibility only.
+ * @deprecated Use ACI_REGEX instead - trust tier should not be in the identifier
+ */
+export const ACI_LEGACY_REGEX = /^([a-z0-9]+)\.([a-z0-9-]+)\.([a-z0-9-]+):([A-Z]+)-L([0-5])-T([0-5])@(\d+\.\d+\.\d+)$/;
 
 // ============================================================================
 // Parsed ACI Interface
@@ -52,6 +71,12 @@ export const ACI_PARTIAL_REGEX = /^([a-z0-9]+)\.([a-z0-9-]+)\.([a-z0-9-]+):([A-Z
 
 /**
  * Parsed components of an ACI string.
+ *
+ * NOTE: Trust tier is NOT included because the ACI is an immutable identifier.
+ * Trust is computed at runtime from:
+ * - Attestations (external certifications)
+ * - Behavioral signals (runtime observations)
+ * - Deployment context policies
  */
 export interface ParsedACI {
   /** Full ACI string */
@@ -68,10 +93,23 @@ export interface ParsedACI {
   readonly domainsBitmask: number;
   /** Autonomy/capability level */
   readonly level: CapabilityLevel;
-  /** Trust/certification tier */
-  readonly certificationTier: CertificationTier;
   /** Semantic version string */
   readonly version: string;
+  /** Optional extensions (mutable, industry/community defined) */
+  readonly extensions: readonly string[];
+}
+
+/**
+ * Unique identity portion of the ACI (immutable core).
+ * Format: {registry}.{organization}.{agentClass}
+ */
+export type ACIIdentity = `${string}.${string}.${string}`;
+
+/**
+ * Extracts the identity portion from a parsed ACI.
+ */
+export function getACIIdentity(parsed: ParsedACI): ACIIdentity {
+  return `${parsed.registry}.${parsed.organization}.${parsed.agentClass}` as ACIIdentity;
 }
 
 /**
@@ -85,8 +123,8 @@ export const parsedACISchema = z.object({
   domains: z.array(z.enum(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'S'])).min(1),
   domainsBitmask: z.number().int().min(0),
   level: z.nativeEnum(CapabilityLevel),
-  certificationTier: z.nativeEnum(CertificationTier),
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
+  extensions: z.array(z.string()).default([]),
 });
 
 // ============================================================================
@@ -121,8 +159,9 @@ export type ACIParseErrorCode =
   | 'INVALID_DOMAINS'
   | 'NO_DOMAINS'
   | 'INVALID_LEVEL'
-  | 'INVALID_TIER'
-  | 'INVALID_VERSION';
+  | 'INVALID_VERSION'
+  | 'INVALID_EXTENSIONS'
+  | 'LEGACY_FORMAT';
 
 // ============================================================================
 // Parsing Functions
@@ -137,28 +176,39 @@ export type ACIParseErrorCode =
  *
  * @example
  * ```typescript
- * const parsed = parseACI('a3i.acme-corp.invoice-bot:ABF-L3-T2@1.0.0');
+ * const parsed = parseACI('a3i.acme-corp.invoice-bot:ABF-L3@1.0.0');
  * // {
- * //   aci: 'a3i.acme-corp.invoice-bot:ABF-L3-T2@1.0.0',
+ * //   aci: 'a3i.acme-corp.invoice-bot:ABF-L3@1.0.0',
  * //   registry: 'a3i',
  * //   organization: 'acme-corp',
  * //   agentClass: 'invoice-bot',
  * //   domains: ['A', 'B', 'F'],
  * //   domainsBitmask: 0x023,
  * //   level: CapabilityLevel.L3_EXECUTE,
- * //   certificationTier: CertificationTier.T2_TESTED,
- * //   version: '1.0.0'
+ * //   version: '1.0.0',
+ * //   extensions: []
  * // }
  * ```
  */
 export function parseACI(aci: string): ParsedACI {
+  // Check for legacy format with embedded trust tier
+  if (ACI_LEGACY_REGEX.test(aci)) {
+    throw new ACIParseError(
+      `Legacy ACI format detected with embedded trust tier. ` +
+        `Trust should not be part of the identifier - use parseLegacyACI() for migration.`,
+      aci,
+      'LEGACY_FORMAT'
+    );
+  }
+
   const match = aci.match(ACI_REGEX);
 
   if (!match) {
     throw new ACIParseError(`Invalid ACI format: ${aci}`, aci, 'INVALID_FORMAT');
   }
 
-  const [, registry, organization, agentClass, domainsStr, levelStr, tierStr, version] = match;
+  const [, registry, organization, agentClass, domainsStr, levelStr, version, extensionsStr] =
+    match;
 
   // Validate and parse domains
   const domainChars = domainsStr!.split('');
@@ -179,9 +229,11 @@ export function parseACI(aci: string): ParsedACI {
   const domains = domainChars as DomainCode[];
   const domainsBitmask = encodeDomains(domains);
 
-  // Parse level and tier
+  // Parse level (no tier - trust is computed at runtime)
   const level = parseInt(levelStr!, 10) as CapabilityLevel;
-  const certificationTier = parseInt(tierStr!, 10) as CertificationTier;
+
+  // Parse optional extensions
+  const extensions = extensionsStr ? extensionsStr.split(',').filter((e) => e.length > 0) : [];
 
   return {
     aci,
@@ -191,8 +243,61 @@ export function parseACI(aci: string): ParsedACI {
     domains,
     domainsBitmask,
     level,
-    certificationTier,
     version: version!,
+    extensions,
+  };
+}
+
+/**
+ * Parses a legacy ACI string that includes trust tier.
+ * Returns the parsed ACI (without tier) plus the extracted tier value.
+ *
+ * @deprecated Use parseACI() - trust should not be in the identifier
+ * @param aci - Legacy ACI string with embedded tier
+ * @returns Parsed ACI plus extracted tier
+ */
+export function parseLegacyACI(aci: string): { parsed: ParsedACI; legacyTier: number } {
+  const match = aci.match(ACI_LEGACY_REGEX);
+
+  if (!match) {
+    throw new ACIParseError(`Invalid legacy ACI format: ${aci}`, aci, 'INVALID_FORMAT');
+  }
+
+  const [, registry, organization, agentClass, domainsStr, levelStr, tierStr, version] = match;
+
+  // Validate and parse domains
+  const domainChars = domainsStr!.split('');
+  const invalidDomains = domainChars.filter((d) => !isDomainCode(d));
+
+  if (invalidDomains.length > 0) {
+    throw new ACIParseError(
+      `Invalid domain codes: ${invalidDomains.join(', ')}`,
+      aci,
+      'INVALID_DOMAINS'
+    );
+  }
+
+  const domains = domainChars as DomainCode[];
+  const domainsBitmask = encodeDomains(domains);
+  const level = parseInt(levelStr!, 10) as CapabilityLevel;
+  const legacyTier = parseInt(tierStr!, 10);
+
+  // Generate the new ACI format (without tier)
+  const newAci = `${registry}.${organization}.${agentClass}:${formatDomainString(domains)}-L${level}@${version}`;
+
+  return {
+    parsed: {
+      aci: newAci,
+      registry: registry!,
+      organization: organization!,
+      agentClass: agentClass!,
+      domains,
+      domainsBitmask,
+      level,
+      version: version!,
+      extensions: [],
+    },
+    legacyTier,
   };
 }
 
@@ -238,6 +343,9 @@ export function safeParseACI(
 
 /**
  * Options for generating an ACI string.
+ *
+ * NOTE: Trust tier is NOT included because ACI is an immutable identifier.
+ * Trust is computed at runtime from attestations and behavioral signals.
  */
 export interface GenerateACIOptions {
   /** Certifying registry (e.g., 'a3i') */
@@ -250,10 +358,10 @@ export interface GenerateACIOptions {
   domains: readonly DomainCode[];
   /** Autonomy level */
   level: CapabilityLevel;
-  /** Trust/certification tier */
-  certificationTier: CertificationTier;
   /** Semantic version */
   version: string;
+  /** Optional extensions (mutable, industry/community defined) */
+  extensions?: readonly string[];
 }
 
 /**
@@ -270,22 +378,25 @@ export interface GenerateACIOptions {
  *   agentClass: 'invoice-bot',
  *   domains: ['A', 'B', 'F'],
  *   level: CapabilityLevel.L3_EXECUTE,
- *   certificationTier: CertificationTier.T2_TESTED,
  *   version: '1.0.0',
  * });
- * // 'a3i.acme-corp.invoice-bot:ABF-L3-T2@1.0.0'
+ * // 'a3i.acme-corp.invoice-bot:ABF-L3@1.0.0'
+ *
+ * // With extensions:
+ * const aciWithExt = generateACI({
+ *   registry: 'a3i',
+ *   organization: 'acme-corp',
+ *   agentClass: 'invoice-bot',
+ *   domains: ['A', 'B', 'F'],
+ *   level: CapabilityLevel.L3_EXECUTE,
+ *   version: '1.0.0',
+ *   extensions: ['gov', 'audit'],
+ * });
+ * // 'a3i.acme-corp.invoice-bot:ABF-L3@1.0.0#gov,audit'
  * ```
  */
 export function generateACI(options: GenerateACIOptions): string {
-  const {
-    registry,
-    organization,
-    agentClass,
-    domains,
-    level,
-    certificationTier,
-    version,
-  } = options;
+  const { registry, organization, agentClass, domains, level, version, extensions = [] } = options;
 
   // Validate components
   if (!/^[a-z0-9]+$/.test(registry)) {
@@ -293,11 +404,15 @@ export function generateACI(options: GenerateACIOptions): string {
   }
 
   if (!/^[a-z0-9-]+$/.test(organization)) {
-    throw new Error(`Invalid organization: ${organization}. Must be lowercase alphanumeric with hyphens.`);
+    throw new Error(
+      `Invalid organization: ${organization}. Must be lowercase alphanumeric with hyphens.`
+    );
   }
 
   if (!/^[a-z0-9-]+$/.test(agentClass)) {
-    throw new Error(`Invalid agent class: ${agentClass}. Must be lowercase alphanumeric with hyphens.`);
+    throw new Error(
+      `Invalid agent class: ${agentClass}. Must be lowercase alphanumeric with hyphens.`
+    );
   }
 
   if (domains.length === 0) {
@@ -313,18 +428,32 @@ export function generateACI(options: GenerateACIOptions): string {
     throw new Error(`Invalid level: ${level}. Must be 0-5.`);
   }
 
-  if (!isCertificationTier(certificationTier)) {
-    throw new Error(`Invalid certification tier: ${certificationTier}. Must be 0-5.`);
-  }
-
   if (!/^\d+\.\d+\.\d+$/.test(version)) {
     throw new Error(`Invalid version: ${version}. Must be semantic version (e.g., 1.0.0).`);
+  }
+
+  // Validate extensions if provided
+  if (extensions.length > 0) {
+    const invalidExtensions = extensions.filter((e) => !/^[a-z0-9_-]+$/.test(e));
+    if (invalidExtensions.length > 0) {
+      throw new Error(
+        `Invalid extensions: ${invalidExtensions.join(', ')}. Must be lowercase alphanumeric with hyphens/underscores.`
+      );
+    }
   }
 
   // Format domains (sorted, deduplicated)
   const domainsStr = formatDomainString(domains);
 
-  return `${registry}.${organization}.${agentClass}:${domainsStr}-L${level}-T${certificationTier}@${version}`;
+  // Build ACI string
+  let aci = `${registry}.${organization}.${agentClass}:${domainsStr}-L${level}@${version}`;
+
+  // Append extensions if present
+  if (extensions.length > 0) {
+    aci += `#${extensions.join(',')}`;
+  }
+
+  return aci;
 }
 
 /**
@@ -335,8 +464,8 @@ export function generateACI(options: GenerateACIOptions): string {
  * @param agentClass - Agent classification
  * @param domains - Capability domains
  * @param level - Autonomy level
- * @param certificationTier - Trust tier
  * @param version - Semantic version
+ * @param extensions - Optional extensions
  * @returns Generated ACI string
  */
 export function generateACIString(
@@ -345,8 +474,8 @@ export function generateACIString(
   agentClass: string,
   domains: readonly DomainCode[],
   level: CapabilityLevel,
-  certificationTier: CertificationTier,
-  version: string
+  version: string,
+  extensions?: readonly string[]
 ): string {
   return generateACI({
     registry,
@@ -354,8 +483,8 @@ export function generateACIString(
     agentClass,
     domains,
     level,
-    certificationTier,
     version,
+    extensions,
   });
 }
 
@@ -409,11 +538,11 @@ export interface ACIValidationResult {
  *
  * @example
  * ```typescript
- * const result = validateACI('a3i.acme-corp.bot:A-L5-T1@1.0.0');
+ * const result = validateACI('a3i.acme-corp.bot:A-L5@1.0.0');
  * // {
  * //   valid: true,
  * //   errors: [],
- * //   warnings: [{ code: 'L5_LOW_TRUST', message: '...' }],
+ * //   warnings: [],
  * //   parsed: { ... }
  * // }
  * ```
@@ -422,52 +551,49 @@ export function validateACI(aci: string): ACIValidationResult {
   const errors: ACIValidationError[] = [];
   const warnings: ACIValidationWarning[] = [];
 
+  // Check for legacy format with embedded trust tier
+  if (ACI_LEGACY_REGEX.test(aci)) {
+    warnings.push({
+      code: 'LEGACY_FORMAT',
+      message:
+        'ACI contains embedded trust tier which is deprecated. ' +
+        'Trust should be computed at runtime, not encoded in the identifier.',
+    });
+  }
+
   try {
     const parsed = parseACI(aci);
 
-    // Check for common issues
+    // Validate capability level constraints
+    // Note: Trust checks are now done at RUNTIME, not in the ACI itself
 
-    // L5 agents should typically have high trust
-    if (
-      parsed.level === CapabilityLevel.L5_SOVEREIGN &&
-      parsed.certificationTier < CertificationTier.T4_VERIFIED
-    ) {
+    // L5 agents operate at maximum autonomy - should be rare
+    if (parsed.level === CapabilityLevel.L5_SOVEREIGN) {
       warnings.push({
-        code: 'L5_LOW_TRUST',
-        message: 'L5 (Sovereign) agents typically require T4+ certification tier',
+        code: 'L5_SOVEREIGN_LEVEL',
+        message:
+          'L5 (Sovereign) level grants maximum autonomy. ' +
+          'Ensure runtime trust policies are configured appropriately.',
       });
     }
 
-    // L4 agents should have at least T3 trust
-    if (
-      parsed.level === CapabilityLevel.L4_AUTONOMOUS &&
-      parsed.certificationTier < CertificationTier.T3_CERTIFIED
-    ) {
+    // Security domain agents require careful runtime trust
+    if (parsed.domains.includes('S')) {
       warnings.push({
-        code: 'L4_LOW_TRUST',
-        message: 'L4 (Autonomous) agents typically require T3+ certification tier',
+        code: 'SECURITY_DOMAIN',
+        message:
+          'Security domain agent. Runtime attestations and behavioral scoring ' +
+          'should be configured to enforce appropriate trust levels.',
       });
     }
 
-    // Security domain with low trust
-    if (
-      parsed.domains.includes('S') &&
-      parsed.certificationTier < CertificationTier.T2_TESTED
-    ) {
+    // Finance domain agents require careful runtime trust
+    if (parsed.domains.includes('F')) {
       warnings.push({
-        code: 'SECURITY_LOW_TRUST',
-        message: 'Security domain agents should have at least T2 certification',
-      });
-    }
-
-    // Finance domain with low trust
-    if (
-      parsed.domains.includes('F') &&
-      parsed.certificationTier < CertificationTier.T2_TESTED
-    ) {
-      warnings.push({
-        code: 'FINANCE_LOW_TRUST',
-        message: 'Finance domain agents should have at least T2 certification',
+        code: 'FINANCE_DOMAIN',
+        message:
+          'Finance domain agent. Runtime attestations and behavioral scoring ' +
+          'should be configured to enforce appropriate trust levels.',
       });
     }
 
@@ -479,7 +605,27 @@ export function validateACI(aci: string): ACIValidationResult {
     };
   } catch (e) {
     if (e instanceof ACIParseError) {
-      errors.push({ code: e.code, message: e.message });
+      // If it's a legacy format error, try parsing with legacy parser
+      if (e.code === 'LEGACY_FORMAT') {
+        try {
+          const { parsed } = parseLegacyACI(aci);
+          warnings.push({
+            code: 'LEGACY_FORMAT_MIGRATED',
+            message:
+              'Legacy ACI migrated to new format. Trust tier has been removed from identifier.',
+          });
+          return {
+            valid: true,
+            errors,
+            warnings,
+            parsed,
+          };
+        } catch {
+          errors.push({ code: e.code, message: e.message });
+        }
+      } else {
+        errors.push({ code: e.code, message: e.message });
+      }
     } else {
       errors.push({ code: 'UNKNOWN_ERROR', message: String(e) });
     }
@@ -531,9 +677,35 @@ export function updateACI(
     agentClass: parsed.agentClass,
     domains: updates.domains ?? parsed.domains,
     level: updates.level ?? parsed.level,
-    certificationTier: updates.certificationTier ?? parsed.certificationTier,
     version: updates.version ?? parsed.version,
+    extensions: updates.extensions ?? parsed.extensions,
   });
+}
+
+/**
+ * Adds extensions to an ACI string.
+ *
+ * @param aci - Original ACI string
+ * @param newExtensions - Extensions to add
+ * @returns New ACI string with extensions added
+ */
+export function addACIExtensions(aci: string, newExtensions: readonly string[]): string {
+  const parsed = parseACI(aci);
+  const allExtensions = [...new Set([...parsed.extensions, ...newExtensions])];
+  return updateACI(aci, { extensions: allExtensions });
+}
+
+/**
+ * Removes extensions from an ACI string.
+ *
+ * @param aci - Original ACI string
+ * @param extensionsToRemove - Extensions to remove
+ * @returns New ACI string with extensions removed
+ */
+export function removeACIExtensions(aci: string, extensionsToRemove: readonly string[]): string {
+  const parsed = parseACI(aci);
+  const remaining = parsed.extensions.filter((e) => !extensionsToRemove.includes(e));
+  return updateACI(aci, { extensions: remaining });
 }
 
 /**
@@ -574,11 +746,9 @@ export function incrementACIVersion(
 /**
  * Zod schema for ACI string validation.
  */
-export const aciStringSchema = z
-  .string()
-  .refine((val) => ACI_REGEX.test(val), {
-    message: 'Invalid ACI format. Expected: registry.org.class:DOMAINS-Ln-Tn@x.y.z',
-  });
+export const aciStringSchema = z.string().refine((val) => ACI_REGEX.test(val), {
+  message: 'Invalid ACI format. Expected: registry.org.class:DOMAINS-Ln@x.y.z[#extensions]',
+});
 
 /**
  * Zod schema for ACI string with parsing transform.
@@ -594,8 +764,8 @@ export const generateACIOptionsSchema = z.object({
   agentClass: z.string().min(1).regex(/^[a-z0-9-]+$/),
   domains: z.array(z.enum(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'S'])).min(1),
   level: z.nativeEnum(CapabilityLevel),
-  certificationTier: z.nativeEnum(CertificationTier),
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
+  extensions: z.array(z.string().regex(/^[a-z0-9_-]+$/)).optional(),
 });
 
 /**

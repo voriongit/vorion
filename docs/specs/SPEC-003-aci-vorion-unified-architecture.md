@@ -1,6 +1,6 @@
 # SPEC-003: ACI-Vorion Unified Architecture
 
-**Version:** 1.0.0-draft
+**Version:** 1.1.0
 **Status:** Draft
 **Authors:** Platform Architecture Team
 **Date:** 2026-01-24
@@ -12,12 +12,75 @@
 
 This specification defines the unified trust architecture that reconciles the **Agent Certification Interface (ACI) v1.1.0** external standard with **Vorion's internal runtime** trust model. The goal is to enable Vorion deployments to participate in the broader ACI ecosystem while preserving Vorion's unique runtime governance capabilities.
 
+### CRITICAL ARCHITECTURAL PRINCIPLE
+
+**The ACI is an IMMUTABLE IDENTIFIER.** Trust is NOT embedded in the ACI itself.
+
+```
+WRONG:  a3i.acme-corp.bot:ABF-L3-T2@1.0.0   (trust tier T2 embedded)
+RIGHT:  a3i.acme-corp.bot:ABF-L3@1.0.0      (no trust tier - computed at runtime)
+```
+
+Trust is computed at RUNTIME from:
+1. **Attestations** — External certifications linked to the ACI identity (stored separately)
+2. **Behavioral Signals** — Runtime observations and scoring
+3. **Deployment Context** — Policies specific to the environment
+
+This separation ensures:
+- The ACI remains stable (like a passport number or certificate ID)
+- Trust can evolve independently of the identifier
+- The same agent can have different trust levels in different deployments
+- Extensions (sections 4+) can be mutable and industry-defined
+
 **Core Design Principles:**
 
-1. **Three-Axis Trust Model** — Certification (what you're certified for), Competence (how skilled you are), Runtime (what we allow now)
-2. **Minimum Permission Principle** — Effective permissions are the intersection of all trust axes
-3. **ACI as Attestation, Vorion as Enforcement** — ACI provides portable certification; Vorion enforces runtime policy
-4. **Graceful Adoption** — Existing Vorion deployments can adopt ACI incrementally
+1. **ACI as Identity, Not Trust** — ACI identifies the agent; trust is computed separately
+2. **Three-Axis Trust Model** — Certification (from attestations), Competence (capability level), Runtime (behavioral scoring)
+3. **Minimum Permission Principle** — Effective permissions are the intersection of all trust axes
+4. **Attestations as Trust Source** — External certifications provide the certification tier, not the ACI string
+5. **Graceful Adoption** — Existing Vorion deployments can adopt ACI incrementally
+
+---
+
+## ACI Format Specification
+
+### Immutable Core Format
+
+```
+{registry}.{organization}.{agentClass}:{domains}-L{level}@{version}[#extensions]
+```
+
+| Section | Name | Mutability | Description |
+|---------|------|------------|-------------|
+| 1 | Registry | Immutable | Certifying registry (e.g., `a3i`) |
+| 2 | Organization | Immutable | Operating organization (e.g., `acme-corp`) |
+| 3 | Agent Class | Immutable | Agent classification (e.g., `invoice-bot`) |
+| 4 | Capability | Stable | `:{domains}-L{level}@{version}` — capability declaration |
+| 5+ | Extensions | Mutable | `#ext1,ext2` — industry/community defined |
+
+### Examples
+
+```
+# Basic ACI (identity + capability)
+a3i.acme-corp.invoice-bot:ABF-L3@1.0.0
+
+# ACI with extensions
+a3i.acme-corp.invoice-bot:ABF-L3@1.0.0#gov,audit,hipaa
+
+# Healthcare agent with compliance extensions
+a3i.healthco.patient-assistant:CH-L2@2.1.0#hipaa,gdpr,phi-handler
+```
+
+### What is NOT in the ACI
+
+The following are computed at RUNTIME, not encoded in the ACI:
+
+| Attribute | Source | Why Not in ACI |
+|-----------|--------|----------------|
+| Trust Tier | Attestations | Trust is dynamic; same agent may have different trust in different deployments |
+| Trust Score | Behavioral scoring | Evolves based on agent behavior |
+| Permissions | Policy evaluation | Context-dependent |
+| Reputation | Historical signals | Changes over time |
 
 ---
 
@@ -108,24 +171,42 @@ The unified model recognizes that "trust" has three independent dimensions:
 
 ### 2.2 Axis Definitions
 
-#### 2.2.1 Certification Axis (ACI Trust Tiers)
+#### 2.2.1 Certification Axis (From Attestations, NOT the ACI)
 
-**Source:** External certification authorities per ACI v1.1.0
+**Source:** External attestations linked to the ACI identity
 
-| Tier | ACI Name | Meaning | Typical Issuance |
-|------|----------|---------|------------------|
-| T0 | Unverified | No certification | Default state |
+> **IMPORTANT:** The certification tier is NOT embedded in the ACI string.
+> It comes from separate attestation records that reference the ACI identity.
+
+| Tier | Name | Meaning | Typical Issuance |
+|------|------|---------|------------------|
+| T0 | Unverified | No attestation exists | Default state |
 | T1 | Registered | Identity verified, no capability claims | Self-registration |
 | T2 | Tested | Passed capability tests | Automated testing |
 | T3 | Certified | Reviewed by certification body | Third-party audit |
 | T4 | Verified | Continuous monitoring verified | Ongoing attestation |
 | T5 | Sovereign | Full trust, human-level authority | Reserved |
 
+**Attestation Structure:**
+```typescript
+interface Attestation {
+  id: string;                    // Unique attestation ID
+  subject: ACIIdentity;          // "a3i.acme-corp.invoice-bot"
+  issuer: string;                // Certifying authority
+  trustTier: CertificationTier;  // T0-T5
+  scope: string[];               // Domains covered
+  issuedAt: Date;
+  expiresAt: Date;
+  evidence: string[];            // References to audit reports, etc.
+}
+```
+
 **Characteristics:**
-- Portable across deployments
-- Issued by external authorities (or self-issued for T0-T1)
-- Slow to change (requires re-certification)
-- Represents "maximum theoretical capability"
+- Separate from ACI identifier (linked by `subject` field)
+- Portable across deployments (carried with attestation, not ACI)
+- Has expiration dates
+- Multiple attestations can exist for same ACI identity
+- Highest valid attestation determines effective certification tier
 
 #### 2.2.2 Competence Axis (Capability Levels)
 
