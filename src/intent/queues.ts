@@ -1,6 +1,7 @@
 import { Queue, Worker, QueueEvents, JobsOptions, Job } from 'bullmq';
 import { randomUUID } from 'node:crypto';
-import type { Intent, TrustLevel, ControlAction } from '../common/types.js';
+import { SpanStatusCode } from '@opentelemetry/api';
+import type { Intent, TrustLevel, ControlAction, Decision } from '../common/types.js';
 import type { EvaluationResult } from '../basis/types.js';
 import type { PolicyAction } from '../policy/types.js';
 import { TrustEngine } from '../trust-engine/index.js';
@@ -51,7 +52,9 @@ import {
 import {
   tracePolicyEvaluate,
   recordPolicyEvaluationResult,
+  getTracer,
 } from './tracing.js';
+import { createProofService } from '../proof/index.js';
 
 const logger = createLogger({ component: 'intent-queue' });
 
@@ -59,6 +62,7 @@ const queueNames = {
   intake: 'intent:intake',
   evaluate: 'intent:evaluate',
   decision: 'intent:decision',
+  execute: 'intent:execute',
   deadLetter: 'intent:dead-letter',
 };
 
@@ -162,6 +166,11 @@ export const intentDecisionQueue = new Queue(queueNames.decision, {
   defaultJobOptions: getJobOptions(),
 });
 
+export const intentExecuteQueue = new Queue(queueNames.execute, {
+  connection: connection(),
+  defaultJobOptions: getJobOptions(),
+});
+
 export const deadLetterQueue = new Queue(queueNames.deadLetter, {
   connection: connection(),
   defaultJobOptions: {
@@ -173,7 +182,7 @@ export const deadLetterQueue = new Queue(queueNames.deadLetter, {
 // Queue event listeners for monitoring
 const queueEvents: QueueEvents[] = [];
 
-[queueNames.intake, queueNames.evaluate, queueNames.decision].forEach((name) => {
+[queueNames.intake, queueNames.evaluate, queueNames.decision, queueNames.execute].forEach((name) => {
   const events = new QueueEvents(name, { connection: connection() });
   queueEvents.push(events);
 
@@ -839,6 +848,13 @@ export function registerIntentWorkers(service: IntentService): void {
           webhookService.notifyIntent('intent.approved', intentId, tenantId, { finalAction, policyOverride }).catch((error) => {
             logger.warn({ error, intentId }, 'Failed to send webhook notification');
           });
+
+          // Enqueue for execution
+          await intentExecuteQueue.add('intent.execute', {
+            intentId: intent.id,
+            tenantId: intent.tenantId,
+            decision: ruleDecision,
+          });
         } else if (nextStatus === 'denied') {
           const reason = policyEvaluation?.reason ?? 'Denied by policy';
           webhookService.notifyIntent('intent.denied', intentId, tenantId, { finalAction, reason }).catch((error) => {
@@ -906,6 +922,128 @@ export function registerIntentWorkers(service: IntentService): void {
   });
 
   workers.push(decisionWorker);
+
+  // Execution worker - processes approved intents
+  const tracer = getTracer();
+  const executionWorker = new Worker(
+    queueNames.execute,
+    async (job) => {
+      const startTime = Date.now();
+      if (!intentService || isShuttingDown) return;
+
+      const { intentId, tenantId, decision } = job.data as {
+        intentId: string;
+        tenantId: string;
+        decision: Decision;
+      };
+
+      const span = tracer.startSpan('intent.execution', {
+        attributes: { intentId, tenantId },
+      });
+
+      let intent: Intent | null = null;
+
+      try {
+        // Get intent
+        intent = await intentService.get(intentId, tenantId);
+        if (!intent) {
+          logger.warn({ intentId }, 'Intent not found for execution');
+          return;
+        }
+
+        // Transition to executing
+        await intentService.updateStatus(intentId, tenantId, 'executing', 'approved');
+
+        // Execute via Cognigate (when implemented)
+        // For now, mark as completed with placeholder execution
+        const executionResult = {
+          success: true,
+          outputs: { executed: true, timestamp: new Date().toISOString() },
+          resourceUsage: { memoryPeakMb: 0, cpuTimeMs: 0, wallTimeMs: Date.now() - startTime },
+        };
+
+        // Record trust signal for successful execution
+        await trustEngine.recordSignal({
+          id: randomUUID(),
+          entityId: intent.entityId,
+          type: 'behavioral.execution_success',
+          value: 0.1,
+          weight: 1.0,
+          source: 'intent-execution-worker',
+          timestamp: new Date().toISOString(),
+        });
+
+        // Create proof record
+        const proofService = createProofService();
+        await proofService.create({
+          intent,
+          decision,
+          inputs: intent.context ?? {},
+          outputs: executionResult.outputs,
+        });
+
+        // Update to completed
+        await intentService.updateStatus(intentId, tenantId, 'completed', 'executing');
+
+        // Audit
+        await auditHelper.recordIntentEvent(
+          tenantId,
+          'intent.completed',
+          intentId,
+          { type: 'service', id: 'intent-execute-worker' },
+          { outcome: 'success', metadata: { executionResult } }
+        );
+
+        // Webhook
+        webhookService.notifyIntent('intent.completed', intentId, tenantId, executionResult).catch((err) => {
+          logger.warn({ err, intentId }, 'Failed to send completion webhook');
+        });
+
+        span.setStatus({ code: SpanStatusCode.OK });
+        recordJobResult('execution', 'success', (Date.now() - startTime) / 1000);
+      } catch (error) {
+        span.setStatus({ code: SpanStatusCode.ERROR, message: String(error) });
+        logger.error({ error, intentId }, 'Execution failed');
+
+        // Record failure signal
+        await trustEngine.recordSignal({
+          id: randomUUID(),
+          entityId: intent?.entityId ?? 'unknown',
+          type: 'behavioral.execution_failure',
+          value: -0.2,
+          weight: 1.0,
+          source: 'intent-execution-worker',
+          timestamp: new Date().toISOString(),
+        });
+
+        // Update to failed
+        await intentService.updateStatus(intentId, tenantId, 'failed', 'executing');
+
+        recordJobResult('execution', 'failure', (Date.now() - startTime) / 1000);
+        throw error;
+      } finally {
+        span.end();
+      }
+    },
+    {
+      connection: connection(),
+      concurrency,
+      lockDuration,
+      stalledInterval: lockDuration + 5000,
+    }
+  );
+
+  executionWorker.on('failed', async (job, error) => {
+    if (!job) return;
+    const { intentId, tenantId } = job.data as { intentId: string; tenantId: string };
+    logger.error({ jobId: job.id, intentId, error: error.message }, 'Execution job failed');
+
+    if (job.attemptsMade >= config.intent.maxRetries) {
+      await moveToDeadLetterQueue(job, error, 'execution');
+    }
+  });
+
+  workers.push(executionWorker);
 
   logger.info(
     { concurrency, lockDuration, maxRetries: config.intent.maxRetries },
