@@ -1,0 +1,378 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@protected": true,
+    
+    "aci": "https://aci.agentanchor.io/ns/aci/v1#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "schema": "https://schema.org/",
+    
+    "AgentClassificationIdentifier": {
+      "@id": "aci:AgentClassificationIdentifier",
+      "@context": {
+        "aci": {
+          "@id": "aci:aciString",
+          "@type": "xsd:string"
+        },
+        "registry": {
+          "@id": "aci:registry",
+          "@type": "xsd:string"
+        },
+        "organization": {
+          "@id": "aci:organization",
+          "@type": "xsd:string"
+        },
+        "agentClass": {
+          "@id": "aci:agentClass",
+          "@type": "xsd:string"
+        },
+        "domains": {
+          "@id": "aci:domains",
+          "@type": "xsd:integer"
+        },
+        "domainList": {
+          "@id": "aci:domainList",
+          "@container": "@list"
+        },
+        "level": {
+          "@id": "aci:capabilityLevel",
+          "@type": "xsd:integer"
+        },
+        "trustTier": {
+          "@id": "aci:trustTier",
+          "@type": "xsd:integer"
+        },
+        "version": {
+          "@id": "aci:version",
+          "@type": "xsd:string"
+        }
+      }
+    },
+    
+    "CapabilityDomain": {
+      "@id": "aci:CapabilityDomain",
+      "@context": {
+        "code": {
+          "@id": "aci:domainCode",
+          "@type": "xsd:string"
+        },
+        "name": {
+          "@id": "schema:name",
+          "@type": "xsd:string"
+        },
+        "description": {
+          "@id": "schema:description",
+          "@type": "xsd:string"
+        },
+        "bitmask": {
+          "@id": "aci:bitmask",
+          "@type": "xsd:integer"
+        }
+      }
+    },
+    
+    "CapabilityLevel": {
+      "@id": "aci:CapabilityLevel",
+      "@context": {
+        "level": {
+          "@id": "aci:levelNumber",
+          "@type": "xsd:integer"
+        },
+        "name": {
+          "@id": "schema:name",
+          "@type": "xsd:string"
+        },
+        "description": {
+          "@id": "schema:description",
+          "@type": "xsd:string"
+        },
+        "humanInvolvement": {
+          "@id": "aci:humanInvolvement",
+          "@type": "xsd:string"
+        }
+      }
+    },
+    
+    "TrustTier": {
+      "@id": "aci:TrustTier",
+      "@context": {
+        "tier": {
+          "@id": "aci:tierNumber",
+          "@type": "xsd:integer"
+        },
+        "name": {
+          "@id": "schema:name",
+          "@type": "xsd:string"
+        },
+        "description": {
+          "@id": "schema:description",
+          "@type": "xsd:string"
+        },
+        "certification": {
+          "@id": "aci:certificationLevel",
+          "@type": "xsd:string"
+        },
+        "scoreRange": {
+          "@id": "aci:scoreRange",
+          "@context": {
+            "min": {
+              "@id": "aci:minScore",
+              "@type": "xsd:integer"
+            },
+            "max": {
+              "@id": "aci:maxScore",
+              "@type": "xsd:integer"
+            }
+          }
+        }
+      }
+    },
+    
+    "ACIAttestation": {
+      "@id": "aci:ACIAttestation",
+      "@context": {
+        "issuer": {
+          "@id": "aci:issuer",
+          "@type": "@id"
+        },
+        "subject": {
+          "@id": "aci:subject",
+          "@type": "@id"
+        },
+        "scope": {
+          "@id": "aci:attestationScope",
+          "@type": "xsd:string"
+        },
+        "trustTier": {
+          "@id": "aci:attestedTrustTier",
+          "@type": "xsd:integer"
+        },
+        "issuedAt": {
+          "@id": "aci:issuedAt",
+          "@type": "xsd:dateTime"
+        },
+        "expiresAt": {
+          "@id": "aci:expiresAt",
+          "@type": "xsd:dateTime"
+        },
+        "evidence": {
+          "@id": "aci:evidence",
+          "@type": "@id"
+        }
+      }
+    },
+    
+    "AgentIdentity": {
+      "@id": "aci:AgentIdentity",
+      "@context": {
+        "aci": {
+          "@id": "aci:aciString",
+          "@type": "xsd:string"
+        },
+        "did": {
+          "@id": "aci:did",
+          "@type": "@id"
+        },
+        "capabilities": {
+          "@id": "aci:capabilities",
+          "@type": "@id"
+        },
+        "attestations": {
+          "@id": "aci:attestations",
+          "@container": "@set"
+        },
+        "serviceEndpoint": {
+          "@id": "aci:serviceEndpoint",
+          "@type": "@id"
+        },
+        "created": {
+          "@id": "schema:dateCreated",
+          "@type": "xsd:dateTime"
+        },
+        "updated": {
+          "@id": "schema:dateModified",
+          "@type": "xsd:dateTime"
+        }
+      }
+    },
+    
+    "aciCapabilities": {
+      "@id": "aci:aciCapabilities",
+      "@type": "@id"
+    },
+    
+    "aciAttestations": {
+      "@id": "aci:aciAttestations",
+      "@container": "@set"
+    }
+  },
+  
+  "domains": [
+    {
+      "@type": "CapabilityDomain",
+      "code": "A",
+      "name": "Administration",
+      "description": "System administration, user management",
+      "bitmask": 1
+    },
+    {
+      "@type": "CapabilityDomain",
+      "code": "B",
+      "name": "Business",
+      "description": "Business logic, workflows, approvals",
+      "bitmask": 2
+    },
+    {
+      "@type": "CapabilityDomain",
+      "code": "C",
+      "name": "Communications",
+      "description": "Email, messaging, notifications",
+      "bitmask": 4
+    },
+    {
+      "@type": "CapabilityDomain",
+      "code": "D",
+      "name": "Data",
+      "description": "Data processing, analytics, reporting",
+      "bitmask": 8
+    },
+    {
+      "@type": "CapabilityDomain",
+      "code": "E",
+      "name": "External",
+      "description": "Third-party integrations, APIs",
+      "bitmask": 16
+    },
+    {
+      "@type": "CapabilityDomain",
+      "code": "F",
+      "name": "Finance",
+      "description": "Financial operations, payments, accounting",
+      "bitmask": 32
+    },
+    {
+      "@type": "CapabilityDomain",
+      "code": "G",
+      "name": "Governance",
+      "description": "Policy, compliance, oversight",
+      "bitmask": 64
+    },
+    {
+      "@type": "CapabilityDomain",
+      "code": "H",
+      "name": "Hospitality",
+      "description": "Venue, events, catering management",
+      "bitmask": 128
+    },
+    {
+      "@type": "CapabilityDomain",
+      "code": "I",
+      "name": "Infrastructure",
+      "description": "Compute, storage, networking",
+      "bitmask": 256
+    },
+    {
+      "@type": "CapabilityDomain",
+      "code": "S",
+      "name": "Security",
+      "description": "Authentication, authorization, audit",
+      "bitmask": 512
+    }
+  ],
+  
+  "levels": [
+    {
+      "@type": "CapabilityLevel",
+      "level": 0,
+      "name": "Observe",
+      "description": "Read-only, monitoring",
+      "humanInvolvement": "None required"
+    },
+    {
+      "@type": "CapabilityLevel",
+      "level": 1,
+      "name": "Advise",
+      "description": "Can suggest actions, provide recommendations",
+      "humanInvolvement": "Review recommended"
+    },
+    {
+      "@type": "CapabilityLevel",
+      "level": 2,
+      "name": "Draft",
+      "description": "Can prepare changes, stage for review",
+      "humanInvolvement": "Approval required"
+    },
+    {
+      "@type": "CapabilityLevel",
+      "level": 3,
+      "name": "Execute",
+      "description": "Can execute actions after human approval",
+      "humanInvolvement": "Approval required"
+    },
+    {
+      "@type": "CapabilityLevel",
+      "level": 4,
+      "name": "Autonomous",
+      "description": "Self-directed within defined bounds",
+      "humanInvolvement": "Exception handling"
+    },
+    {
+      "@type": "CapabilityLevel",
+      "level": 5,
+      "name": "Sovereign",
+      "description": "Full autonomy, highest certification required",
+      "humanInvolvement": "Emergency only"
+    }
+  ],
+  
+  "tiers": [
+    {
+      "@type": "TrustTier",
+      "tier": 0,
+      "name": "Unverified",
+      "description": "No external verification",
+      "certification": "None",
+      "scoreRange": { "min": 0, "max": 99 }
+    },
+    {
+      "@type": "TrustTier",
+      "tier": 1,
+      "name": "Registered",
+      "description": "Organization identity verified",
+      "certification": "Identity only",
+      "scoreRange": { "min": 100, "max": 299 }
+    },
+    {
+      "@type": "TrustTier",
+      "tier": 2,
+      "name": "Tested",
+      "description": "Passed automated capability tests",
+      "certification": "Capability tests",
+      "scoreRange": { "min": 300, "max": 499 }
+    },
+    {
+      "@type": "TrustTier",
+      "tier": 3,
+      "name": "Certified",
+      "description": "Independent audit completed",
+      "certification": "Third-party audit",
+      "scoreRange": { "min": 500, "max": 699 }
+    },
+    {
+      "@type": "TrustTier",
+      "tier": 4,
+      "name": "Verified",
+      "description": "Continuous behavioral monitoring",
+      "certification": "Continuous monitoring",
+      "scoreRange": { "min": 700, "max": 899 }
+    },
+    {
+      "@type": "TrustTier",
+      "tier": 5,
+      "name": "Sovereign",
+      "description": "Highest assurance level",
+      "certification": "Full certification + insurance",
+      "scoreRange": { "min": 900, "max": 1000 }
+    }
+  ]
+}
