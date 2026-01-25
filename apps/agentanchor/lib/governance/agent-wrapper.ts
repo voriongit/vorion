@@ -32,7 +32,8 @@ import {
 } from './types';
 
 // Re-export canonical types for backwards compatibility
-export { CanonicalAgentConfig, AgentLifecycleStatus };
+// Re-export canonical types for backwards compatibility
+export type { CanonicalAgentConfig, AgentLifecycleStatus };
 
 import { buildTrustContext, assessRisk, evaluateAction } from './trust';
 import { buildSystemPrompt, buildPersonaConfig, injectContextToPrompt, DEFAULT_PERSONAS } from './persona';

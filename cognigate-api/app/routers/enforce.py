@@ -14,16 +14,93 @@ import time
 import structlog
 from fastapi import APIRouter
 
-from app.models.enforce import EnforceRequest, EnforceResponse, PolicyViolation
+from app.models.enforce import EnforceRequest, EnforceResponse, PolicyViolation, RigorMode
 from app.models.intent import StructuredPlan
 from app.core.velocity import check_velocity, record_action, VelocityCheckResult
 from app.core.circuit_breaker import (
     circuit_breaker,
     CircuitState,
 )
+from app.core.cache import cache_manager
+from app.core.async_logger import async_log_queue
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+
+# Rigor mode mapping by trust level
+# L0-L2: STRICT (low trust needs maximum scrutiny)
+# L3: STANDARD (medium trust gets standard enforcement)
+# L4-L5: LITE (high trust can skip non-critical checks)
+DEFAULT_RIGOR_BY_TRUST = {
+    0: RigorMode.STRICT,    # L0: Sandbox
+    1: RigorMode.STRICT,    # L1: Supervised
+    2: RigorMode.STRICT,    # L2: Assisted
+    3: RigorMode.STANDARD,  # L3: Standard/Trusted
+    4: RigorMode.LITE,      # L4: Trusted/Certified
+}
+
+
+def determine_rigor_mode(trust_level: int, requested_mode: RigorMode | None) -> RigorMode:
+    """
+    Determine enforcement rigor mode.
+
+    Args:
+        trust_level: Entity's trust level (0-4)
+        requested_mode: Explicitly requested mode (optional)
+
+    Returns:
+        RigorMode to use for enforcement
+    """
+    if requested_mode:
+        return requested_mode
+
+    # Auto-select based on trust level
+    return DEFAULT_RIGOR_BY_TRUST.get(trust_level, RigorMode.STANDARD)
+
+
+# Policy severity classification for rigor filtering
+CRITICAL_POLICIES = {
+    "basis-core-security",      # Security violations
+    "basis-risk-thresholds",    # Risk limits
+}
+
+STANDARD_POLICIES = {
+    "basis-core-security",
+    "basis-data-protection",
+    "basis-risk-thresholds",
+}
+
+# STRICT includes all policies (current behavior)
+
+
+def filter_policies_by_rigor(
+    policies: list[str],
+    rigor: RigorMode
+) -> list[str]:
+    """
+    Filter policy list based on rigor mode.
+
+    Args:
+        policies: Full list of policies to check
+        rigor: Rigor mode
+
+    Returns:
+        Filtered list of policies to evaluate
+    """
+    if rigor == RigorMode.STRICT:
+        # STRICT: Check all policies
+        return policies
+
+    if rigor == RigorMode.STANDARD:
+        # STANDARD: Check all standard policies
+        return [p for p in policies if p in STANDARD_POLICIES]
+
+    if rigor == RigorMode.LITE:
+        # LITE: Check only critical policies
+        return [p for p in policies if p in CRITICAL_POLICIES]
+
+    return policies
 
 
 # Mock BASIS policies (in production, loaded from basis-core)
@@ -168,7 +245,8 @@ async def enforce_policies(request: EnforceRequest) -> EnforceResponse:
     """
     start_time = time.perf_counter()
 
-    logger.info(
+    # Use async logger for high-frequency informational logs
+    await async_log_queue.info(
         "enforce_request",
         entity_id=request.entity_id,
         plan_id=request.plan.plan_id,
@@ -204,13 +282,14 @@ async def enforce_policies(request: EnforceRequest) -> EnforceResponse:
             constraints_evaluated=1,
             trust_impact=-100,
             requires_approval=False,
+            rigor_mode=RigorMode.STRICT,  # Circuit breaker always uses STRICT
             duration_ms=duration_ms,
         )
 
     # ========================================================================
     # LAYER 2: VELOCITY CAP CHECK (L0-L2 Rate Limiting)
     # ========================================================================
-    velocity_result = check_velocity(request.entity_id, request.trust_level)
+    velocity_result = await check_velocity(request.entity_id, request.trust_level)
     if not velocity_result.allowed:
         logger.warning(
             "enforce_velocity_blocked",
@@ -245,21 +324,62 @@ async def enforce_policies(request: EnforceRequest) -> EnforceResponse:
             constraints_evaluated=1,
             trust_impact=-5,
             requires_approval=False,
+            rigor_mode=RigorMode.STRICT,  # Velocity violations always use STRICT
             duration_ms=duration_ms,
         )
 
     # Record successful velocity check (action will be recorded after decision)
+
     # ========================================================================
-    # LAYER 3: POLICY EVALUATION
+    # DETERMINE RIGOR MODE (Proportional enforcement based on trust)
+    # ========================================================================
+    rigor_mode = determine_rigor_mode(request.trust_level, request.rigor_mode)
+
+    await async_log_queue.info(
+        "enforce_rigor_mode",
+        entity_id=request.entity_id,
+        trust_level=request.trust_level,
+        rigor_mode=rigor_mode.value,
+    )
+
+    # ========================================================================
+    # CACHE CHECK: Try to get cached policy result
+    # ========================================================================
+    policies_to_check = request.policy_ids or list(MOCK_POLICIES.keys())
+
+    # Filter policies based on rigor mode
+    policies_to_check = filter_policies_by_rigor(policies_to_check, rigor_mode)
+
+    # Cache key includes rigor mode since different modes = different results
+    cache_key_suffix = f"{request.plan.plan_id}_{rigor_mode.value}"
+    cached_result = await cache_manager.get_policy_result(
+        plan_id=cache_key_suffix,
+        policy_ids=policies_to_check,
+        trust_level=request.trust_level
+    )
+
+    if cached_result:
+        await async_log_queue.info(
+            "enforce_cache_hit",
+            entity_id=request.entity_id,
+            plan_id=request.plan.plan_id,
+        )
+        # Record action for velocity tracking
+        await record_action(request.entity_id)
+
+        # Reconstruct EnforceResponse from cached data
+        cached_result["duration_ms"] = (time.perf_counter() - start_time) * 1000
+        cached_result["rigor_mode"] = rigor_mode  # Add rigor mode
+        return EnforceResponse(**cached_result)
+
+    # ========================================================================
+    # LAYER 3: POLICY EVALUATION (Cache miss - evaluate policies)
     # ========================================================================
 
     violations: list[PolicyViolation] = []
     policies_evaluated: list[str] = []
     constraints_evaluated = 0
     requires_approval = False
-
-    # Determine which policies to evaluate
-    policies_to_check = request.policy_ids or list(MOCK_POLICIES.keys())
 
     for policy_id in policies_to_check:
         if policy_id not in MOCK_POLICIES:
@@ -311,7 +431,7 @@ async def enforce_policies(request: EnforceRequest) -> EnforceResponse:
     # LAYER 4: RECORD METRICS & VELOCITY
     # ========================================================================
     # Record action for velocity tracking
-    record_action(request.entity_id)
+    await record_action(request.entity_id)
 
     # Record request for circuit breaker monitoring
     circuit_breaker.record_request(
@@ -320,7 +440,7 @@ async def enforce_policies(request: EnforceRequest) -> EnforceResponse:
         was_blocked=not allowed,
     )
 
-    logger.info(
+    await async_log_queue.info(
         "enforce_verdict",
         entity_id=request.entity_id,
         plan_id=request.plan.plan_id,
@@ -330,7 +450,7 @@ async def enforce_policies(request: EnforceRequest) -> EnforceResponse:
         duration_ms=duration_ms,
     )
 
-    return EnforceResponse(
+    response = EnforceResponse(
         intent_id=f"int_{request.plan.plan_id[5:]}",  # Derive from plan_id
         plan_id=request.plan.plan_id,
         allowed=allowed,
@@ -341,8 +461,19 @@ async def enforce_policies(request: EnforceRequest) -> EnforceResponse:
         trust_impact=trust_impact,
         requires_approval=requires_approval,
         approval_timeout="4h" if requires_approval else None,
+        rigor_mode=rigor_mode,
         duration_ms=duration_ms,
     )
+
+    # Cache the result for future requests (convert Pydantic to dict for serialization)
+    await cache_manager.set_policy_result(
+        plan_id=cache_key_suffix,  # Use same key as cache check (includes rigor mode)
+        policy_ids=policies_to_check,
+        trust_level=request.trust_level,
+        result=response.model_dump(mode='json', exclude={'verdict_id', 'duration_ms', 'decided_at'})
+    )
+
+    return response
 
 
 @router.get("/enforce/policies")

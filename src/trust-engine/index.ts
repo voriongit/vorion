@@ -36,7 +36,8 @@ export const TRUST_THRESHOLDS: Record<TrustLevel, { min: number; max: number }> 
   1: { min: 200, max: 399 },
   2: { min: 400, max: 599 },
   3: { min: 600, max: 799 },
-  4: { min: 800, max: 1000 },
+  4: { min: 800, max: 949 },
+  5: { min: 950, max: 1000 },
 };
 
 /**
@@ -48,6 +49,7 @@ export const TRUST_LEVEL_NAMES: Record<TrustLevel, string> = {
   2: 'Trusted',
   3: 'Verified',
   4: 'Privileged',
+  5: 'Mission Critical',
 };
 
 /**
@@ -557,7 +559,7 @@ export class TrustEngine {
 
     for (const signal of signals) {
       const age = now - new Date(signal.timestamp).getTime();
-      const timeWeight = Math.exp(-age / (7 * 24 * 60 * 60 * 1000)); // 7-day half-life
+      const timeWeight = Math.exp(-age / (182 * 24 * 60 * 60 * 1000)); // 182-day half-life
       const signalWeight = signal.weight ?? 1.0;
       const combinedWeight = timeWeight * signalWeight;
 

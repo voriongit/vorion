@@ -27,12 +27,16 @@ import {
 } from '@vorion/contracts';
 
 // Re-export canonical types for backwards compatibility
-export {
+// Re-export canonical types for backwards compatibility
+export type {
   CanonicalAgentTask,
   TaskPriority,
   CanonicalTaskStatus,
   CanonicalTaskSource,
   CanonicalCollaborationMode,
+};
+
+export {
   agentTaskSchema,
   taskPrioritySchema,
   taskStatusSchema,

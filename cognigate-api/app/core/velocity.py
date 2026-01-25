@@ -14,11 +14,11 @@ All limits are per-entity, meaning each agent has its own quota.
 """
 
 import time
+import asyncio
 import structlog
 from typing import Optional
 from dataclasses import dataclass, field
-from collections import defaultdict
-from threading import Lock
+from collections import defaultdict, deque
 from enum import Enum
 
 from app.config import get_settings
@@ -48,7 +48,7 @@ class VelocityLimit:
 class VelocityState:
     """Tracks velocity state for an entity."""
     entity_id: str
-    action_timestamps: list = field(default_factory=list)
+    action_timestamps: deque = field(default_factory=lambda: deque(maxlen=100000))  # Use deque for O(1) operations
     total_actions: int = 0
     violations: int = 0
     last_violation: Optional[float] = None
@@ -106,17 +106,17 @@ VELOCITY_LIMITS_BY_TRUST = {
 
 class VelocityTracker:
     """
-    Thread-safe velocity tracker for all entities.
+    Async-safe velocity tracker for all entities.
 
     In production, this would be backed by Redis for distributed tracking.
-    Current implementation uses in-memory storage.
+    Current implementation uses in-memory storage with async/await patterns.
     """
 
     def __init__(self):
         self._states: dict[str, VelocityState] = defaultdict(
             lambda: VelocityState(entity_id="")
         )
-        self._lock = Lock()
+        self._lock = asyncio.Lock()
 
     def _get_state(self, entity_id: str) -> VelocityState:
         """Get or create state for an entity."""
@@ -138,7 +138,7 @@ class VelocityTracker:
         cutoff = now - window_seconds
         return sum(1 for ts in state.action_timestamps if ts > cutoff)
 
-    def check_velocity(
+    async def check_velocity(
         self,
         entity_id: str,
         trust_level: int = 1,
@@ -153,7 +153,7 @@ class VelocityTracker:
         Returns:
             VelocityCheckResult with allowed=True/False
         """
-        with self._lock:
+        async with self._lock:
             state = self._get_state(entity_id)
             now = time.time()
 
@@ -218,16 +218,16 @@ class VelocityTracker:
                 message="Within velocity limits",
             )
 
-    def record_action(self, entity_id: str):
+    async def record_action(self, entity_id: str):
         """Record an action for an entity."""
-        with self._lock:
+        async with self._lock:
             state = self._get_state(entity_id)
             state.action_timestamps.append(time.time())
             state.total_actions += 1
 
-    def throttle_entity(self, entity_id: str, duration_seconds: float = 300):
+    async def throttle_entity(self, entity_id: str, duration_seconds: float = 300):
         """Manually throttle an entity."""
-        with self._lock:
+        async with self._lock:
             state = self._get_state(entity_id)
             state.is_throttled = True
             state.throttle_until = time.time() + duration_seconds
@@ -237,17 +237,17 @@ class VelocityTracker:
                 duration_seconds=duration_seconds,
             )
 
-    def unthrottle_entity(self, entity_id: str):
+    async def unthrottle_entity(self, entity_id: str):
         """Remove throttle from an entity."""
-        with self._lock:
+        async with self._lock:
             state = self._get_state(entity_id)
             state.is_throttled = False
             state.throttle_until = None
             logger.info("entity_unthrottled", entity_id=entity_id)
 
-    def get_stats(self, entity_id: str) -> dict:
+    async def get_stats(self, entity_id: str) -> dict:
         """Get velocity statistics for an entity."""
-        with self._lock:
+        async with self._lock:
             state = self._get_state(entity_id)
             now = time.time()
 
@@ -262,31 +262,35 @@ class VelocityTracker:
                 "actions_last_day": self._count_actions_in_window(state, 86400),
             }
 
-    def get_all_stats(self) -> list[dict]:
+    async def get_all_stats(self) -> list[dict]:
         """Get velocity statistics for all entities."""
-        with self._lock:
-            return [self.get_stats(eid) for eid in self._states.keys()]
+        async with self._lock:
+            # Use await for async get_stats
+            stats = []
+            for eid in self._states.keys():
+                stats.append(await self.get_stats(eid))
+            return stats
 
 
 # Global velocity tracker instance
 velocity_tracker = VelocityTracker()
 
 
-def check_velocity(entity_id: str, trust_level: int = 1) -> VelocityCheckResult:
+async def check_velocity(entity_id: str, trust_level: int = 1) -> VelocityCheckResult:
     """Check velocity limits for an entity."""
-    return velocity_tracker.check_velocity(entity_id, trust_level)
+    return await velocity_tracker.check_velocity(entity_id, trust_level)
 
 
-def record_action(entity_id: str):
+async def record_action(entity_id: str):
     """Record an action for velocity tracking."""
-    velocity_tracker.record_action(entity_id)
+    await velocity_tracker.record_action(entity_id)
 
 
-def throttle_entity(entity_id: str, duration_seconds: float = 300):
+async def throttle_entity(entity_id: str, duration_seconds: float = 300):
     """Throttle an entity."""
-    velocity_tracker.throttle_entity(entity_id, duration_seconds)
+    await velocity_tracker.throttle_entity(entity_id, duration_seconds)
 
 
-def get_velocity_stats(entity_id: str) -> dict:
+async def get_velocity_stats(entity_id: str) -> dict:
     """Get velocity stats for an entity."""
-    return velocity_tracker.get_stats(entity_id)
+    return await velocity_tracker.get_stats(entity_id)

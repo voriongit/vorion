@@ -3,6 +3,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { RiskLevel, CouncilDecision, ValidatorVote } from './types'
+import { canonicalToNumericRisk } from './risk-assessment'
 import { createPrecedent } from './precedent-service'
 
 export type EscalationStatus = 'pending' | 'approved' | 'denied' | 'modified' | 'timeout' | 'cancelled'
@@ -252,7 +253,7 @@ export async function respondToEscalation(
 
   // Create precedent for significant decisions
   let precedentId: string | undefined
-  if (escalation.risk_level >= 3) {
+  if (typeof escalation.risk_level === 'number' ? escalation.risk_level >= 3 : canonicalToNumericRisk(escalation.risk_level) >= 3) {
     const outcomeMap: Record<HumanDecision, 'approved' | 'denied' | 'escalated'> = {
       approve: 'approved',
       deny: 'denied',
@@ -421,8 +422,9 @@ export async function getEscalationStats(): Promise<{
 // Helper functions
 
 function determinePriority(riskLevel: RiskLevel): EscalationPriority {
-  if (riskLevel === 4) return 'critical'
-  if (riskLevel === 3) return 'high'
+  const numericRisk = typeof riskLevel === 'number' ? riskLevel : canonicalToNumericRisk(riskLevel)
+  if (numericRisk === 4) return 'critical'
+  if (numericRisk === 3) return 'high'
   return 'normal'
 }
 

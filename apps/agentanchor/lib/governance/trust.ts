@@ -10,6 +10,8 @@ import {
   GovernanceDecision,
   TRUST_TIER_THRESHOLDS,
   RISK_AUTONOMY_REQUIREMENTS,
+  TrustBand,
+  LEGACY_GOVERNANCE_TIER_TO_BAND,
 } from './types';
 
 // =============================================================================
@@ -106,9 +108,12 @@ export function calculateDecay(rawScore: number, lastActivity: Date): {
 export function buildTrustContext(score: number, lastActivity: Date): TrustContext {
   const decay = calculateDecay(score, lastActivity);
 
+  const tier = getTrustTier(decay.effectiveScore);
+
   return {
     score,
-    tier: getTrustTier(decay.effectiveScore),
+    tier,
+    band: LEGACY_GOVERNANCE_TIER_TO_BAND[tier],
     lastActivity,
     decayApplied: !decay.inGracePeriod,
     effectiveScore: decay.effectiveScore,

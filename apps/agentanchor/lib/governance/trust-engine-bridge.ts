@@ -16,7 +16,7 @@ import {
   AGENT_SIGNAL_TYPES,
 } from '@/lib/trust/trust-engine-service'
 import type { TrustLevel } from '@vorionsys/atsf-core/types'
-import { TrustContext, TrustTier, RiskLevel, GovernanceDecision } from './types'
+import { TrustContext, TrustTier, RiskLevel, GovernanceDecision, LEGACY_GOVERNANCE_TIER_TO_BAND } from './types'
 import type { RoutingPath } from './matrix-router'
 
 /**
@@ -75,6 +75,7 @@ export function trustRecordToContext(record: TrustRecordExt): TrustContext {
   return {
     score: record.score,
     tier: LEVEL_TO_TIER[record.level] || 'untrusted',
+    band: LEGACY_GOVERNANCE_TIER_TO_BAND[LEVEL_TO_TIER[record.level] || 'untrusted'],
     lastActivity: new Date(record.lastCalculatedAt),
     decayApplied: false, // Trust engine handles decay internally
     effectiveScore: record.score, // Already calculated by engine

@@ -24,6 +24,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Generate natural language text for various purposes',
     riskLevel: 'low',
     requiredTrustTier: 'untrusted',
+    requiredTrustBand: 'T0_UNTRUSTED',
   },
   code_assistance: {
     id: 'code_assistance',
@@ -31,6 +32,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Help with programming tasks, code review, and debugging',
     riskLevel: 'medium',
     requiredTrustTier: 'provisional',
+    requiredTrustBand: 'T1_SUPERVISED',
     toolDefinition: {
       name: 'code_assist',
       description: 'Analyze, write, or debug code',
@@ -52,6 +54,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Analyze datasets, generate insights, and create visualizations',
     riskLevel: 'medium',
     requiredTrustTier: 'established',
+    requiredTrustBand: 'T3_TRUSTED',
     toolDefinition: {
       name: 'analyze_data',
       description: 'Analyze data and generate insights',
@@ -72,6 +75,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Handle customer inquiries, issues, and service requests',
     riskLevel: 'medium',
     requiredTrustTier: 'established',
+    requiredTrustBand: 'T3_TRUSTED',
   },
   content_writing: {
     id: 'content_writing',
@@ -79,6 +83,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Create articles, blog posts, marketing copy, and other content',
     riskLevel: 'low',
     requiredTrustTier: 'provisional',
+    requiredTrustBand: 'T1_SUPERVISED',
   },
   translation: {
     id: 'translation',
@@ -86,6 +91,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Translate text between languages while preserving meaning',
     riskLevel: 'low',
     requiredTrustTier: 'untrusted',
+    requiredTrustBand: 'T0_UNTRUSTED',
     toolDefinition: {
       name: 'translate',
       description: 'Translate text between languages',
@@ -107,6 +113,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Condense long content into concise summaries',
     riskLevel: 'low',
     requiredTrustTier: 'untrusted',
+    requiredTrustBand: 'T0_UNTRUSTED',
   },
   question_answering: {
     id: 'question_answering',
@@ -114,6 +121,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Answer questions based on provided context or knowledge',
     riskLevel: 'low',
     requiredTrustTier: 'untrusted',
+    requiredTrustBand: 'T0_UNTRUSTED',
   },
   creative_writing: {
     id: 'creative_writing',
@@ -121,6 +129,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Create stories, poems, scripts, and other creative content',
     riskLevel: 'low',
     requiredTrustTier: 'provisional',
+    requiredTrustBand: 'T1_SUPERVISED',
   },
   technical_documentation: {
     id: 'technical_documentation',
@@ -128,6 +137,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Create and maintain technical documentation, API docs, and guides',
     riskLevel: 'low',
     requiredTrustTier: 'established',
+    requiredTrustBand: 'T3_TRUSTED',
   },
   web_search: {
     id: 'web_search',
@@ -135,6 +145,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Search the web for information and resources',
     riskLevel: 'medium',
     requiredTrustTier: 'established',
+    requiredTrustBand: 'T3_TRUSTED',
     toolDefinition: {
       name: 'web_search',
       description: 'Search the web for information',
@@ -155,6 +166,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Read, write, and manage files within allowed directories',
     riskLevel: 'high',
     requiredTrustTier: 'trusted',
+    requiredTrustBand: 'T3_TRUSTED',
     toolDefinition: {
       name: 'file_ops',
       description: 'Perform file operations',
@@ -175,6 +187,7 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, Capability> = {
     description: 'Make API calls to external services',
     riskLevel: 'high',
     requiredTrustTier: 'verified',
+    requiredTrustBand: 'T4_AUTONOMOUS',
     toolDefinition: {
       name: 'api_call',
       description: 'Make HTTP requests to APIs',
@@ -212,7 +225,7 @@ export function canUseCapability(capabilityId: CapabilityId, trust: TrustContext
     return { allowed: false, reason: `Unknown capability: ${capabilityId}` };
   }
 
-  if (!tierMeetsRequirement(trust.tier, capability.requiredTrustTier)) {
+  if (!tierMeetsRequirement(trust.tier, capability.requiredTrustTier || 'untrusted')) {
     return {
       allowed: false,
       reason: `Requires ${capability.requiredTrustTier} trust tier (current: ${trust.tier})`,

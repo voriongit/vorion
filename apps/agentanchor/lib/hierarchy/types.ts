@@ -35,12 +35,16 @@ import {
 } from '@vorion/contracts';
 
 // Re-export canonical types for backwards compatibility
-export {
+// Re-export canonical types for backwards compatibility
+export type {
   CanonicalHierarchyLevel,
   CanonicalAuthorityScope,
   CanonicalAuthorityScopeInterface,
   CanonicalAgentTask,
   CanonicalAgentMetrics,
+};
+
+export {
   CANONICAL_HIERARCHY_LEVELS,
   CANONICAL_HIERARCHY_ORDER,
   HIERARCHY_TIERS,

@@ -4,6 +4,11 @@
  * Defines audit events, records, and related types for comprehensive
  * audit logging with chain integrity.
  *
+ * Note: These audit types are designed to work with both legacy types
+ * from src/common/types.ts and canonical types from @vorion/contracts.
+ * For canonical proof/evidence types, see packages/contracts/src/v2/evidence.ts
+ * and packages/contracts/src/v2/proof-event.ts.
+ *
  * @packageDocumentation
  */
 
@@ -129,6 +134,7 @@ export const TARGET_TYPES = [
   'policy',
   'escalation',
   'entity',
+  'agent', // Added for canonical alignment
   'tenant',
   'user',
   'system',

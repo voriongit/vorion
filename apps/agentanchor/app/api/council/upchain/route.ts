@@ -7,6 +7,8 @@ import {
   getDecisionHistory,
   assessRisk,
   getRequiredApproval,
+  numericToCanonicalRisk,
+  NumericRiskLevel,
 } from '@/lib/council'
 
 export const dynamic = 'force-dynamic'
@@ -105,7 +107,7 @@ export async function POST(request: NextRequest) {
           confidence_score: result.decision?.votes?.length
             ? result.decision.votes.reduce((sum, v) => sum + v.confidence, 0) / result.decision.votes.length
             : 1.0,
-          risk_level: ['low', 'low', 'medium', 'high', 'critical'][result.riskLevel],
+          risk_level: numericToCanonicalRisk(result.riskLevel as NumericRiskLevel),
           user_response: result.status === 'auto_approved' ? 'approved' : null,
         })
     }

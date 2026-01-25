@@ -11,6 +11,7 @@ import {
   VoteDecision,
   RISK_LEVELS,
 } from './types'
+import { canonicalToNumericRisk } from './risk-assessment'
 import { VALIDATORS, VALIDATOR_IDS, getValidator } from './validators'
 
 // Initialize Anthropic client
@@ -31,15 +32,19 @@ async function getValidatorVote(
   const validator = getValidator(validatorId)
   const { request, precedents } = context
 
-  // Build the evaluation prompt
-  const evaluationPrompt = `
+    const numericRisk = typeof request.riskLevel === 'number'
+      ? request.riskLevel
+      : canonicalToNumericRisk(request.riskLevel)
+
+    // Build the evaluation prompt
+    const evaluationPrompt = `
 Evaluate this action request:
 
 **Agent ID:** ${request.agentId}
 **Action Type:** ${request.actionType}
 **Action Details:** ${request.actionDetails}
 **Justification:** ${request.justification}
-**Risk Level:** ${request.riskLevel} (${RISK_LEVELS[request.riskLevel].name})
+**Risk Level:** ${request.riskLevel} (${RISK_LEVELS[numericRisk].name})
 **Context:** ${JSON.stringify(request.context, null, 2)}
 
 ${precedents?.length ? `
@@ -99,7 +104,8 @@ Provide your evaluation as JSON only.
  * Determine required validators based on risk level
  */
 function getRequiredValidators(riskLevel: RiskLevel): ValidatorId[] {
-  switch (riskLevel) {
+  const numericRisk = typeof riskLevel === 'number' ? riskLevel : canonicalToNumericRisk(riskLevel)
+  switch (numericRisk) {
     case 0:
     case 1:
       return [] // Auto-approve, no validators needed
@@ -120,13 +126,14 @@ function calculateOutcome(
   votes: ValidatorVote[],
   riskLevel: RiskLevel
 ): { outcome: CouncilDecision['outcome']; reasoning: string } {
+  const numericRisk = typeof riskLevel === 'number' ? riskLevel : canonicalToNumericRisk(riskLevel)
   const approvals = votes.filter(v => v.decision === 'approve').length
   const denials = votes.filter(v => v.decision === 'deny').length
   const abstentions = votes.filter(v => v.decision === 'abstain').length
   const totalVoters = votes.length
 
   // Risk level 0-1: Auto-approve
-  if (riskLevel <= 1) {
+  if (numericRisk <= 1) {
     return {
       outcome: 'approved',
       reasoning: 'Routine action auto-approved (Risk Level 0-1)',
@@ -134,7 +141,7 @@ function calculateOutcome(
   }
 
   // Risk level 2: Single validator approval
-  if (riskLevel === 2) {
+  if (numericRisk === 2) {
     if (approvals > 0) {
       return {
         outcome: 'approved',
@@ -154,7 +161,7 @@ function calculateOutcome(
   }
 
   // Risk level 3: Majority required (3/4)
-  if (riskLevel === 3) {
+  if (numericRisk === 3) {
     const requiredApprovals = Math.ceil((totalVoters - abstentions) * 0.75)
 
     if (approvals >= requiredApprovals && approvals >= 3) {
@@ -180,7 +187,7 @@ function calculateOutcome(
   }
 
   // Risk level 4: Unanimous + Human
-  if (riskLevel === 4) {
+  if (numericRisk === 4) {
     if (denials > 0) {
       const denyReasons = votes
         .filter(v => v.decision === 'deny')
@@ -216,7 +223,8 @@ export async function evaluateRequest(
   request: UpchainRequest,
   options?: { precedents?: any[] }
 ): Promise<CouncilDecision> {
-  const requiredValidators = getRequiredValidators(request.riskLevel)
+  const numericRisk = typeof request.riskLevel === 'number' ? request.riskLevel : canonicalToNumericRisk(request.riskLevel)
+  const requiredValidators = getRequiredValidators(numericRisk)
 
   // Auto-approve low-risk actions
   if (requiredValidators.length === 0) {
@@ -226,7 +234,7 @@ export async function evaluateRequest(
       agentId: request.agentId,
       votes: [],
       outcome: 'approved',
-      finalReasoning: `Auto-approved: ${RISK_LEVELS[request.riskLevel].name} action`,
+      finalReasoning: `Auto-approved: ${RISK_LEVELS[numericRisk].name} action`,
       createsPrecedent: false,
       decidedAt: new Date().toISOString(),
       recordedOnTruthChain: false, // Will be set true after recording
@@ -243,11 +251,11 @@ export async function evaluateRequest(
   const votes = await Promise.all(votePromises)
 
   // Calculate outcome
-  const { outcome, reasoning } = calculateOutcome(votes, request.riskLevel)
+  const { outcome, reasoning } = calculateOutcome(votes, numericRisk)
 
   // Determine if this creates precedent (significant decisions)
   const createsPrecedent =
-    request.riskLevel >= 3 &&
+    numericRisk >= 3 &&
     (outcome === 'approved' || outcome === 'denied')
 
   return {

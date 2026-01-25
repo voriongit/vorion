@@ -115,7 +115,7 @@ export default function CertifyAgentPage() {
       router.push(`/portal/agents/${selectedAgent}`);
     } catch (error) {
       console.error('Certification failed:', error);
-      alert(`Certification failed: ${error.message}`);
+      alert(`Certification failed: ${(error as Error).message}`);
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { RiskLevel, CouncilDecision } from './types'
+import { canonicalToNumericRisk } from './risk-assessment'
 
 export interface Precedent {
   id: string
@@ -78,7 +79,8 @@ export async function createPrecedentFromDecision(
   riskLevel: RiskLevel
 ): Promise<Precedent | null> {
   // Only create precedents for L3+ decisions with clear outcomes
-  if (riskLevel < 3 || decision.outcome === 'pending') {
+  const numericRisk = typeof riskLevel === 'number' ? riskLevel : canonicalToNumericRisk(riskLevel)
+  if (numericRisk < 3 || decision.outcome === 'pending') {
     return null
   }
 

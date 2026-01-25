@@ -71,7 +71,7 @@ export default function MintAgentCardPage() {
       router.push(`/portal/agents/${tokenId}`);
     } catch (error) {
       console.error('Minting failed:', error);
-      alert(`Minting failed: ${error.message}`);
+      alert(`Minting failed: ${(error as Error).message}`);
     } finally {
       setLoading(false);
     }

@@ -13,7 +13,9 @@ import {
 } from '@vorion/contracts';
 
 // Re-export canonical types for backwards compatibility
-export { CanonicalAgentStatus, AGENT_LIFECYCLE_STATUSES, AGENT_LIFECYCLE_LABELS, AGENT_LIFECYCLE_COLORS };
+// Re-export canonical types for backwards compatibility
+export type { CanonicalAgentStatus };
+export { AGENT_LIFECYCLE_STATUSES, AGENT_LIFECYCLE_LABELS, AGENT_LIFECYCLE_COLORS };
 
 // ============================================================================
 // Core Agent Types

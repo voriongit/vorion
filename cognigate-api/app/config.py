@@ -56,9 +56,15 @@ class Settings(BaseSettings):
     critic_temperature: float = 0.3
     critic_enabled: bool = True
 
-    # External Services (future)
+    # External Services
     # database_url: str = ""
-    # redis_url: str = ""
+    redis_url: str = "redis://localhost:6379"
+    redis_enabled: bool = True
+
+    # Cache TTLs (seconds)
+    cache_ttl_policy_results: int = 60        # Policy evaluation results
+    cache_ttl_trust_scores: int = 300         # Trust scores
+    cache_ttl_velocity_state: int = 0         # Velocity state (no expiry, but Redis will evict on memory pressure)
 
 
 @lru_cache

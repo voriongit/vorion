@@ -227,7 +227,7 @@ export async function registerIntentRoutes(
   }
 
   server.register(
-    async (api) => {
+    async (api: FastifyInstance) => {
       // ========================================================================
       // OpenAPI Documentation Endpoints
       // ========================================================================

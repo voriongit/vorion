@@ -28,7 +28,7 @@ export {
   ComponentType,
   ComponentStatus,
   ApprovalType,
-} from '../../packages/contracts/src/v2/enums.js';
+} from '@vorion/contracts/v2';
 
 // Trust Profile types
 export type {
@@ -45,7 +45,7 @@ export type {
   DirectionChange,
   TrustDynamicsState,
   ProvisionalOutcome,
-} from '../../packages/contracts/src/v2/trust-profile.js';
+} from '@vorion/contracts/v2';
 
 export {
   DEFAULT_TRUST_WEIGHTS,
@@ -54,7 +54,7 @@ export {
   RiskProfile,
   RISK_PROFILE_WINDOWS,
   DEFAULT_TRUST_DYNAMICS,
-} from '../../packages/contracts/src/v2/trust-profile.js';
+} from '@vorion/contracts/v2';
 
 // Intent types (canonical)
 export type {
@@ -62,7 +62,7 @@ export type {
   IntentContext as CanonicalIntentContext,
   IntentSummary,
   CreateIntentRequest,
-} from '../../packages/contracts/src/v2/intent.js';
+} from '@vorion/contracts/v2';
 
 // Decision types (canonical)
 export type {
@@ -73,9 +73,9 @@ export type {
   ApprovalRequirement,
   AuthorizationRequest,
   AuthorizationResponse,
-} from '../../packages/contracts/src/v2/decision.js';
+} from '@vorion/contracts/v2';
 
-export { DenialReason } from '../../packages/contracts/src/v2/decision.js';
+export { DenialReason } from '@vorion/contracts/v2';
 
 // Governance types (canonical)
 export type {
@@ -93,7 +93,7 @@ export type {
   Permission,
   GovernanceRole,
   ControlAction as GovernanceControlAction,
-} from '../../packages/contracts/src/canonical/governance.js';
+} from '@vorion/contracts/canonical';
 
 export {
   GovernanceDenialReason,
@@ -127,16 +127,16 @@ export {
   authorityAuditSchema,
   authoritySchema,
   authContextSchema,
-} from '../../packages/contracts/src/canonical/governance.js';
+} from '@vorion/contracts/canonical';
 
 // =============================================================================
 // LEGACY TYPE IMPORTS (for adapter functions)
 // =============================================================================
 
 import type { ID, Timestamp, TrustLevel, TrustScore, Intent, TrustSignal } from './types.js';
-import { TrustBand } from '../../packages/contracts/src/v2/enums.js';
-import type { Intent as CanonicalIntent } from '../../packages/contracts/src/v2/intent.js';
-import type { TrustEvidence, TrustDimensions } from '../../packages/contracts/src/v2/trust-profile.js';
+import { TrustBand } from '@vorion/contracts/v2';
+import type { Intent as CanonicalIntent } from '@vorion/contracts/v2';
+import type { TrustEvidence, TrustDimensions } from '@vorion/contracts/v2';
 
 // =============================================================================
 // ADAPTER FUNCTIONS

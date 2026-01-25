@@ -9,6 +9,8 @@ export {
   assessRisk,
   canAutoApprove,
   getRequiredApproval,
+  numericToCanonicalRisk,
+  canonicalToNumericRisk,
 } from './risk-assessment'
 export {
   submitUpchainRequest,

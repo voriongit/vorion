@@ -177,11 +177,11 @@ const queueEvents: QueueEvents[] = [];
   const events = new QueueEvents(name, { connection: connection() });
   queueEvents.push(events);
 
-  events.on('failed', ({ jobId, failedReason }) => {
+  events.on('failed', ({ jobId, failedReason }: { jobId: string; failedReason: string }) => {
     logger.error({ queue: name, jobId, failedReason }, 'Job failed');
   });
 
-  events.on('stalled', ({ jobId }) => {
+  events.on('stalled', ({ jobId }: { jobId: string }) => {
     logger.warn({ queue: name, jobId }, 'Job stalled');
   });
 });
@@ -301,7 +301,7 @@ export function registerIntentWorkers(service: IntentService): void {
   // Intake Worker
   const intakeWorker = new Worker(
     queueNames.intake,
-    async (job) => {
+    async (job: Job) => {
       const startTime = Date.now();
       if (!intentService || isShuttingDown) return;
 
@@ -405,7 +405,7 @@ export function registerIntentWorkers(service: IntentService): void {
     }
   );
 
-  intakeWorker.on('failed', async (job, error) => {
+  intakeWorker.on('failed', async (job: Job | undefined, error: Error) => {
     if (!job) return;
     const { intentId, tenantId } = job.data as { intentId: string; tenantId: string };
     logger.error({ jobId: job.id, intentId, error: error.message }, 'Intent intake job failed');

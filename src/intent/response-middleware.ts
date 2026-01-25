@@ -91,7 +91,7 @@ export function registerResponseMiddleware(
   server.decorateRequest('responseContext', null);
 
   // Add response context to each request and set X-Request-ID header
-  server.addHook('onRequest', async (request, reply) => {
+  server.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     const traceContext = getTraceContext() ?? request.traceContext;
     // Use incoming request ID or generate a new one
     const requestId = (request.headers[REQUEST_ID_HEADER.toLowerCase()] as string) ?? randomUUID();
@@ -108,7 +108,7 @@ export function registerResponseMiddleware(
 
   // Optionally wrap all responses in standard envelope
   if (options?.wrapAllResponses) {
-    server.addHook('onSend', async (request, _reply, payload) => {
+    server.addHook('onSend', async (request: FastifyRequest, _reply: FastifyReply, payload: string) => {
       // Skip if already an API response or if it's not JSON
       if (typeof payload !== 'string') {
         return payload;

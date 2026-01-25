@@ -19,9 +19,12 @@ import {
 } from '@vorion/contracts';
 
 // Re-export canonical types for backwards compatibility
-export {
+export type {
   CanonicalAgentCapability,
   CanonicalCollaborationMode,
+};
+
+export {
   agentCapabilitySchema,
   collaborationModeSchema,
   COLLABORATION_MODES,

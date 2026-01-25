@@ -1,10 +1,10 @@
 // Risk Assessment Service
 // Classifies actions into risk levels based on action type and context
 
-import { RiskLevel, TRUST_TIER_AUTONOMY } from './types'
+import { RiskLevel, TRUST_TIER_AUTONOMY, NumericRiskLevel, CanonicalRiskLevel } from './types'
 
 // Action categories with default risk levels
-const ACTION_RISK_MAP: Record<string, RiskLevel> = {
+const ACTION_RISK_MAP: Record<string, NumericRiskLevel> = {
   // Level 0 - Routine
   'read_data': 0,
   'format_text': 0,
@@ -81,8 +81,8 @@ export function assessRisk(
   const factors: string[] = []
 
   // Start with base risk from action type
-  let baseRisk = ACTION_RISK_MAP[actionType.toLowerCase()] ?? 1
-  let adjustedRisk = baseRisk
+  let baseRisk: NumericRiskLevel = ACTION_RISK_MAP[actionType.toLowerCase()] ?? 1
+  let adjustedRisk: NumericRiskLevel = baseRisk
 
   // Check for high-risk keywords in action details
   const lowerDetails = actionDetails.toLowerCase()
@@ -90,47 +90,47 @@ export function assessRisk(
   const mediumRiskMatches = MEDIUM_RISK_KEYWORDS.filter(kw => lowerDetails.includes(kw))
 
   if (highRiskMatches.length > 0) {
-    adjustedRisk = Math.min(4, adjustedRisk + 2) as RiskLevel
+    adjustedRisk = Math.min(4, adjustedRisk + 2) as NumericRiskLevel
     factors.push(`High-risk keywords detected: ${highRiskMatches.join(', ')}`)
   } else if (mediumRiskMatches.length > 0) {
-    adjustedRisk = Math.min(4, adjustedRisk + 1) as RiskLevel
+    adjustedRisk = Math.min(4, adjustedRisk + 1) as NumericRiskLevel
     factors.push(`Medium-risk keywords detected: ${mediumRiskMatches.join(', ')}`)
   }
 
   // Apply risk factors
   if (riskFactors.affectsMultipleUsers) {
-    adjustedRisk = Math.min(4, adjustedRisk + 1) as RiskLevel
+    adjustedRisk = Math.min(4, adjustedRisk + 1) as NumericRiskLevel
     factors.push('Affects multiple users')
   }
 
   if (riskFactors.involvesPersonalData) {
-    adjustedRisk = Math.min(4, adjustedRisk + 1) as RiskLevel
+    adjustedRisk = Math.min(4, adjustedRisk + 1) as NumericRiskLevel
     factors.push('Involves personal data')
   }
 
   if (riskFactors.hasFinancialImpact) {
-    adjustedRisk = Math.min(4, adjustedRisk + 2) as RiskLevel
+    adjustedRisk = Math.min(4, adjustedRisk + 2) as NumericRiskLevel
     factors.push('Has financial impact')
   }
 
   if (riskFactors.isIrreversible) {
-    adjustedRisk = Math.min(4, adjustedRisk + 1) as RiskLevel
+    adjustedRisk = Math.min(4, adjustedRisk + 1) as NumericRiskLevel
     factors.push('Action is irreversible')
   }
 
   if (riskFactors.involvesExternalSystem) {
-    adjustedRisk = Math.min(4, Math.max(2, adjustedRisk)) as RiskLevel
+    adjustedRisk = Math.min(4, Math.max(2, adjustedRisk)) as NumericRiskLevel
     factors.push('Involves external system')
   }
 
   if (riskFactors.modifiesPermissions) {
-    adjustedRisk = Math.min(4, adjustedRisk + 1) as RiskLevel
+    adjustedRisk = Math.min(4, adjustedRisk + 1) as NumericRiskLevel
     factors.push('Modifies permissions')
   }
 
   // Context-based adjustments
   if (context.production === true || context.environment === 'production') {
-    adjustedRisk = Math.min(4, adjustedRisk + 1) as RiskLevel
+    adjustedRisk = Math.min(4, adjustedRisk + 1) as NumericRiskLevel
     factors.push('Production environment')
   }
 
@@ -140,7 +140,7 @@ export function assessRisk(
     : `Risk level ${adjustedRisk} based on action type "${actionType}"`
 
   return {
-    riskLevel: adjustedRisk as RiskLevel,
+    riskLevel: adjustedRisk as NumericRiskLevel,
     reasoning,
     factors,
   }
@@ -153,9 +153,10 @@ export function canAutoApprove(
   riskLevel: RiskLevel,
   trustTier: string
 ): { canAutoApprove: boolean; reason: string } {
+  const numericRisk = typeof riskLevel === 'number' ? riskLevel : canonicalToNumericRisk(riskLevel)
   const tierAutonomy = TRUST_TIER_AUTONOMY[trustTier] ?? 0
 
-  if (riskLevel <= tierAutonomy) {
+  if (numericRisk <= tierAutonomy) {
     return {
       canAutoApprove: true,
       reason: `Trust tier "${trustTier}" allows auto-approval up to level ${tierAutonomy}`,
@@ -164,7 +165,7 @@ export function canAutoApprove(
 
   return {
     canAutoApprove: false,
-    reason: `Risk level ${riskLevel} exceeds trust tier "${trustTier}" autonomy (max: ${tierAutonomy})`,
+    reason: `Risk level ${numericRisk} exceeds trust tier "${trustTier}" autonomy (max: ${tierAutonomy})`,
   }
 }
 
@@ -175,7 +176,8 @@ export function getRequiredApproval(riskLevel: RiskLevel): {
   type: 'auto' | 'single' | 'majority' | 'unanimous_human'
   description: string
 } {
-  switch (riskLevel) {
+  const numericRisk = typeof riskLevel === 'number' ? riskLevel : canonicalToNumericRisk(riskLevel)
+  switch (numericRisk) {
     case 0:
     case 1:
       return { type: 'auto', description: 'Auto-approved with logging' }
@@ -188,4 +190,31 @@ export function getRequiredApproval(riskLevel: RiskLevel): {
     default:
       return { type: 'majority', description: 'Majority approval required' }
   }
+}
+
+/**
+ * Convert numeric risk level to canonical string format
+ */
+export function numericToCanonicalRisk(level: NumericRiskLevel): CanonicalRiskLevel {
+  const map: Record<NumericRiskLevel, CanonicalRiskLevel> = {
+    0: 'low',
+    1: 'low',
+    2: 'medium',
+    3: 'high',
+    4: 'critical'
+  }
+  return map[level] || 'low'
+}
+
+/**
+ * Convert canonical string risk level to numeric format
+ */
+export function canonicalToNumericRisk(level: CanonicalRiskLevel): NumericRiskLevel {
+  const map: Record<CanonicalRiskLevel, NumericRiskLevel> = {
+    'low': 1,
+    'medium': 2,
+    'high': 3,
+    'critical': 4
+  }
+  return map[level] ?? 1
 }

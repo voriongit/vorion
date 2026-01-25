@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
+import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -655,9 +655,9 @@ export async function createServer(): Promise<FastifyInstance> {
 
   // API routes
   server.register(
-    async (api) => {
+    async (api: FastifyInstance) => {
       // Token revocation check hook - runs after JWT verification
-      api.addHook('preHandler', async (request, reply) => {
+      api.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
         // Skip revocation check for logout endpoint (allow logout with revoked token)
         if (request.url.endsWith('/auth/logout')) {
           return;
@@ -1303,7 +1303,7 @@ export async function createServer(): Promise<FastifyInstance> {
       // ========== Admin Operations ==========
 
       // Trigger cleanup job manually
-      api.post('/admin/cleanup', async (request, reply) => {
+      api.post('/admin/cleanup', async (request: FastifyRequest, reply: FastifyReply) => {
         const user = request.user as { sub?: string; roles?: string[] };
         const roles = user.roles ?? [];
 
@@ -1321,7 +1321,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Retry a job from DLQ (moved to admin section)
-      api.post('/admin/dlq/:jobId/retry', async (request, reply) => {
+      api.post('/admin/dlq/:jobId/retry', async (request: FastifyRequest, reply: FastifyReply) => {
         const user = request.user as { sub?: string; roles?: string[] };
         const roles = user.roles ?? [];
 
@@ -1347,7 +1347,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Revoke all tokens for a user (security incident response)
-      api.post('/admin/users/:userId/revoke-tokens', async (request, reply) => {
+      api.post('/admin/users/:userId/revoke-tokens', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const user = request.user as { sub?: string; roles?: string[] };
         const roles = user.roles ?? [];
@@ -1397,7 +1397,7 @@ export async function createServer(): Promise<FastifyInstance> {
       // ========== Audit Routes ==========
 
       // Query audit records
-      api.get('/audit', async (request, reply) => {
+      api.get('/audit', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const query = auditQuerySchema.parse(request.query ?? {});
 
@@ -1425,7 +1425,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Get audit record by ID
-      api.get('/audit/:id', async (request, reply) => {
+      api.get('/audit/:id', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const params = auditIdParamsSchema.parse(request.params ?? {});
 
@@ -1440,7 +1440,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Get audit trail for a target
-      api.get('/audit/target/:targetType/:targetId', async (request, reply) => {
+      api.get('/audit/target/:targetType/:targetId', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const params = auditTargetParamsSchema.parse(request.params ?? {});
         const query = auditTargetQuerySchema.parse(request.query ?? {});
@@ -1456,7 +1456,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Get all audit records for a trace
-      api.get('/audit/trace/:traceId', async (request, reply) => {
+      api.get('/audit/trace/:traceId', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const params = auditTraceParamsSchema.parse(request.params ?? {});
 
@@ -1466,7 +1466,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Get audit statistics
-      api.get('/audit/stats', async (request, reply) => {
+      api.get('/audit/stats', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const query = auditStatsQuerySchema.parse(request.query ?? {});
 
@@ -1479,7 +1479,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Verify audit chain integrity (admin-only)
-      api.post('/audit/verify', async (request, reply) => {
+      api.post('/audit/verify', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const user = request.user as { sub?: string; roles?: string[] };
         const roles = user.roles ?? [];
@@ -1505,7 +1505,7 @@ export async function createServer(): Promise<FastifyInstance> {
       // ========== Policy Routes ==========
 
       // Create a new policy
-      api.post('/policies', async (request, reply) => {
+      api.post('/policies', async (request: FastifyRequest, reply: FastifyReply) => {
         // Authorization: admin and policy_writer roles
         if (!await checkAuthorization(request, reply, POLICY_ROLES.WRITE)) {
           return;
@@ -1547,7 +1547,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // List policies for tenant
-      api.get('/policies', async (request, reply) => {
+      api.get('/policies', async (request: FastifyRequest, reply: FastifyReply) => {
         // Authorization: admin and policy_reader roles
         if (!await checkAuthorization(request, reply, POLICY_ROLES.READ)) {
           return;
@@ -1582,7 +1582,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Get policy by ID
-      api.get('/policies/:id', async (request, reply) => {
+      api.get('/policies/:id', async (request: FastifyRequest, reply: FastifyReply) => {
         // Authorization: admin and policy_reader roles
         if (!await checkAuthorization(request, reply, POLICY_ROLES.READ)) {
           return;
@@ -1602,7 +1602,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Update policy definition
-      api.put('/policies/:id', async (request, reply) => {
+      api.put('/policies/:id', async (request: FastifyRequest, reply: FastifyReply) => {
         // Authorization: admin and policy_writer roles
         if (!await checkAuthorization(request, reply, POLICY_ROLES.WRITE)) {
           return;
@@ -1652,7 +1652,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Publish a draft policy
-      api.post('/policies/:id/publish', async (request, reply) => {
+      api.post('/policies/:id/publish', async (request: FastifyRequest, reply: FastifyReply) => {
         // Authorization: admin and policy_writer roles
         if (!await checkAuthorization(request, reply, POLICY_ROLES.WRITE)) {
           return;
@@ -1680,7 +1680,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Deprecate a policy
-      api.post('/policies/:id/deprecate', async (request, reply) => {
+      api.post('/policies/:id/deprecate', async (request: FastifyRequest, reply: FastifyReply) => {
         // Authorization: admin and policy_writer roles
         if (!await checkAuthorization(request, reply, POLICY_ROLES.WRITE)) {
           return;
@@ -1708,7 +1708,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Archive a policy
-      api.post('/policies/:id/archive', async (request, reply) => {
+      api.post('/policies/:id/archive', async (request: FastifyRequest, reply: FastifyReply) => {
         // Authorization: admin and policy_writer roles
         if (!await checkAuthorization(request, reply, POLICY_ROLES.WRITE)) {
           return;
@@ -1736,7 +1736,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Delete a policy (only if draft)
-      api.delete('/policies/:id', async (request, reply) => {
+      api.delete('/policies/:id', async (request: FastifyRequest, reply: FastifyReply) => {
         // Authorization: admin only
         if (!await checkAuthorization(request, reply, POLICY_ROLES.DELETE)) {
           return;
@@ -1783,7 +1783,7 @@ export async function createServer(): Promise<FastifyInstance> {
       // ========== Webhook Routes ==========
 
       // Register a webhook
-      api.post('/webhooks', async (request, reply) => {
+      api.post('/webhooks', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const body = webhookCreateBodySchema.parse(request.body ?? {});
 
@@ -1821,7 +1821,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // List webhooks for tenant
-      api.get('/webhooks', async (request, reply) => {
+      api.get('/webhooks', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
 
         const webhooks = await webhookService.getWebhooks(tenantId);
@@ -1835,7 +1835,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Unregister a webhook
-      api.delete('/webhooks/:id', async (request, reply) => {
+      api.delete('/webhooks/:id', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const params = webhookIdParamsSchema.parse(request.params ?? {});
 
@@ -1855,7 +1855,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Get recent deliveries for a webhook
-      api.get('/webhooks/:id/deliveries', async (request, reply) => {
+      api.get('/webhooks/:id/deliveries', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const params = webhookIdParamsSchema.parse(request.params ?? {});
         const query = webhookDeliveriesQuerySchema.parse(request.query ?? {});
@@ -1895,7 +1895,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Initiate GDPR data export (async job)
-      api.post('/intent/gdpr/export', async (request, reply) => {
+      api.post('/intent/gdpr/export', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const user = request.user as { sub?: string };
         const body = gdprExportBodySchema.parse(request.body ?? {});
@@ -1924,7 +1924,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Get GDPR export status
-      api.get('/intent/gdpr/export/:requestId', async (request, reply) => {
+      api.get('/intent/gdpr/export/:requestId', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const params = gdprRequestIdParamsSchema.parse(request.params ?? {});
 
@@ -1951,7 +1951,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // Download GDPR export data
-      api.get('/intent/gdpr/export/:requestId/download', async (request, reply) => {
+      api.get('/intent/gdpr/export/:requestId/download', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const params = gdprRequestIdParamsSchema.parse(request.params ?? {});
 
@@ -1976,7 +1976,7 @@ export async function createServer(): Promise<FastifyInstance> {
       });
 
       // GDPR right to erasure (soft delete user data)
-      api.delete('/intent/gdpr/data', async (request, reply) => {
+      api.delete('/intent/gdpr/data', async (request: FastifyRequest, reply: FastifyReply) => {
         const tenantId = await getTenantId(request);
         const user = request.user as { sub?: string; roles?: string[] };
         const body = gdprExportBodySchema.parse(request.body ?? {});

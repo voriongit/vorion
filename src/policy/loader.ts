@@ -165,7 +165,7 @@ export class PolicyLoader {
     const redis = getRedis();
     redis
       .setex(CACHE_PREFIX + cacheKey, this.cacheTtl, JSON.stringify(policies))
-      .catch((error) => {
+      .catch((error: unknown) => {
         logger.warn({ error }, 'Failed to update Redis policy cache');
       });
   }

@@ -11,11 +11,14 @@ from pathlib import Path
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 
 from app.config import get_settings
 from app.routers import enforce, intent, proof, health, admin
+from app.core.cache import cache_manager
+from app.core.async_logger import async_log_queue
 
 # Configure structured logging
 structlog.configure(
@@ -48,7 +51,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         version=settings.app_version,
         environment=settings.environment,
     )
+    # Initialize async logger
+    await async_log_queue.start()
+    # Initialize Redis cache
+    await cache_manager.connect()
     yield
+    # Cleanup
+    await cache_manager.disconnect()
+    await async_log_queue.stop()
     logger.info("cognigate_shutdown")
 
 
@@ -100,6 +110,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Compression middleware - Reduces JSON response sizes by 60-80%
+# Only compresses responses larger than 500 bytes
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Include routers
 app.include_router(health.router, tags=["Health"])
