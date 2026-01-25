@@ -1028,11 +1028,13 @@ JWT token for authentication. The token must contain:
           deletedAt: {
             type: 'string',
             format: 'date-time',
+            nullable: true,
             // OpenAPI 3.1 uses type arrays for nullable
             description: 'Soft delete timestamp (GDPR)',
           },
           cancellationReason: {
             type: 'string',
+            nullable: true,
             // OpenAPI 3.1 uses type arrays for nullable
             description: 'Reason for cancellation if cancelled',
           },
@@ -1314,6 +1316,7 @@ JWT token for authentication. The token must contain:
           },
           resolution: {
             type: 'object',
+            nullable: true,
             // OpenAPI 3.1 uses type arrays for nullable
             properties: {
               resolvedBy: { type: 'string' },
