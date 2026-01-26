@@ -60,6 +60,7 @@ export const councilDecisionsRelations = relations(councilDecisions, ({one}) => 
 	}),
 }));
 
+/** @deprecated Legacy marketplace relations - will be removed in v2.0 */
 export const marketplaceListingsRelations = relations(marketplaceListings, ({one, many}) => ({
 	agent: one(agents, {
 		fields: [marketplaceListings.agentId],
@@ -78,6 +79,7 @@ export const profilesRelations = relations(profiles, ({many}) => ({
 	agents: many(agents),
 }));
 
+/** @deprecated Legacy marketplace relations - will be removed in v2.0 */
 export const acquisitionsRelations = relations(acquisitions, ({one}) => ({
 	marketplaceListing: one(marketplaceListings, {
 		fields: [acquisitions.listingId],

@@ -2,7 +2,9 @@ import { pgTable, index, foreignKey, uuid, integer, text, jsonb, timestamp, bool
 import { sql } from "drizzle-orm"
 
 export const academyStatus = pgEnum("academy_status", ['enrolled', 'in_progress', 'examination', 'passed', 'failed', 'withdrawn'])
+/** @deprecated Used by legacy marketplace tables - will be removed in v2.0 */
 export const acquisitionStatus = pgEnum("acquisition_status", ['active', 'suspended', 'terminated', 'expired'])
+/** @deprecated Used by legacy marketplace tables - will be removed in v2.0 */
 export const acquisitionType = pgEnum("acquisition_type", ['commission', 'clone', 'enterprise_lock'])
 export const agentStatus = pgEnum("agent_status", ['draft', 'training', 'examination', 'active', 'suspended', 'retired'])
 export const curriculumType = pgEnum("curriculum_type", ['basic_training', 'specialized', 'advanced', 'certification', 'remedial'])
@@ -14,6 +16,7 @@ export const goalLevel = pgEnum("goal_level", ['mission', 'strategic', 'team_okr
 export const goalStatus = pgEnum("goal_status", ['draft', 'active', 'completed', 'cancelled', 'blocked'])
 export const guardRailScope = pgEnum("guard_rail_scope", ['universal', 'category', 'team', 'role', 'individual'])
 export const guardRailType = pgEnum("guard_rail_type", ['hard_boundary', 'soft_boundary', 'warning', 'guidance'])
+/** @deprecated Used by legacy marketplace tables - will be removed in v2.0 */
 export const listingStatus = pgEnum("listing_status", ['draft', 'pending_review', 'active', 'paused', 'sold_out', 'retired'])
 export const messagePriority = pgEnum("message_priority", ['low', 'medium', 'high', 'critical'])
 export const messageType = pgEnum("message_type", ['request', 'response', 'broadcast', 'escalation', 'delegation', 'notification', 'collaboration'])
@@ -79,6 +82,12 @@ export const councilDecisions = pgTable("council_decisions", {
 		}).onDelete("cascade"),
 ]);
 
+/**
+ * @deprecated LEGACY TABLE - Marketplace feature is deprecated.
+ * This table is retained for migration compatibility and historical data.
+ * Do not add new features using this table. Will be removed in v2.0.
+ * See: https://github.com/voriongit/vorion/issues/marketplace-deprecation
+ */
 export const marketplaceListings = pgTable("marketplace_listings", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	agentId: uuid("agent_id").notNull(),
@@ -122,6 +131,12 @@ export const marketplaceListings = pgTable("marketplace_listings", {
 		}).onDelete("cascade"),
 ]);
 
+/**
+ * @deprecated LEGACY TABLE - Marketplace feature is deprecated.
+ * This table is retained for migration compatibility and historical data.
+ * Do not add new features using this table. Will be removed in v2.0.
+ * See: https://github.com/voriongit/vorion/issues/marketplace-deprecation
+ */
 export const acquisitions = pgTable("acquisitions", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	listingId: uuid("listing_id").notNull(),
