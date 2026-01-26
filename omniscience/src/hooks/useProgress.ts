@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { QuizAttempt } from '@/types';
+import type { QuizAttempt, EarnedCertificate } from '@/types';
 import {
   loadProgress,
   saveProgress,
@@ -25,6 +25,11 @@ import {
   clearProgress,
   exportProgress,
   importProgress,
+  getEarnedCertificates,
+  hasCertificateForPath,
+  getHighestCertificateForPath,
+  awardCertificate,
+  getCertificateProgress,
   type UserProgress,
   type TermProgress,
   type ModuleProgress,
@@ -182,6 +187,40 @@ export function useProgress() {
   }, [progress]);
 
   // ============================================
+  // CERTIFICATE ACTIONS
+  // ============================================
+
+  const getCertificates = useCallback((): EarnedCertificate[] => {
+    return progress ? getEarnedCertificates(progress) : [];
+  }, [progress]);
+
+  const checkHasCertificate = useCallback((pathSlug: string): boolean => {
+    return progress ? hasCertificateForPath(progress, pathSlug) : false;
+  }, [progress]);
+
+  const getPathCertificate = useCallback((pathSlug: string): EarnedCertificate | null => {
+    return progress ? getHighestCertificateForPath(progress, pathSlug) : null;
+  }, [progress]);
+
+  const tryAwardCertificate = useCallback((
+    pathSlug: string,
+    quizScore: number,
+    totalModules: number
+  ): EarnedCertificate | null => {
+    if (!progress) return null;
+
+    const result = awardCertificate(progress, pathSlug, quizScore, totalModules);
+    if (result.awarded) {
+      setProgress(result.progress);
+    }
+    return result.awarded;
+  }, [progress]);
+
+  const getCertProgress = useCallback((pathSlug: string, totalModules: number) => {
+    return progress ? getCertificateProgress(progress, pathSlug, totalModules) : null;
+  }, [progress]);
+
+  // ============================================
   // UTILITY ACTIONS
   // ============================================
 
@@ -209,12 +248,14 @@ export function useProgress() {
 
   // Memoized stats
   const stats = useMemo(() => progress?.stats ?? null, [progress]);
+  const certificates = useMemo(() => progress?.certificates ?? [], [progress]);
 
   return {
     // State
     progress,
     isLoaded,
     stats,
+    certificates,
 
     // Term actions
     viewTerm,
@@ -235,6 +276,13 @@ export function useProgress() {
     getPathInfo,
     getPathCompletion,
     getModuleCompletion,
+
+    // Certificate actions
+    getCertificates,
+    checkHasCertificate,
+    getPathCertificate,
+    tryAwardCertificate,
+    getCertProgress,
 
     // Utility actions
     getSummary,

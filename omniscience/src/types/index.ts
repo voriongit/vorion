@@ -119,6 +119,47 @@ export interface UserQuizProgress {
   averageScore: number;
 }
 
+// Certificate Types
+export type CertificateLevel = 'foundation' | 'practitioner' | 'expert' | 'master';
+
+export interface Certificate {
+  id: string;
+  pathSlug: string;
+  pathTitle: string;
+  level: CertificateLevel;
+  title: string;
+  description: string;
+  requirements: CertificateRequirement[];
+  icon: string;
+  color: string;
+  badgeUrl?: string;
+}
+
+export interface CertificateRequirement {
+  type: 'quiz_score' | 'modules_completed' | 'terms_mastered';
+  description: string;
+  threshold: number; // percentage or count
+  current?: number; // current progress
+}
+
+export interface EarnedCertificate {
+  certificateId: string;
+  pathSlug: string;
+  earnedAt: Date;
+  quizScore: number;
+  modulesCompleted: number;
+  termsMastered: number;
+  verificationCode: string; // Unique code for verification
+}
+
+export interface UserCertificates {
+  earned: EarnedCertificate[];
+  inProgress: {
+    certificateId: string;
+    progress: CertificateRequirement[];
+  }[];
+}
+
 // Chat Types
 export interface ChatMessage {
   id: string;
