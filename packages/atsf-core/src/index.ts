@@ -67,6 +67,15 @@ export * from './persistence/index.js';
 // LangChain integration
 export * from './langchain/index.js';
 
+// Phase 6: Trust Engine Hardening
+export * as phase6 from './phase6/index.js';
+export {
+  createPhase6TrustEngine,
+  type Phase6TrustEngine,
+  type Phase6Config,
+  PHASE6_VERSION,
+} from './phase6/index.js';
+
 // Version
 export const VERSION = '0.1.0';
 

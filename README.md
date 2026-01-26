@@ -6,6 +6,8 @@
 [![ISO 42001](https://img.shields.io/badge/ISO-42001%20Ready-green.svg)](docs/VORION_V1_FULL_APPROVAL_PDFS/ISO_42001_GAP_ANALYSIS.md)
 [![AI TRiSM](https://img.shields.io/badge/AI%20TRiSM-Compliant-green.svg)](docs/VORION_V1_FULL_APPROVAL_PDFS/AI_TRISM_COMPLIANCE_MAPPING.md)
 
+> **Security Notice**: The only official Vorion repositories are hosted at [github.com/voriongit](https://github.com/voriongit). Be aware that threat actors have used similar-sounding names (e.g., "Vortax", "VorTion") for credential-stealing malware campaigns. Always verify the source before downloading software. Official releases are cryptographically signed.
+
 ---
 
 ## Overview
