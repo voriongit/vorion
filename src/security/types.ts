@@ -268,6 +268,8 @@ export interface TEEVerificationResult {
   measurementHash?: string;
   /** Verification timestamp */
   verifiedAt: string;
+  /** Whether production-grade verification was used */
+  productionVerified?: boolean;
 }
 
 export const teeVerificationResultSchema = z.object({
@@ -276,6 +278,7 @@ export const teeVerificationResultSchema = z.object({
   platform: teePlatformSchema.optional(),
   measurementHash: z.string().optional(),
   verifiedAt: z.string().datetime(),
+  productionVerified: z.boolean().optional(),
 });
 
 // =============================================================================

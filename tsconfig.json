@@ -5,7 +5,7 @@
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDirs": ["./src", "./packages/contracts/src"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -26,7 +26,12 @@
       "@vorion/proof/*": ["src/proof/*"],
       "@vorion/trust-engine/*": ["src/trust-engine/*"],
       "@vorion/api/*": ["src/api/*"],
-      "@vorion/common/*": ["src/common/*"]
+      "@vorion/common/*": ["src/common/*"],
+      "@vorion/contracts": ["packages/contracts/src/index.ts"],
+      "@vorion/contracts/*": ["packages/contracts/src/*"],
+      "@vorion/contracts/canonical": ["packages/contracts/src/canonical/index.ts"],
+      "@vorion/contracts/v2": ["packages/contracts/src/v2/index.ts"],
+      "@vorion/contracts/aci": ["packages/contracts/src/aci/index.ts"]
     }
   },
   "include": ["src/**/*"],

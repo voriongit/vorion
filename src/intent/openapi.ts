@@ -1026,16 +1026,17 @@ JWT token for authentication. The token must contain:
             description: 'Last update timestamp',
           },
           deletedAt: {
-            type: 'string',
-            format: 'date-time',
-            nullable: true,
-            // OpenAPI 3.1 uses type arrays for nullable
+            oneOf: [
+              { type: 'string', format: 'date-time' },
+              { type: 'null' },
+            ],
             description: 'Soft delete timestamp (GDPR)',
           },
           cancellationReason: {
-            type: 'string',
-            nullable: true,
-            // OpenAPI 3.1 uses type arrays for nullable
+            oneOf: [
+              { type: 'string' },
+              { type: 'null' },
+            ],
             description: 'Reason for cancellation if cancelled',
           },
         },
@@ -1315,14 +1316,17 @@ JWT token for authentication. The token must contain:
             $ref: '#/components/schemas/EscalationStatus',
           },
           resolution: {
-            type: 'object',
-            nullable: true,
-            // OpenAPI 3.1 uses type arrays for nullable
-            properties: {
-              resolvedBy: { type: 'string' },
-              resolvedAt: { type: 'string', format: 'date-time' },
-              notes: { type: 'string' },
-            },
+            oneOf: [
+              {
+                type: 'object',
+                properties: {
+                  resolvedBy: { type: 'string' },
+                  resolvedAt: { type: 'string', format: 'date-time' },
+                  notes: { type: 'string' },
+                },
+              },
+              { type: 'null' },
+            ],
           },
           timeout: {
             type: 'string',

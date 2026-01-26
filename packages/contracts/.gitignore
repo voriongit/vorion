@@ -1,0 +1,16 @@
+# Build output
+dist/
+
+# Source map files (build artifacts)
+*.d.ts.map
+*.js.map
+
+# JavaScript files in src (build artifacts - only TypeScript source should be tracked)
+src/**/*.js
+src/**/*.d.ts
+
+# Node modules
+node_modules/
+
+# TypeScript incremental build info
+*.tsbuildinfo

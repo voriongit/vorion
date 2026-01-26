@@ -2,29 +2,38 @@
   "name": "@vorion/contracts",
   "version": "0.1.0",
   "description": "Shared schemas and validators for Vorion platform",
-  "type": "module",
-  "main": "./dist/index.js",
+    "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
     },
     "./common": {
       "types": "./dist/common/index.d.ts",
-      "import": "./dist/common/index.js"
+      "import": "./dist/common/index.js",
+      "require": "./dist/common/index.js"
     },
     "./v2": {
       "types": "./dist/v2/index.d.ts",
-      "import": "./dist/v2/index.js"
+      "import": "./dist/v2/index.js",
+      "require": "./dist/v2/index.js"
     },
     "./validators": {
       "types": "./dist/validators/index.d.ts",
-      "import": "./dist/validators/index.js"
+      "import": "./dist/validators/index.js",
+      "require": "./dist/validators/index.js"
     },
     "./aci": {
       "types": "./dist/aci/index.d.ts",
-      "import": "./dist/aci/index.js"
+      "import": "./dist/aci/index.js",
+      "require": "./dist/aci/index.js"
+    },
+    "./canonical": {
+      "types": "./dist/canonical/index.d.ts",
+      "import": "./dist/canonical/index.js",
+      "require": "./dist/canonical/index.js"
     }
   },
   "files": [

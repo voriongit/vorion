@@ -536,8 +536,8 @@ export function isTrustDimensions(value: unknown): value is TrustDimensions {
     (key) =>
       key in dimensions &&
       typeof dimensions[key] === 'number' &&
-      dimensions[key] >= DIMENSION_SCORE_RANGE.min &&
-      dimensions[key] <= DIMENSION_SCORE_RANGE.max
+      (dimensions[key] as number) >= DIMENSION_SCORE_RANGE.min &&
+      (dimensions[key] as number) <= DIMENSION_SCORE_RANGE.max
   );
 }
 
@@ -596,8 +596,8 @@ export function isTrustWeights(value: unknown): value is TrustWeights {
     (key) =>
       key in weights &&
       typeof weights[key] === 'number' &&
-      weights[key] >= WEIGHT_RANGE.min &&
-      weights[key] <= WEIGHT_RANGE.max
+      (weights[key] as number) >= WEIGHT_RANGE.min &&
+      (weights[key] as number) <= WEIGHT_RANGE.max
   );
 
   if (!hasValidKeys) {

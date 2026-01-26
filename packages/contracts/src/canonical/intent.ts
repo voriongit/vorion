@@ -13,9 +13,9 @@
 
 import { z } from 'zod';
 import type { TrustBand } from './trust-band.js';
-import type { TrustScore } from './trust-score.js';
 import { trustBandSchema } from './trust-band.js';
-import { trustScoreSchema, TrustScoreBrand } from './trust-score.js';
+import { trustScoreValueSchema, type TrustScore } from './trust-score.js';
+export type { TrustScore };
 
 // Re-export enums from v2 to avoid duplication
 export { ActionType, DataSensitivity, Reversibility } from '../v2/enums.js';
@@ -535,7 +535,7 @@ export const intentContextSchema = z.object({
  * Zod schema for TrustSnapshot.
  */
 export const trustSnapshotSchema = z.object({
-  score: trustScoreSchema,
+  score: trustScoreValueSchema,
   band: trustBandSchema,
   capturedAt: z.coerce.date(),
   profileVersion: z.number().int().positive().optional(),
