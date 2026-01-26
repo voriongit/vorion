@@ -75,10 +75,14 @@
   },
   "peerDependencies": {
     "typescript": "^5.0.0",
-    "@langchain/core": ">=0.2.0"
+    "@langchain/core": ">=0.2.0",
+    "better-sqlite3": ">=9.0.0"
   },
   "peerDependenciesMeta": {
     "@langchain/core": {
+      "optional": true
+    },
+    "better-sqlite3": {
       "optional": true
     }
   },

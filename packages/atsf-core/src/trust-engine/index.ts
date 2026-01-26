@@ -252,10 +252,18 @@ export interface TrustEngineConfig {
   successWindowMs?: number;
   /** Maximum score boost per recovery signal (default: 50 points) */
   maxRecoveryPerSignal?: number;
+
+  // Event subscription limits (to prevent wildcard overhead)
+  /** Maximum number of listeners per event type (default: 100) */
+  maxListenersPerEvent?: number;
+  /** Maximum total listeners across all events (default: 1000) */
+  maxTotalListeners?: number;
+  /** Warn when listener count exceeds this percentage of max (default: 0.8 = 80%) */
+  listenerWarningThreshold?: number;
 }
 
 /**
- * Trust Engine service with event emission
+ * Trust Engine service with event emission and subscription limits
  */
 export class TrustEngine extends EventEmitter {
   private records: Map<ID, TrustRecord> = new Map();
@@ -276,6 +284,13 @@ export class TrustEngine extends EventEmitter {
   private _successWindowMs: number;
   private _maxRecoveryPerSignal: number;
 
+  // Event subscription limits
+  private _maxListenersPerEvent: number;
+  private _maxTotalListeners: number;
+  private _listenerWarningThreshold: number;
+  private _listenerCounts: Map<string, number> = new Map();
+  private _totalListeners = 0;
+
   constructor(config: TrustEngineConfig = {}) {
     super();
     this._decayRate = config.decayRate ?? 0.01;
@@ -294,6 +309,147 @@ export class TrustEngine extends EventEmitter {
     this._minSuccessesForAcceleration = config.minSuccessesForAcceleration ?? 3;
     this._successWindowMs = config.successWindowMs ?? 3600000; // 1 hour
     this._maxRecoveryPerSignal = config.maxRecoveryPerSignal ?? 50;
+
+    // Event subscription limits (to prevent wildcard overhead)
+    this._maxListenersPerEvent = config.maxListenersPerEvent ?? 100;
+    this._maxTotalListeners = config.maxTotalListeners ?? 1000;
+    this._listenerWarningThreshold = config.listenerWarningThreshold ?? 0.8;
+
+    // Set default max listeners on EventEmitter
+    this.setMaxListeners(this._maxListenersPerEvent);
+  }
+
+  /**
+   * Add event listener with subscription limits
+   * @throws Error if listener limits are exceeded
+   */
+  override on(eventName: string | symbol, listener: (...args: unknown[]) => void): this {
+    this.checkListenerLimits(String(eventName));
+    this.incrementListenerCount(String(eventName));
+    return super.on(eventName, listener);
+  }
+
+  /**
+   * Add one-time event listener with subscription limits
+   */
+  override once(eventName: string | symbol, listener: (...args: unknown[]) => void): this {
+    this.checkListenerLimits(String(eventName));
+    this.incrementListenerCount(String(eventName));
+    // Wrap listener to decrement count when removed
+    const wrappedListener = (...args: unknown[]) => {
+      this.decrementListenerCount(String(eventName));
+      listener(...args);
+    };
+    return super.once(eventName, wrappedListener);
+  }
+
+  /**
+   * Remove event listener
+   */
+  override off(eventName: string | symbol, listener: (...args: unknown[]) => void): this {
+    this.decrementListenerCount(String(eventName));
+    return super.off(eventName, listener);
+  }
+
+  /**
+   * Remove event listener (alias)
+   */
+  override removeListener(eventName: string | symbol, listener: (...args: unknown[]) => void): this {
+    this.decrementListenerCount(String(eventName));
+    return super.removeListener(eventName, listener);
+  }
+
+  /**
+   * Remove all listeners for an event
+   */
+  override removeAllListeners(eventName?: string | symbol): this {
+    if (eventName) {
+      const count = this._listenerCounts.get(String(eventName)) ?? 0;
+      this._totalListeners -= count;
+      this._listenerCounts.delete(String(eventName));
+    } else {
+      this._totalListeners = 0;
+      this._listenerCounts.clear();
+    }
+    return super.removeAllListeners(eventName);
+  }
+
+  /**
+   * Check if adding a listener would exceed limits
+   */
+  private checkListenerLimits(eventName: string): void {
+    const currentEventCount = this._listenerCounts.get(eventName) ?? 0;
+
+    // Check per-event limit
+    if (currentEventCount >= this._maxListenersPerEvent) {
+      throw new Error(
+        `Maximum listeners (${this._maxListenersPerEvent}) exceeded for event "${eventName}". ` +
+        `Consider using fewer listeners or increasing maxListenersPerEvent.`
+      );
+    }
+
+    // Check total limit
+    if (this._totalListeners >= this._maxTotalListeners) {
+      throw new Error(
+        `Maximum total listeners (${this._maxTotalListeners}) exceeded. ` +
+        `Consider removing unused listeners or increasing maxTotalListeners.`
+      );
+    }
+
+    // Warn if approaching limits
+    const eventThreshold = this._maxListenersPerEvent * this._listenerWarningThreshold;
+    const totalThreshold = this._maxTotalListeners * this._listenerWarningThreshold;
+
+    if (currentEventCount >= eventThreshold) {
+      logger.warn(
+        { eventName, current: currentEventCount, max: this._maxListenersPerEvent },
+        `Approaching listener limit for event "${eventName}"`
+      );
+    }
+
+    if (this._totalListeners >= totalThreshold) {
+      logger.warn(
+        { current: this._totalListeners, max: this._maxTotalListeners },
+        'Approaching total listener limit'
+      );
+    }
+  }
+
+  /**
+   * Increment listener count for an event
+   */
+  private incrementListenerCount(eventName: string): void {
+    const current = this._listenerCounts.get(eventName) ?? 0;
+    this._listenerCounts.set(eventName, current + 1);
+    this._totalListeners++;
+  }
+
+  /**
+   * Decrement listener count for an event
+   */
+  private decrementListenerCount(eventName: string): void {
+    const current = this._listenerCounts.get(eventName) ?? 0;
+    if (current > 0) {
+      this._listenerCounts.set(eventName, current - 1);
+      this._totalListeners--;
+    }
+  }
+
+  /**
+   * Get current listener statistics
+   */
+  getListenerStats(): {
+    totalListeners: number;
+    maxTotalListeners: number;
+    listenersByEvent: Record<string, number>;
+    maxListenersPerEvent: number;
+  } {
+    return {
+      totalListeners: this._totalListeners,
+      maxTotalListeners: this._maxTotalListeners,
+      listenersByEvent: Object.fromEntries(this._listenerCounts),
+      maxListenersPerEvent: this._maxListenersPerEvent,
+    };
   }
 
   /**
