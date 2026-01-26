@@ -7,11 +7,11 @@ import LiveSiteCard from '../components/LiveSiteCard.astro';
 const projects = [
   {
     title: 'Vorion Platform',
-    description: 'Enterprise AI governance platform providing trust scoring, policy enforcement, audit trails, and human oversight for autonomous AI systems.',
+    description: 'Enterprise AI governance platform providing trust scoring, policy enforcement, audit trails, and human oversight for autonomous AI systems. Phase 6 architecture finalized.',
     href: '/projects/vorion',
     status: 'active' as const,
     icon: '🏛️',
-    tags: ['Enterprise', 'Governance', 'Trust'],
+    tags: ['Enterprise', 'Governance', 'Phase 6'],
   },
   {
     title: 'AgentAnchor',
@@ -23,12 +23,12 @@ const projects = [
     tags: ['B2B', 'Compliance', 'Dashboard'],
   },
   {
-    title: 'BASIS Standard',
-    description: 'Open governance standard for AI agents. Defines 6-tier trust levels, behavioral scoring, and policy enforcement protocols.',
-    href: '/projects/basis',
+    title: 'ACI Specification',
+    description: 'Agent Capability Interface standard for AI governance. Defines 6-tier trust levels (0-1000), behavioral scoring, and policy enforcement protocols. Published to npm.',
+    href: '/projects/aci-spec',
     status: 'shipped' as const,
     icon: '📐',
-    tags: ['Standard', 'Open Source', 'v1.0.0'],
+    tags: ['Standard', 'Apache 2.0', 'v1.1.0'],
   },
   {
     title: 'ATSF Framework',
@@ -80,9 +80,9 @@ const liveSites = [
     status: 'online' as const,
   },
   {
-    title: 'BASIS Standard',
-    description: 'Open governance specification',
-    url: 'https://basis.vorion.org',
+    title: 'ACI Spec (npm)',
+    description: '@vorionsys/aci-spec v1.1.0',
+    url: 'https://www.npmjs.com/package/@vorionsys/aci-spec',
     status: 'online' as const,
   },
   {
@@ -100,6 +100,16 @@ const liveSites = [
 ];
 
 const packages = [
+  {
+    name: '@vorionsys/aci-spec',
+    description: 'Agent Capability Interface specification - the open standard for AI governance. Published on npm.',
+    features: [
+      '6-tier trust levels (0-1000 scale)',
+      'TrustBand, TRUST_THRESHOLDS, OBSERVATION_CEILINGS',
+      '7 specification documents + OWASP guides',
+      'TypeScript + ESM/CJS dual format',
+    ],
+  },
   {
     name: '@vorion/ai-gateway',
     description: 'Multi-provider AI routing with intelligent model selection, PII detection, and cost optimization.',
@@ -124,20 +134,10 @@ const packages = [
     name: '@vorionsys/atsf-core',
     description: 'Core runtime for the Agentic Trust Scoring Framework with behavioral trust calculation.',
     features: [
-      '6-tier trust levels per BASIS spec',
+      '6-tier trust levels per ACI spec',
       'Accelerated decay on failures',
       'Recovery mechanisms for trust restoration',
       'Event emission for observability',
-    ],
-  },
-  {
-    name: '@vorion/agent-sdk',
-    description: 'TypeScript SDK for connecting AI agents to Aurais Mission Control.',
-    features: [
-      'WebSocket connection with auto-reconnect',
-      'Task assignment and progress reporting',
-      'Human approval request workflow',
-      'Type-safe event handling',
     ],
   },
 ];
@@ -157,7 +157,7 @@ const packages = [
       <div class="text-center max-w-4xl mx-auto">
         <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-vorion-500/10 border border-vorion-500/20 text-vorion-400 text-sm font-medium mb-8">
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          4 Platforms Live
+          Phase 6 Complete — ACI Spec v1.1.0 Published
         </div>
 
         <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
@@ -193,6 +193,109 @@ const packages = [
             </svg>
             GitHub
           </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- What is AI Governance? - Beginner Section -->
+  <section class="py-16 sm:py-20 bg-gradient-to-b from-slate-900/50 to-transparent">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-vorion-500/10 border border-vorion-500/20 text-vorion-400 text-sm font-medium mb-4">
+          <span>New Here?</span>
+        </div>
+        <h2 class="text-2xl sm:text-3xl font-bold text-white mb-4">What is AI Governance?</h2>
+        <p class="text-slate-400 max-w-2xl mx-auto">
+          AI governance ensures AI systems operate safely and predictably within defined boundaries—like guardrails for autonomous vehicles, but for AI.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+          <div class="w-12 h-12 rounded-xl bg-vorion-500/20 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-vorion-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">Trust Scoring</h3>
+          <p class="text-slate-400 text-sm">
+            AI agents earn trust over time through consistent, safe behavior. New agents start restricted; proven agents gain autonomy. Think of it like a credit score for AI.
+          </p>
+        </div>
+
+        <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+          <div class="w-12 h-12 rounded-xl bg-accent-cyan/20 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-accent-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">Capability Gating</h3>
+          <p class="text-slate-400 text-sm">
+            Match AI permissions to trust levels. A low-trust agent can read data but not modify it. High-trust agents can act autonomously within defined scope.
+          </p>
+        </div>
+
+        <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+          <div class="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">Circuit Breakers</h3>
+          <p class="text-slate-400 text-sm">
+            Safety systems that halt AI operations when anomalies are detected. Budget limits, approval workflows, and automatic rollbacks prevent runaway behavior.
+          </p>
+        </div>
+      </div>
+
+      <!-- How the ecosystem fits together -->
+      <div class="p-8 rounded-xl bg-slate-900/80 border border-slate-700">
+        <h3 class="text-lg font-semibold text-white mb-6 text-center">How Our Ecosystem Fits Together</h3>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="text-center">
+            <div class="w-16 h-16 rounded-xl bg-vorion-500/20 flex items-center justify-center mx-auto mb-3">
+              <span class="text-2xl">📐</span>
+            </div>
+            <h4 class="font-medium text-white text-sm mb-1">ACI Specification</h4>
+            <p class="text-xs text-slate-500">The open standard<br/>defining the rules</p>
+          </div>
+          <div class="flex items-center justify-center text-slate-600 hidden md:flex">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </div>
+          <div class="text-center">
+            <div class="w-16 h-16 rounded-xl bg-accent-cyan/20 flex items-center justify-center mx-auto mb-3">
+              <span class="text-2xl">🚪</span>
+            </div>
+            <h4 class="font-medium text-white text-sm mb-1">Cognigate Runtime</h4>
+            <p class="text-xs text-slate-500">Enforces the rules<br/>in real-time</p>
+          </div>
+          <div class="flex items-center justify-center text-slate-600 hidden md:flex">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </div>
+          <div class="text-center">
+            <div class="w-16 h-16 rounded-xl bg-emerald-500/20 flex items-center justify-center mx-auto mb-3">
+              <span class="text-2xl">⚓</span>
+            </div>
+            <h4 class="font-medium text-white text-sm mb-1">AgentAnchor</h4>
+            <p class="text-xs text-slate-500">Enterprise dashboard<br/>for management</p>
+          </div>
+          <div class="flex items-center justify-center text-slate-600 hidden md:flex">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </div>
+          <div class="text-center">
+            <div class="w-16 h-16 rounded-xl bg-purple-500/20 flex items-center justify-center mx-auto mb-3">
+              <span class="text-2xl">📚</span>
+            </div>
+            <h4 class="font-medium text-white text-sm mb-1">Learn Vorion</h4>
+            <p class="text-xs text-slate-500">Education and<br/>certification</p>
+          </div>
         </div>
       </div>
     </div>
@@ -276,7 +379,7 @@ const packages = [
       <div class="text-center mb-12">
         <h2 class="text-2xl sm:text-3xl font-bold text-white mb-4">6-Tier Trust Architecture</h2>
         <p class="text-slate-400 max-w-2xl mx-auto">
-          The BASIS standard defines six trust levels for AI agents, from sandboxed newcomers to fully autonomous systems.
+          The ACI specification defines six trust levels (0-1000 scale) for AI agents, from sandboxed newcomers to fully autonomous systems.
         </p>
       </div>
 
@@ -284,10 +387,10 @@ const packages = [
         {[
           { level: 0, name: 'Sandbox', score: '0-99', color: 'from-slate-600 to-slate-700' },
           { level: 1, name: 'Provisional', score: '100-299', color: 'from-slate-500 to-slate-600' },
-          { level: 2, name: 'Standard', score: '300-499', color: 'from-vorion-600 to-vorion-700' },
+          { level: 2, name: 'Established', score: '300-499', color: 'from-vorion-600 to-vorion-700' },
           { level: 3, name: 'Trusted', score: '500-699', color: 'from-vorion-500 to-vorion-600' },
-          { level: 4, name: 'Certified', score: '700-899', color: 'from-emerald-600 to-emerald-700' },
-          { level: 5, name: 'Autonomous', score: '900-1000', color: 'from-emerald-500 to-emerald-600' },
+          { level: 4, name: 'Verified', score: '700-899', color: 'from-emerald-600 to-emerald-700' },
+          { level: 5, name: 'Certified', score: '900-1000', color: 'from-emerald-500 to-emerald-600' },
         ].map(tier => (
           <div class="p-4 rounded-xl bg-slate-900/50 border border-slate-800 text-center">
             <div class:list={[

@@ -13,6 +13,18 @@ description: The definitive knowledge base for Agentic AI
 
 ---
 
+:::tip New to AI Agents?
+If you're just getting started, think of **AI agents** as smart assistants that can work independently. Unlike chatbots that wait for your questions, agents can:
+- Make plans and break down complex tasks
+- Use tools (search the web, write code, send emails)
+- Remember context across conversations
+- Work together with other agents
+
+**Start here:** [Safety & Governance](/safety) explains how we keep agents safe and trustworthy.
+:::
+
+---
+
 ## What is Agentic AI?
 
 Agentic AI refers to AI systems that can **autonomously perceive, reason, plan, and act** to achieve goals with minimal human intervention. Unlike traditional AI that responds to single prompts, agentic systems:
@@ -49,7 +61,7 @@ The internal anatomy: memory systems, reasoning engines, planning algorithms, an
 How multiple agents collaborate: hierarchical control, swarm intelligence, event-driven coordination, and consensus protocols.
 
 ### [Protocols & Standards](/protocols)
-The interoperability layer: MCP (Model Context Protocol), A2A (Agent-to-Agent), decentralized identity, and the BASIS governance standard.
+The interoperability layer: MCP (Model Context Protocol), A2A (Agent-to-Agent), decentralized identity, and the ACI governance specification.
 
 ### [Domain Applications](/domains)
 Specialized implementations in software engineering, scientific research, financial trading, and enterprise automation.
@@ -72,7 +84,7 @@ The agentic AI landscape is evolving rapidly:
 | 2023 | AutoGPT, BabyAGI spark autonomous agent research |
 | 2024 | Tool use becomes standard (function calling) |
 | 2025 | MCP, A2A protocols emerge for interoperability |
-| 2026 | Governance frameworks (BASIS) address safety |
+| 2026 | ACI Spec v1.1.0 published, governance frameworks mature |
 
 **We're building the infrastructure for AI agents to work safely alongside humans.**
 
@@ -91,9 +103,13 @@ The agentic AI landscape is evolving rapidly:
 
 Omniscience is maintained by the [Vorion](https://vorion.org) community:
 
-- **[BASIS Standard](https://vorion.org/basis)** — Open standard for AI agent governance
-- **[Cognigate](https://cognigate.dev)** — Reference implementation of BASIS
+- **[ACI Specification](https://npmjs.com/package/@vorionsys/aci-spec)** — Agent Capability Interface standard (v1.1.0)
+- **[Cognigate](https://cognigate.dev)** — Reference implementation of ACI governance
 - **[AgentAnchor](https://agentanchorai.com)** — Agent certification platform
+
+```bash
+npm install @vorionsys/aci-spec
+```
 
 ---
 

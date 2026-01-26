@@ -8,7 +8,8 @@
  * - Quiz attempts and scores
  */
 
-import type { QuizAttempt } from '@/types';
+import type { QuizAttempt, EarnedCertificate, CertificateLevel } from '@/types';
+import { checkCertificateEligibility, createEarnedCertificate } from './certificates';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -49,6 +50,7 @@ export interface UserProgress {
   updatedAt: string;
   terms: Record<string, TermProgress>;
   paths: Record<string, PathProgress>;
+  certificates: EarnedCertificate[];
   stats: {
     totalTermsViewed: number;
     totalTermsMastered: number;
@@ -58,6 +60,7 @@ export interface UserProgress {
     averageQuizScore: number;
     streakDays: number;
     lastActiveDate: string;
+    totalCertificates: number;
   };
 }
 
@@ -70,6 +73,7 @@ function createDefaultProgress(): UserProgress {
     updatedAt: now,
     terms: {},
     paths: {},
+    certificates: [],
     stats: {
       totalTermsViewed: 0,
       totalTermsMastered: 0,
@@ -79,6 +83,7 @@ function createDefaultProgress(): UserProgress {
       averageQuizScore: 0,
       streakDays: 0,
       lastActiveDate: now,
+      totalCertificates: 0,
     },
   };
 }
@@ -584,5 +589,141 @@ export function getProgressSummary(progress: UserProgress) {
     completedPaths: Object.entries(progress.paths)
       .filter(([, p]) => p.completed)
       .map(([slug]) => slug),
+    certificates: progress.certificates || [],
+  };
+}
+
+// ============================================
+// CERTIFICATE FUNCTIONS
+// ============================================
+
+/**
+ * Get all earned certificates
+ */
+export function getEarnedCertificates(progress: UserProgress): EarnedCertificate[] {
+  return progress.certificates || [];
+}
+
+/**
+ * Check if user has earned a certificate for a path
+ */
+export function hasCertificateForPath(progress: UserProgress, pathSlug: string): boolean {
+  return (progress.certificates || []).some(c => c.pathSlug === pathSlug);
+}
+
+/**
+ * Get the highest certificate earned for a path
+ */
+export function getHighestCertificateForPath(progress: UserProgress, pathSlug: string): EarnedCertificate | null {
+  const certs = (progress.certificates || []).filter(c => c.pathSlug === pathSlug);
+  if (certs.length === 0) return null;
+
+  // Sort by quiz score descending
+  return certs.sort((a, b) => b.quizScore - a.quizScore)[0];
+}
+
+/**
+ * Award a certificate after completing a path quiz
+ */
+export function awardCertificate(
+  progress: UserProgress,
+  pathSlug: string,
+  quizScore: number,
+  totalModules: number
+): { progress: UserProgress; awarded: EarnedCertificate | null } {
+  const pathProgress = progress.paths[pathSlug];
+  if (!pathProgress) {
+    return { progress, awarded: null };
+  }
+
+  // Calculate completion metrics
+  const modulesCompletedCount = Object.values(pathProgress.modulesProgress || {})
+    .filter(m => m.completed).length;
+  const modulesCompletedPercent = totalModules > 0
+    ? Math.round((modulesCompletedCount / totalModules) * 100)
+    : 0;
+
+  const termsMasteredCount = Object.values(progress.terms)
+    .filter(t => t.mastered).length;
+
+  // Check eligibility
+  const eligibility = checkCertificateEligibility(
+    pathSlug,
+    quizScore,
+    modulesCompletedPercent,
+    0 // termsMasteredPercent not used currently
+  );
+
+  if (!eligibility.eligible || !eligibility.level) {
+    return { progress, awarded: null };
+  }
+
+  // Check if user already has this or higher certificate
+  const existingCert = getHighestCertificateForPath(progress, pathSlug);
+  if (existingCert && existingCert.quizScore >= quizScore) {
+    return { progress, awarded: null };
+  }
+
+  // Create and award the certificate
+  const newCert = createEarnedCertificate(
+    pathSlug,
+    eligibility.level,
+    quizScore,
+    modulesCompletedCount,
+    termsMasteredCount
+  );
+
+  // Initialize certificates array if needed
+  if (!progress.certificates) {
+    progress.certificates = [];
+  }
+
+  // Remove any existing certificate for this path (upgrading)
+  progress.certificates = progress.certificates.filter(c => c.pathSlug !== pathSlug);
+  progress.certificates.push(newCert);
+
+  // Update stats
+  progress.stats.totalCertificates = progress.certificates.length;
+  progress.updatedAt = new Date().toISOString();
+
+  return { progress, awarded: newCert };
+}
+
+/**
+ * Get certificate progress for a path (shows what's needed to earn)
+ */
+export function getCertificateProgress(
+  progress: UserProgress,
+  pathSlug: string,
+  totalModules: number
+): {
+  currentScore: number;
+  modulesCompletedPercent: number;
+  eligibility: ReturnType<typeof checkCertificateEligibility>;
+  existingCertificate: EarnedCertificate | null;
+} {
+  const pathProgress = progress.paths[pathSlug];
+
+  const currentScore = pathProgress?.bestFinalScore || 0;
+  const modulesCompletedCount = Object.values(pathProgress?.modulesProgress || {})
+    .filter(m => m.completed).length;
+  const modulesCompletedPercent = totalModules > 0
+    ? Math.round((modulesCompletedCount / totalModules) * 100)
+    : 0;
+
+  const eligibility = checkCertificateEligibility(
+    pathSlug,
+    currentScore,
+    modulesCompletedPercent,
+    0
+  );
+
+  const existingCertificate = getHighestCertificateForPath(progress, pathSlug);
+
+  return {
+    currentScore,
+    modulesCompletedPercent,
+    eligibility,
+    existingCertificate,
   };
 }

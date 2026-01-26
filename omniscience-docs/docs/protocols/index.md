@@ -10,6 +10,16 @@ description: Communication protocols and standards enabling agent interoperabili
 
 As autonomous AI agents proliferate, the need for standardized communication protocols becomes critical. Without shared protocols, agents become isolated silos unable to collaborate, verify each other's capabilities, or participate in larger systems.
 
+:::info In Simple Terms
+**Protocols** are like languages that AI agents use to talk to each other and to tools. Just like how HTTP lets your browser talk to websites, these protocols let AI agents:
+- **MCP** — Tell tools what to do (like "search for X" or "send this email")
+- **A2A** — Communicate with other AI agents ("I need help with this task")
+- **ACI** — Prove they're trustworthy ("I have a trust score of 750")
+- **DID** — Identify themselves ("I am agent-abc123")
+
+Think of it like this: if AI agents are employees, protocols are the company email system and ID badges that let them work together safely.
+:::
+
 ## Why Protocols Matter
 
 ### The Interoperability Challenge
@@ -24,7 +34,7 @@ As autonomous AI agents proliferate, the need for standardized communication pro
 │    │               │            │    │    │              │            │
 │    │ ?           ? │            │    │    │ A2A       A2A│            │
 │    ▼               ▼            │    │    ▼              ▼            │
-│  ┌───┐    ?      ┌───┐          │    │  ┌───┐  BASIS  ┌───┐          │
+│  ┌───┐    ?      ┌───┐          │    │  ┌───┐   ACI   ┌───┐          │
 │  │ C │──────────▶│ D │          │    │  │ C │─────────▶│ D │          │
 │  └───┘           └───┘          │    │  └───┘          └───┘          │
 │                                 │    │                                 │
@@ -45,7 +55,7 @@ As autonomous AI agents proliferate, the need for standardized communication pro
 │  Multi-agent coordination, task routing, capability discovery            │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                       TRUST & SAFETY LAYER                               │
-│  BASIS Standard, trust scores, capability gating, audit trails           │
+│  ACI Spec, trust scores (0-1000), capability gating, audit trails        │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                       IDENTITY LAYER                                     │
 │  DIDs, Verifiable Credentials, agent authentication                      │
@@ -102,19 +112,23 @@ Decentralized identity standards adapted for AI agents.
 
 [Learn more about Agent Identity →](./agent-identity.md)
 
-### BASIS Standard
+### ACI Specification (Agent Capability Interface)
 
-The Blockchain Agent Standard for Identity and Security.
+The open standard for AI agent governance, published as `@vorionsys/aci-spec`.
 
 **Purpose**: Comprehensive framework for agent trust, identity, and governance
 
 **Key Features**:
-- Trust score framework (ATSF)
-- Agent certification
-- On-chain reputation
-- Capability registry
+- 6-tier trust levels (0-1000 scale)
+- Agent capability gating
+- Behavioral trust scoring
+- Policy enforcement protocols
 
-[Learn more about BASIS →](./basis-standard.md)
+```bash
+npm install @vorionsys/aci-spec
+```
+
+[Learn more about ACI →](./basis-standard.md)
 
 ## Protocol Comparison
 
@@ -123,7 +137,7 @@ The Blockchain Agent Standard for Identity and Security.
 | **MCP** | LLM ↔ Tools | Tool invocation | Anthropic open-source |
 | **A2A** | Agent ↔ Agent | Task delegation | Google open-source |
 | **DID/VC** | Identity | Authentication | W3C Standard |
-| **BASIS** | Trust & Gov | Safety framework | Community standard |
+| **ACI** | Trust & Gov | Safety framework | Apache 2.0 (npm: @vorionsys/aci-spec) |
 
 ## Integration Patterns
 
@@ -131,43 +145,51 @@ The Blockchain Agent Standard for Identity and Security.
 
 A production agent typically implements multiple protocols:
 
-```python
-class ProductionAgent:
-    """Agent implementing full protocol stack."""
+```typescript
+import { TrustBand, TRUST_THRESHOLDS } from '@vorionsys/aci-spec';
 
-    def __init__(self):
-        # Identity layer
-        self.did = DID.create("did:basis:agent123")
-        self.credentials = VerifiableCredentialStore()
+class ProductionAgent {
+  /** Agent implementing full protocol stack. */
 
-        # Communication layer
-        self.mcp_client = MCPClient()
-        self.a2a_endpoint = A2AEndpoint()
+  constructor() {
+    // Identity layer
+    this.did = DID.create("did:aci:agent123");
+    this.credentials = new VerifiableCredentialStore();
 
-        # Trust layer
-        self.basis_client = BASISClient(self.did)
+    // Communication layer
+    this.mcpClient = new MCPClient();
+    this.a2aEndpoint = new A2AEndpoint();
 
-    async def handle_request(self, request: AgentRequest):
-        """Process incoming request with full protocol support."""
+    // Trust layer (ACI spec 0-1000 scale)
+    this.trustEngine = new TrustEngine(TRUST_THRESHOLDS);
+  }
 
-        # 1. Verify requestor identity (DID/VC)
-        verified = await self._verify_identity(request.sender_did)
-        if not verified:
-            return Error("Identity verification failed")
+  async handleRequest(request: AgentRequest) {
+    /** Process incoming request with full protocol support. */
 
-        # 2. Check trust score (BASIS)
-        trust_score = await self.basis_client.get_trust_score(request.sender_did)
-        if trust_score.overall < self.min_trust_threshold:
-            return Error("Insufficient trust score")
+    // 1. Verify requestor identity (DID/VC)
+    const verified = await this.verifyIdentity(request.senderDid);
+    if (!verified) {
+      return { error: "Identity verification failed" };
+    }
 
-        # 3. Execute task using tools (MCP)
-        result = await self._execute_with_mcp(request.task)
+    // 2. Check trust score (ACI spec - 0-1000 scale)
+    const trustScore = await this.trustEngine.getScore(request.senderDid);
+    const trustBand = TrustBand.fromScore(trustScore);
+    if (trustBand.tier < TRUST_THRESHOLDS.T2.min) {
+      return { error: "Insufficient trust score" };
+    }
 
-        # 4. Return result via A2A
-        return A2AResponse(
-            result=result,
-            attestation=self._sign_result(result)
-        )
+    // 3. Execute task using tools (MCP)
+    const result = await this.executeWithMcp(request.task);
+
+    // 4. Return result via A2A
+    return {
+      result,
+      attestation: this.signResult(result)
+    };
+  }
+}
 ```
 
 ## Protocol Evolution
@@ -179,9 +201,9 @@ The agentic AI protocol landscape is rapidly evolving:
 ──┼──────────┼──────────┼──────────┼──────────┼──▶
 
   │          │          │          │          │
-  │  OpenAI  │  MCP 1.0 │  A2A 1.0 │  BASIS   │  Unified
-  │ Function │ Released │ Released │  2.0     │  Agent
-  │ Calling  │          │          │          │  Protocol?
+  │  OpenAI  │  MCP 1.0 │  A2A 1.0 │ACI 1.1.0 │  Unified
+  │ Function │ Released │ Released │ Published│  Agent
+  │ Calling  │          │          │  (npm)   │  Protocol?
   │          │          │          │          │
 ```
 
@@ -210,7 +232,13 @@ Recommended learning path:
 1. **[MCP](./mcp.md)** - Start here for tool integration
 2. **[Agent Identity](./agent-identity.md)** - Understand identity foundations
 3. **[A2A](./a2a.md)** - Learn agent-to-agent communication
-4. **[BASIS Standard](./basis-standard.md)** - Master trust and governance
+4. **[ACI Specification](./basis-standard.md)** - Master trust and governance
+
+### Quick Install
+
+```bash
+npm install @vorionsys/aci-spec
+```
 
 ---
 

@@ -35,10 +35,10 @@ export const quizQuestions: QuizQuestion[] = [
     type: 'multiple-choice',
     question: 'What does LLM stand for in AI?',
     options: [
-      { id: optId(), text: 'Large Language Model', isCorrect: true },
-      { id: optId(), text: 'Learning Logic Machine', isCorrect: false },
-      { id: optId(), text: 'Linear Learning Method', isCorrect: false },
-      { id: optId(), text: 'Linguistic Layered Model', isCorrect: false },
+      { id: optId(), text: 'Large Language Model - neural networks trained on vast text corpora', isCorrect: true },
+      { id: optId(), text: 'Latent Language Memory - a technique for storing linguistic patterns', isCorrect: false },
+      { id: optId(), text: 'Layered Learning Module - a component of deep learning architectures', isCorrect: false },
+      { id: optId(), text: 'Long-term Language Memory - persistent storage for language understanding', isCorrect: false },
     ],
     explanation: 'LLM stands for Large Language Model - AI systems trained on massive text datasets that can understand and generate human-like text.',
     difficulty: 'beginner',
@@ -50,9 +50,9 @@ export const quizQuestions: QuizQuestion[] = [
     question: 'What is a token in the context of LLMs?',
     options: [
       { id: optId(), text: 'A unit of text (word, subword, or character) that the model processes', isCorrect: true },
-      { id: optId(), text: 'A security credential for API access', isCorrect: false },
-      { id: optId(), text: 'A type of cryptocurrency', isCorrect: false },
-      { id: optId(), text: 'A user session identifier', isCorrect: false },
+      { id: optId(), text: 'A numerical embedding vector representing semantic meaning', isCorrect: false },
+      { id: optId(), text: 'A single neuron activation in the transformer architecture', isCorrect: false },
+      { id: optId(), text: 'A weighted connection between layers in the neural network', isCorrect: false },
     ],
     explanation: 'In LLMs, tokens are the basic units of text the model works with. They can be words, parts of words, or individual characters depending on the tokenizer.',
     difficulty: 'beginner',
@@ -78,9 +78,9 @@ export const quizQuestions: QuizQuestion[] = [
     question: 'What does "hallucination" mean in AI context?',
     options: [
       { id: optId(), text: 'When an AI generates false or made-up information presented as fact', isCorrect: true },
-      { id: optId(), text: 'When the AI experiences visual glitches', isCorrect: false },
-      { id: optId(), text: 'A type of image generation technique', isCorrect: false },
-      { id: optId(), text: 'When users misunderstand AI responses', isCorrect: false },
+      { id: optId(), text: 'When the model produces outputs outside its trained domain', isCorrect: false },
+      { id: optId(), text: 'When attention mechanisms focus on irrelevant parts of the input', isCorrect: false },
+      { id: optId(), text: 'When the model generates creative but clearly fictional content', isCorrect: false },
     ],
     explanation: 'AI hallucination refers to when models generate content that seems plausible but is factually incorrect, made up, or not grounded in their training data.',
     difficulty: 'beginner',
@@ -489,10 +489,10 @@ export const quizQuestions: QuizQuestion[] = [
     type: 'multiple-choice',
     question: 'What is a prompt injection attack?',
     options: [
-      { id: optId(), text: 'Malicious input that attempts to override the AI\'s instructions', isCorrect: true },
-      { id: optId(), text: 'Injecting prompts into a database', isCorrect: false },
-      { id: optId(), text: 'Medical injection administered by AI', isCorrect: false },
-      { id: optId(), text: 'Adding more prompts to increase response length', isCorrect: false },
+      { id: optId(), text: 'Malicious input that attempts to override the AI\'s original system instructions', isCorrect: true },
+      { id: optId(), text: 'A technique for inserting context dynamically into prompt templates at runtime', isCorrect: false },
+      { id: optId(), text: 'Embedding few-shot examples within the system prompt to guide responses', isCorrect: false },
+      { id: optId(), text: 'Pre-computing and caching prompt embeddings for faster inference', isCorrect: false },
     ],
     explanation: 'Prompt injection is a security attack where users craft inputs that try to manipulate the AI into ignoring its original instructions or revealing sensitive information.',
     difficulty: 'advanced',
@@ -911,16 +911,16 @@ export const quizQuestions: QuizQuestion[] = [
   },
   {
     id: genId(),
-    termName: 'BASIS',
+    termName: 'Trust Tiers',
     type: 'multiple-choice',
-    question: 'What is the BASIS standard for?',
+    question: 'In the ACI specification, what are Trust Tiers?',
     options: [
-      { id: optId(), text: 'Behavioral and Semantic Interoperability Standard for AI agent identity and trust', isCorrect: true },
-      { id: optId(), text: 'Basic AI System Integration Specification', isCorrect: false },
-      { id: optId(), text: 'A foundational AI architecture', isCorrect: false },
-      { id: optId(), text: 'Baseline Artificial System Intelligence Score', isCorrect: false },
+      { id: optId(), text: 'Six levels (T0-T5) classifying agents by trustworthiness on a 0-1000 scale', isCorrect: true },
+      { id: optId(), text: 'Three categories (Low, Medium, High) for basic risk assessment', isCorrect: false },
+      { id: optId(), text: 'Binary states (Trusted/Untrusted) for simple access control decisions', isCorrect: false },
+      { id: optId(), text: 'Five permission levels that directly map to traditional RBAC roles', isCorrect: false },
     ],
-    explanation: 'BASIS is a protocol for AI agent identity, behavioral attestation, and trust scoring, enabling verifiable AI agent credentials and governance.',
+    explanation: 'ACI Trust Tiers define 6 levels: T0 Sandbox (0-99), T1 Provisional (100-299), T2 Established (300-499), T3 Trusted (500-699), T4 Verified (700-899), T5 Certified (900-1000).',
     difficulty: 'expert',
   },
 
@@ -1579,16 +1579,16 @@ export const quizQuestions: QuizQuestion[] = [
   },
   {
     id: genId(),
-    termName: 'ATSF',
+    termName: 'ACI Spec',
     type: 'multiple-choice',
-    question: 'What is the ATSF in the context of AI agents?',
+    question: 'What is the ACI Specification in the context of AI governance?',
     options: [
-      { id: optId(), text: 'Agent Trust Scoring Framework - a system for evaluating agent trustworthiness', isCorrect: true },
-      { id: optId(), text: 'Automated Testing Software Framework', isCorrect: false },
-      { id: optId(), text: 'Advanced Training System Fundamentals', isCorrect: false },
-      { id: optId(), text: 'AI Task Scheduling Framework', isCorrect: false },
+      { id: optId(), text: 'Agent Capability Interface - a standard defining 6 trust tiers (T0-T5) on a 0-1000 scale', isCorrect: true },
+      { id: optId(), text: 'Agent Communication Interface - a protocol for inter-agent messaging', isCorrect: false },
+      { id: optId(), text: 'Autonomous Control Interface - a standard for robot movement commands', isCorrect: false },
+      { id: optId(), text: 'AI Compliance Index - a metric for measuring regulatory adherence', isCorrect: false },
     ],
-    explanation: 'ATSF (Agent Trust Scoring Framework) provides a structured approach to evaluating and scoring the trustworthiness of AI agents based on their behavior and attestations.',
+    explanation: 'The ACI (Agent Capability Interface) Specification is an open standard (Apache 2.0) for AI governance defining trust tiers, capability gating, and policy enforcement. Available via npm: @vorionsys/aci-spec.',
     difficulty: 'expert',
   },
 
@@ -1601,10 +1601,10 @@ export const quizQuestions: QuizQuestion[] = [
     type: 'multiple-choice',
     question: 'What is model distillation?',
     options: [
-      { id: optId(), text: 'Training a smaller model to mimic a larger model\'s behavior', isCorrect: true },
-      { id: optId(), text: 'Extracting pure data from models', isCorrect: false },
-      { id: optId(), text: 'Removing impurities from training data', isCorrect: false },
-      { id: optId(), text: 'Converting models to liquid form', isCorrect: false },
+      { id: optId(), text: 'Training a smaller "student" model to mimic a larger "teacher" model\'s outputs', isCorrect: true },
+      { id: optId(), text: 'Compressing model weights using quantization to reduce memory footprint', isCorrect: false },
+      { id: optId(), text: 'Pruning unnecessary neurons from a trained model to improve inference speed', isCorrect: false },
+      { id: optId(), text: 'Fine-tuning a pre-trained model on a smaller, domain-specific dataset', isCorrect: false },
     ],
     explanation: 'Model distillation trains a smaller, faster "student" model to replicate the outputs of a larger "teacher" model, reducing size while preserving capability.',
     difficulty: 'advanced',
@@ -2327,13 +2327,16 @@ export function generateModuleQuiz(pathSlug: string, moduleId: string): Quiz | n
   const questions = getQuestionsForModule(pathSlug, moduleId);
   if (questions.length === 0) return null;
 
+  // Shuffle both question order AND answer options within each question
+  const shuffledQuestions = shuffleAllOptions(shuffleArray(questions));
+
   return {
     id: `quiz-${pathSlug}-${moduleId}`,
     title: `${module.title} Quiz`,
     description: `Test your understanding of concepts from "${module.title}"`,
     moduleId,
     pathSlug,
-    questions: shuffleArray(questions),
+    questions: shuffledQuestions,
     passingScore: 70,
     timeLimit: Math.max(5, questions.length * 2), // 2 minutes per question, minimum 5
   };
@@ -2349,17 +2352,18 @@ export function generatePathQuiz(pathSlug: string, questionCount: number = 10): 
   const allQuestions = getQuestionsForPath(pathSlug);
   if (allQuestions.length === 0) return null;
 
-  // Select a balanced sample of questions
+  // Select a balanced sample of questions and shuffle answer options
   const selectedQuestions = selectBalancedQuestions(allQuestions, questionCount);
+  const shuffledQuestions = shuffleAllOptions(selectedQuestions);
 
   return {
     id: `quiz-${pathSlug}-full`,
     title: `${path.title} Final Quiz`,
     description: `Comprehensive assessment for "${path.title}"`,
     pathSlug,
-    questions: selectedQuestions,
+    questions: shuffledQuestions,
     passingScore: 70,
-    timeLimit: Math.max(10, selectedQuestions.length * 2),
+    timeLimit: Math.max(10, shuffledQuestions.length * 2),
   };
 }
 
@@ -2385,7 +2389,7 @@ export function getQuizStats() {
 }
 
 /**
- * Utility: Shuffle an array
+ * Utility: Shuffle an array (Fisher-Yates algorithm)
  */
 function shuffleArray<T>(array: T[]): T[] {
   const result = [...array];
@@ -2394,6 +2398,23 @@ function shuffleArray<T>(array: T[]): T[] {
     [result[i], result[j]] = [result[j], result[i]];
   }
   return result;
+}
+
+/**
+ * Shuffle the options within a question (so correct answer isn't always first)
+ */
+function shuffleQuestionOptions(question: QuizQuestion): QuizQuestion {
+  return {
+    ...question,
+    options: shuffleArray(question.options),
+  };
+}
+
+/**
+ * Shuffle options for all questions in an array
+ */
+function shuffleAllOptions(questions: QuizQuestion[]): QuizQuestion[] {
+  return questions.map(shuffleQuestionOptions);
 }
 
 /**

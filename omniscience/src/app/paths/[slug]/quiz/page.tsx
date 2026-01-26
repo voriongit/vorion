@@ -19,6 +19,8 @@ import {
   Brain,
   Lock,
   FileCode,
+  Award,
+  Trophy,
 } from 'lucide-react';
 import { getPathBySlug, getPathTerms } from '@/lib/learning-paths';
 import { generateModuleQuiz, generatePathQuiz, getQuizStats } from '@/lib/quiz-data';
@@ -71,7 +73,8 @@ export default function PathQuizPage() {
   const [quizKey, setQuizKey] = useState(0);
 
   const path = getPathBySlug(slug);
-  const { submitModuleQuiz, submitPathQuiz, beginPath } = useProgressContext();
+  const { submitModuleQuiz, submitPathQuiz, beginPath, tryAwardCertificate } = useProgressContext();
+  const [awardedCert, setAwardedCert] = useState<{ level: string } | null>(null);
 
   useEffect(() => {
     if (!path) return;
@@ -119,6 +122,15 @@ export default function PathQuizPage() {
       submitModuleQuiz(slug, moduleId, attempt, terms);
     } else {
       submitPathQuiz(slug, attempt, terms);
+
+      // Try to award a certificate for path quizzes
+      if (attempt.passed && path) {
+        const cert = tryAwardCertificate(slug, attempt.score, path.modules.length);
+        if (cert) {
+          // Certificate was awarded - show notification
+          setAwardedCert({ level: cert.certificateId.split('-').pop() || 'foundation' });
+        }
+      }
     }
   };
 
@@ -169,6 +181,26 @@ export default function PathQuizPage() {
             }
           </p>
         </div>
+
+        {/* Certificate Awarded Banner */}
+        {awardedCert && (
+          <div className="mb-6 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-xl p-6 text-center">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <Trophy className="w-8 h-8 text-yellow-400" />
+              <h2 className="text-xl font-bold text-white">Certificate Earned!</h2>
+            </div>
+            <p className="text-gray-300 mb-4">
+              Congratulations! You&apos;ve earned a <span className="text-yellow-400 font-semibold capitalize">{awardedCert.level}</span> certificate for this path.
+            </p>
+            <Link
+              href="/certificates"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-medium rounded-lg transition-colors"
+            >
+              <Award className="w-4 h-4" />
+              View Certificate
+            </Link>
+          </div>
+        )}
 
         {/* Quiz or No Questions Message */}
         {quiz && quiz.questions.length > 0 ? (

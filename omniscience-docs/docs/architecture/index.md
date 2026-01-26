@@ -10,6 +10,19 @@ description: The internal anatomy of intelligent agents
 
 A cognitive architecture defines how an agent's components—memory, reasoning, planning, and action—are organized and interact. It's the blueprint for machine cognition.
 
+:::tip Think of it Like a Brain
+Just like your brain has different regions for memory, decision-making, and motor control, AI agents have **cognitive architectures** with specialized components:
+
+| Human Brain | AI Agent |
+|-------------|----------|
+| Short-term memory | Working memory / context window |
+| Long-term memory | Vector databases, knowledge graphs |
+| Prefrontal cortex (planning) | Planning engines |
+| Motor cortex (action) | Tool use / API calls |
+
+The **ReAct pattern** (Reasoning + Acting) is the most common architecture—it's like thinking out loud before doing something.
+:::
+
 ---
 
 ## Core Systems

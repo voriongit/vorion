@@ -3,8 +3,18 @@
 **Governed AI Execution Platform**
 
 [![License](https://img.shields.io/badge/License-Proprietary-blue.svg)](LICENSE)
+[![ACI Spec](https://img.shields.io/badge/ACI%20Spec-v1.1.0-brightgreen.svg)](https://www.npmjs.com/package/@vorionsys/aci-spec)
+[![Phase](https://img.shields.io/badge/Phase-6%20Complete-blue.svg)](PHASE-6-EXECUTIVE-SUMMARY.md)
 [![ISO 42001](https://img.shields.io/badge/ISO-42001%20Ready-green.svg)](docs/VORION_V1_FULL_APPROVAL_PDFS/ISO_42001_GAP_ANALYSIS.md)
 [![AI TRiSM](https://img.shields.io/badge/AI%20TRiSM-Compliant-green.svg)](docs/VORION_V1_FULL_APPROVAL_PDFS/AI_TRISM_COMPLIANCE_MAPPING.md)
+
+---
+
+## Quick Install
+
+```bash
+npm install @vorionsys/aci-spec
+```
 
 ---
 
@@ -50,12 +60,13 @@ Vorion is an enterprise AI governance platform that enables organizations to dep
 
 | Component | Description | Status |
 |-----------|-------------|--------|
-| **BASIS** | Rule engine for constraint evaluation | In Development |
-| **INTENT** | Goal and context processing | In Development |
-| **ENFORCE** | Policy decision point | In Development |
+| **ACI Spec** | Agent Capability Interface specification | Published (v1.1.0) |
+| **BASIS** | Rule engine for constraint evaluation | Architecture Complete |
+| **INTENT** | Goal and context processing | Architecture Complete |
+| **ENFORCE** | Policy decision point | Architecture Complete |
 | **Cognigate** | Constrained execution runtime | In Development |
-| **PROOF** | Immutable evidence chain with Merkle aggregation | In Development |
-| **Trust Engine** | Behavioral trust scoring with stepped decay | In Development |
+| **PROOF** | Immutable evidence chain with Merkle aggregation | Specified |
+| **Trust Engine** | Behavioral trust scoring with stepped decay | Architecture Complete |
 | **ZK Audit** | Zero-knowledge proof generation for privacy-preserving audits | Specified |
 | **Merkle Service** | Batch verification and external anchoring | Specified |
 
@@ -227,15 +238,16 @@ Vorion is built on **STPA (Systems-Theoretic Process Analysis)** principles:
 - **Controlled Process**: AI agent execution
 - **Sensor**: PROOF + Trust Engine provide feedback
 
-### Trust Model
+### Trust Model (ACI Spec v1.1.0)
 
-| Level | Score | Name | Autonomy |
-|-------|-------|------|----------|
-| L0 | 0-24 | Untrusted | Human approval required |
-| L1 | 25-49 | Provisional | Limited operations |
-| L2 | 50-74 | Trusted | Standard operations |
-| L3 | 75-89 | Verified | Extended operations |
-| L4 | 90-100 | Privileged | Full autonomy |
+| Tier | Score | Name | Autonomy |
+|------|-------|------|----------|
+| T0 | 0-99 | Sandbox | Human approval required |
+| T1 | 100-299 | Provisional | Limited operations |
+| T2 | 300-499 | Established | Standard operations |
+| T3 | 500-699 | Trusted | Extended operations |
+| T4 | 700-899 | Verified | High autonomy |
+| T5 | 900-1000 | Certified | Full autonomy |
 
 ### Trust Score Decay
 
@@ -472,31 +484,40 @@ Vorion supports compliance with:
 
 ## Roadmap
 
-### Phase 1: Foundation (Current)
+### Phase 1-5: Foundation (Complete)
 - [x] Core component implementation
 - [x] Basic rule engine (BASIS)
 - [x] Intent processing
 - [x] PROOF evidence system
 - [x] Trust Engine with stepped decay (182-day half-life)
+- [x] ACI Specification published (`@vorionsys/aci-spec@1.1.0`)
+- [x] 82+ tests passing, 0-1000 trust scale
 
-### Phase 2: Trust & Security (In Progress)
-- [x] Trust Engine implementation
-- [x] Stepped decay milestones (7, 14, 28, 56, 112, 182 days)
+### Phase 6: Architecture (Complete - January 2026)
+- [x] All 5 architecture decisions finalized
+- [x] Kernel-level ceiling enforcement (1000-point cap)
+- [x] Context immutability at agent instantiation
+- [x] Dual-layer role gates (kernel + BASIS)
+- [x] Hybrid weight presets (ACI spec + Axiom deltas)
+- [x] Creation modifiers at instantiation time
+
+### Phase 7: Implementation (Q1-Q2 2026)
+- [ ] 8-week implementation (TypeScript types, test harness)
+- [ ] 200+ unit tests, <1ms P99 latency target
 - [ ] Merkle tree aggregation for proof chain
-- [ ] External anchoring (Ethereum, TSA)
 - [ ] Zero-knowledge proof system (Circom/Groth16)
-- [ ] Tiered audit system (Full, Selective, ZK)
+- [ ] ACI standard publication (OpenID Foundation, W3C)
 
-### Phase 3: Enterprise
+### Phase 8: Security Hardening (Q3 2026)
+- [ ] DPoP token binding
+- [ ] TEE (Trusted Execution Environment) support
+- [ ] Semantic governance layer
+
+### Phase 9: Enterprise & Ecosystem (Q4 2026)
 - [ ] Multi-tenant support
-- [ ] Advanced analytics
 - [ ] Enterprise integrations
-- [ ] ZK audit API endpoints
-
-### Phase 4: Ecosystem
 - [ ] Partner SDK
-- [ ] Privacy-preserving trust credentials
-- [ ] Certification program
+- [ ] 5+ enterprise deployments target
 
 ---
 
