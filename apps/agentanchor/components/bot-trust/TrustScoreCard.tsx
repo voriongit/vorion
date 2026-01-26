@@ -2,7 +2,8 @@
 
 /**
  * Trust Score Card Component
- * Displays FICO-style trust score (300-1000) with component breakdown
+ * Displays trust score (0-1000) with component breakdown
+ * Scale: 0-1000 canonical range aligned with @vorionsys/atsf-core RuntimeTier
  */
 
 import { useEffect, useState } from 'react';
@@ -106,20 +107,23 @@ export default function TrustScoreCard({ botId }: TrustScoreCardProps) {
     );
   }
 
+  // Colors and labels aligned with RuntimeTier (0-1000)
   const getScoreColor = (score: number) => {
-    if (score >= 850) return 'text-green-600';
-    if (score >= 700) return 'text-blue-600';
-    if (score >= 600) return 'text-yellow-600';
-    if (score >= 500) return 'text-orange-600';
-    return 'text-red-600';
+    if (score >= 900) return 'text-purple-600';  // L5 Autonomous
+    if (score >= 700) return 'text-green-600';   // L4 Certified
+    if (score >= 500) return 'text-blue-600';    // L3 Trusted
+    if (score >= 300) return 'text-yellow-600';  // L2 Standard
+    if (score >= 100) return 'text-orange-600';  // L1 Provisional
+    return 'text-red-600';                        // L0 Sandbox
   };
 
   const getScoreLabel = (score: number) => {
-    if (score >= 850) return 'Exceptional';
-    if (score >= 700) return 'Very Good';
-    if (score >= 600) return 'Good';
-    if (score >= 500) return 'Fair';
-    return 'Needs Improvement';
+    if (score >= 900) return 'Autonomous';
+    if (score >= 700) return 'Certified';
+    if (score >= 500) return 'Trusted';
+    if (score >= 300) return 'Standard';
+    if (score >= 100) return 'Provisional';
+    return 'Sandbox';
   };
 
   const scoreColor = getScoreColor(trustScore.score);
@@ -133,6 +137,7 @@ export default function TrustScoreCard({ botId }: TrustScoreCardProps) {
       <div className="mb-6">
         <div className={`text-5xl font-bold ${scoreColor}`}>
           {trustScore.score}
+          <span className="text-lg text-gray-400 font-normal">/1000</span>
         </div>
         <p className="text-sm text-gray-500 mt-1">{scoreLabel}</p>
         <p className="text-xs text-gray-400 mt-2">

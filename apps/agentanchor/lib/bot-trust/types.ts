@@ -2,10 +2,18 @@
  * Bot Trust System - TypeScript Type Definitions
  *
  * CANONICAL ALIGNMENT NOTE:
- * This module aligns with @vorion/contracts canonical types:
- * - TrustScore: 0-100 scale (not 300-1000)
+ * This module aligns with @vorionsys/atsf-core canonical types:
+ * - TrustScore: 0-1000 scale (canonical range)
  * - RiskLevel: 'low' | 'medium' | 'high' | 'critical' string union
- * - AutonomyLevel: Maps to TrustBand T0-T5
+ * - AutonomyLevel: Maps to RuntimeTier L0-L5
+ *
+ * RuntimeTier Ranges (0-1000):
+ * - L0 Sandbox: 0-99
+ * - L1 Provisional: 100-299
+ * - L2 Standard: 300-499
+ * - L3 Trusted: 500-699
+ * - L4 Certified: 700-899
+ * - L5 Autonomous: 900-1000
  */
 
 export enum DecisionType {
@@ -119,21 +127,20 @@ export interface ApprovalRate {
 }
 
 /**
- * TrustScore aligned with @vorion/contracts
+ * TrustScore aligned with @vorionsys/atsf-core
  *
- * CANONICAL RANGE: 0-100 (not 300-1000)
+ * CANONICAL RANGE: 0-1000
  * - Score represents composite trust from multiple dimensions
- * - Components map to TrustDimensions in @vorion/contracts
+ * - Components map to TrustDimensions in @vorionsys/atsf-core
  */
 export interface TrustScore {
   /**
    * Composite trust score
-   * @range 0-100 (canonical scale)
-   * @deprecated 300-1000 range - use 0-100 scale
+   * @range 0-1000 (canonical scale)
    */
   score: number;
   /**
-   * Trust dimension components (each 0-100)
+   * Trust dimension components (each 0-1000)
    * Maps to canonical TrustDimensions:
    * - decision_accuracy -> CT (Capability Trust)
    * - ethics_compliance -> GT (Governance Trust)
@@ -142,32 +149,33 @@ export interface TrustScore {
    * - peer_reviews -> AC (Assurance Confidence)
    */
   components: {
-    decision_accuracy: number;   // 0-100 -> CT
-    ethics_compliance: number;   // 0-100 -> GT
-    training_success: number;    // 0-100 -> BT
-    operational_stability: number; // 0-100 -> XT
-    peer_reviews: number;        // 0-100 -> AC
+    decision_accuracy: number;   // 0-1000 -> CT
+    ethics_compliance: number;   // 0-1000 -> GT
+    training_success: number;    // 0-1000 -> BT
+    operational_stability: number; // 0-1000 -> XT
+    peer_reviews: number;        // 0-1000 -> AC
   };
   calculated_at: Date;
 }
 
 /**
- * Convert legacy 300-1000 score to canonical 0-100 scale
+ * @deprecated Legacy conversion - 0-1000 is now the canonical scale
+ * Convert old 0-100 score to canonical 0-1000 scale
  */
 export function convertLegacyTrustScore(legacyScore: number): number {
-  // Legacy range was 300-1000 (700 point range)
-  // Canonical range is 0-100
-  const normalized = Math.max(0, Math.min(1000, legacyScore));
-  if (normalized < 300) return 0;
-  return Math.round(((normalized - 300) / 700) * 100);
+  // Old apps may have used 0-100 scale
+  // Canonical range is 0-1000
+  const normalized = Math.max(0, Math.min(100, legacyScore));
+  return Math.round(normalized * 10);
 }
 
 /**
- * Convert canonical 0-100 score to legacy 300-1000 scale
+ * @deprecated Legacy conversion - 0-1000 is now the canonical scale
+ * Convert canonical 0-1000 score to old 0-100 scale (for legacy displays)
  */
 export function convertToLegacyTrustScore(canonicalScore: number): number {
-  const normalized = Math.max(0, Math.min(100, canonicalScore));
-  return Math.round(300 + (normalized / 100) * 700);
+  const normalized = Math.max(0, Math.min(1000, canonicalScore));
+  return Math.round(normalized / 10);
 }
 
 export interface AutonomyLevelRequirements {

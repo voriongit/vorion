@@ -30,16 +30,16 @@ export type AgentStatus = 'draft' | 'training' | 'active' | 'suspended' | 'archi
 export type MaintenanceFlag = 'author' | 'delegated' | 'platform' | 'none'
 
 /**
- * Canonical TrustBand aligned with @vorion/contracts
- * Uses 6-band T0-T5 system based on 0-100 score scale
+ * Canonical TrustBand aligned with @vorionsys/atsf-core RuntimeTier
+ * Uses 6-band L0-L5 system based on 0-1000 score scale
  */
 export type TrustBand =
-  | 'T0_UNTRUSTED'      // 0-20: No autonomy
-  | 'T1_SUPERVISED'     // 21-40: Full human oversight
-  | 'T2_CONSTRAINED'    // 41-55: Limited autonomy
-  | 'T3_TRUSTED'        // 56-70: Moderate autonomy
-  | 'T4_AUTONOMOUS'     // 71-85: High autonomy
-  | 'T5_MISSION_CRITICAL' // 86-100: Full autonomy
+  | 'T0_UNTRUSTED'      // 0-99: No autonomy (Sandbox)
+  | 'T1_SUPERVISED'     // 100-299: Full human oversight (Provisional)
+  | 'T2_CONSTRAINED'    // 300-499: Limited autonomy (Standard)
+  | 'T3_TRUSTED'        // 500-699: Moderate autonomy (Trusted)
+  | 'T4_AUTONOMOUS'     // 700-899: High autonomy (Certified)
+  | 'T5_MISSION_CRITICAL' // 900-1000: Full autonomy (Autonomous)
 
 /**
  * @deprecated Use TrustBand instead. Legacy tier names for backwards compatibility.
@@ -239,28 +239,28 @@ export interface AgentListResponse {
 // ============================================================================
 
 /**
- * Canonical trust band thresholds aligned with @vorion/contracts
- * Uses 0-100 scale with asymmetric band widths per ATSF v2.0
+ * Canonical trust band thresholds aligned with @vorionsys/atsf-core RuntimeTier
+ * Uses 0-1000 scale matching ATSF RuntimeTier levels
  */
 export const TRUST_BANDS: Record<TrustBand, { min: number; max: number; label: string; color: string }> = {
-  T0_UNTRUSTED: { min: 0, max: 20, label: 'Untrusted', color: 'gray' },
-  T1_SUPERVISED: { min: 21, max: 40, label: 'Supervised', color: 'yellow' },
-  T2_CONSTRAINED: { min: 41, max: 55, label: 'Constrained', color: 'orange' },
-  T3_TRUSTED: { min: 56, max: 70, label: 'Trusted', color: 'blue' },
-  T4_AUTONOMOUS: { min: 71, max: 85, label: 'Autonomous', color: 'green' },
-  T5_MISSION_CRITICAL: { min: 86, max: 100, label: 'Mission Critical', color: 'purple' },
+  T0_UNTRUSTED: { min: 0, max: 99, label: 'Sandbox', color: 'gray' },
+  T1_SUPERVISED: { min: 100, max: 299, label: 'Provisional', color: 'yellow' },
+  T2_CONSTRAINED: { min: 300, max: 499, label: 'Standard', color: 'orange' },
+  T3_TRUSTED: { min: 500, max: 699, label: 'Trusted', color: 'blue' },
+  T4_AUTONOMOUS: { min: 700, max: 899, label: 'Certified', color: 'green' },
+  T5_MISSION_CRITICAL: { min: 900, max: 1000, label: 'Autonomous', color: 'purple' },
 }
 
 /**
  * @deprecated Use TRUST_BANDS instead. Legacy tier definitions for backwards compatibility.
- * Note: These use 0-1000 scale, new TRUST_BANDS use 0-100 scale.
+ * Both use 0-1000 scale. TRUST_BANDS aligns with ATSF RuntimeTier naming.
  */
 export const TRUST_TIERS: Record<TrustTier, { min: number; max: number; label: string; color: string }> = {
-  untrusted: { min: 0, max: 199, label: 'Untrusted', color: 'gray' },
-  novice: { min: 200, max: 399, label: 'Novice', color: 'yellow' },
-  proven: { min: 400, max: 599, label: 'Proven', color: 'blue' },
-  trusted: { min: 600, max: 799, label: 'Trusted', color: 'green' },
-  elite: { min: 800, max: 899, label: 'Elite', color: 'purple' },
+  untrusted: { min: 0, max: 99, label: 'Untrusted', color: 'gray' },
+  novice: { min: 100, max: 299, label: 'Novice', color: 'yellow' },
+  proven: { min: 300, max: 499, label: 'Proven', color: 'blue' },
+  trusted: { min: 500, max: 699, label: 'Trusted', color: 'green' },
+  elite: { min: 700, max: 899, label: 'Elite', color: 'purple' },
   legendary: { min: 900, max: 1000, label: 'Legendary', color: 'gold' },
 }
 
@@ -342,43 +342,45 @@ export const STATUS_LABELS: Record<AgentStatus, { label: string; color: string }
 // ============================================================================
 
 /**
- * Get canonical TrustBand from a 0-100 score
- * Aligned with @vorion/contracts band thresholds
+ * Get canonical TrustBand from a 0-1000 score
+ * Aligned with @vorionsys/atsf-core RuntimeTier thresholds
  */
 export function getTrustBandFromScore(score: number): TrustBand {
-  if (score <= 20) return 'T0_UNTRUSTED'
-  if (score <= 40) return 'T1_SUPERVISED'
-  if (score <= 55) return 'T2_CONSTRAINED'
-  if (score <= 70) return 'T3_TRUSTED'
-  if (score <= 85) return 'T4_AUTONOMOUS'
+  if (score < 100) return 'T0_UNTRUSTED'
+  if (score < 300) return 'T1_SUPERVISED'
+  if (score < 500) return 'T2_CONSTRAINED'
+  if (score < 700) return 'T3_TRUSTED'
+  if (score < 900) return 'T4_AUTONOMOUS'
   return 'T5_MISSION_CRITICAL'
 }
 
 /**
  * @deprecated Use getTrustBandFromScore instead.
- * Get legacy TrustTier from a 0-1000 score (legacy scale)
+ * Get legacy TrustTier from a 0-1000 score
  */
 export function getTrustTierFromScore(score: number): TrustTier {
-  if (score < 200) return 'untrusted'
-  if (score < 400) return 'novice'
-  if (score < 600) return 'proven'
-  if (score < 800) return 'trusted'
+  if (score < 100) return 'untrusted'
+  if (score < 300) return 'novice'
+  if (score < 500) return 'proven'
+  if (score < 700) return 'trusted'
   if (score < 900) return 'elite'
   return 'legendary'
 }
 
 /**
- * Convert legacy 0-1000 score to canonical 0-100 score
+ * @deprecated 0-1000 is now the canonical scale
+ * Convert old 0-100 score to canonical 0-1000 score
  */
 export function convertLegacyScore(legacyScore: number): number {
-  return Math.round(legacyScore / 10)
+  return Math.round(legacyScore * 10)
 }
 
 /**
- * Convert canonical 0-100 score to legacy 0-1000 score
+ * @deprecated 0-1000 is now the canonical scale
+ * Convert canonical 0-1000 score to old 0-100 display value
  */
 export function convertToLegacyScore(canonicalScore: number): number {
-  return canonicalScore * 10
+  return Math.round(canonicalScore / 10)
 }
 
 export function getNextCertificationLevel(current: number): number {
