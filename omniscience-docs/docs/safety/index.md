@@ -10,6 +10,16 @@ description: Ensuring autonomous AI agents operate safely and responsibly
 
 As AI agents gain autonomy and capability, ensuring their safe and responsible operation becomes paramount. This section covers the frameworks, techniques, and best practices for building AI agents that humans can trust and control.
 
+:::info In Simple Terms
+**AI Safety** is like having guardrails on a highway—it lets AI agents work fast and autonomously while keeping them on the right path.
+
+**Key concepts you'll learn:**
+- **Trust Scores** — AI agents earn trust over time, like building a credit score
+- **Capability Gating** — Agents only get permissions they've earned (low trust = read-only; high trust = can take actions)
+- **Audit Trails** — Every action is logged so we can see what happened and why
+- **Human Oversight** — Humans can always step in, approve risky actions, or hit the brakes
+:::
+
 ## The Safety Imperative
 
 ```

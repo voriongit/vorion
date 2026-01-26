@@ -10,6 +10,16 @@ description: Communication protocols and standards enabling agent interoperabili
 
 As autonomous AI agents proliferate, the need for standardized communication protocols becomes critical. Without shared protocols, agents become isolated silos unable to collaborate, verify each other's capabilities, or participate in larger systems.
 
+:::info In Simple Terms
+**Protocols** are like languages that AI agents use to talk to each other and to tools. Just like how HTTP lets your browser talk to websites, these protocols let AI agents:
+- **MCP** — Tell tools what to do (like "search for X" or "send this email")
+- **A2A** — Communicate with other AI agents ("I need help with this task")
+- **ACI** — Prove they're trustworthy ("I have a trust score of 750")
+- **DID** — Identify themselves ("I am agent-abc123")
+
+Think of it like this: if AI agents are employees, protocols are the company email system and ID badges that let them work together safely.
+:::
+
 ## Why Protocols Matter
 
 ### The Interoperability Challenge

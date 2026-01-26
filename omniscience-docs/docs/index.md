@@ -13,6 +13,18 @@ description: The definitive knowledge base for Agentic AI
 
 ---
 
+:::tip New to AI Agents?
+If you're just getting started, think of **AI agents** as smart assistants that can work independently. Unlike chatbots that wait for your questions, agents can:
+- Make plans and break down complex tasks
+- Use tools (search the web, write code, send emails)
+- Remember context across conversations
+- Work together with other agents
+
+**Start here:** [Safety & Governance](/safety) explains how we keep agents safe and trustworthy.
+:::
+
+---
+
 ## What is Agentic AI?
 
 Agentic AI refers to AI systems that can **autonomously perceive, reason, plan, and act** to achieve goals with minimal human intervention. Unlike traditional AI that responds to single prompts, agentic systems:

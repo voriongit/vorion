@@ -67,6 +67,79 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Understanding AI Governance - Beginner Section */}
+      <section className="py-20 px-6 border-t border-white/5 bg-gradient-to-b from-indigo-500/5 to-transparent">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <span className="text-xs uppercase tracking-wider text-indigo-400 font-medium">New to AI Governance?</span>
+            <h2 className="text-3xl font-bold text-white mt-2 mb-4">What is AI Governance?</h2>
+            <p className="text-neutral-400 max-w-2xl mx-auto">
+              Think of it like a credit score for AI. Just as banks use credit scores to decide loan amounts,
+              AI governance uses trust scores to decide what an AI agent can do.
+            </p>
+          </div>
+
+          {/* Simple 3-Step Explanation */}
+          <div className="grid md:grid-cols-3 gap-8 mb-12">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                <span className="text-2xl font-bold text-indigo-400">1</span>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">AI Takes Action</h3>
+              <p className="text-neutral-400 text-sm">
+                An AI agent wants to do something—send an email, make a purchase, access data.
+                Every action has a risk level.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/20 flex items-center justify-center">
+                <span className="text-2xl font-bold text-purple-400">2</span>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Trust is Checked</h3>
+              <p className="text-neutral-400 text-sm">
+                The system checks: "Has this AI earned enough trust for this action?"
+                New agents start with low trust and must prove themselves.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <span className="text-2xl font-bold text-emerald-400">3</span>
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Decision is Made</h3>
+              <p className="text-neutral-400 text-sm">
+                High trust? Approved. Low trust? Denied or escalated to a human.
+                Everything is logged for compliance.
+              </p>
+            </div>
+          </div>
+
+          {/* Trust Tiers Explained Simply */}
+          <div className="bg-white/5 rounded-2xl p-8 border border-white/10">
+            <h3 className="text-xl font-bold text-white mb-6 text-center">The 6 Trust Tiers (T0-T5)</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {[
+                { tier: 'T0', name: 'Sandbox', score: '0-99', desc: 'Brand new, testing only', color: 'red' },
+                { tier: 'T1', name: 'Provisional', score: '100-299', desc: 'Learning, limited actions', color: 'orange' },
+                { tier: 'T2', name: 'Established', score: '300-499', desc: 'Proven, standard tasks', color: 'yellow' },
+                { tier: 'T3', name: 'Trusted', score: '500-699', desc: 'Reliable, extended access', color: 'blue' },
+                { tier: 'T4', name: 'Verified', score: '700-899', desc: 'Highly trusted, sensitive ops', color: 'indigo' },
+                { tier: 'T5', name: 'Certified', score: '900-1000', desc: 'Full autonomy, audited', color: 'emerald' },
+              ].map(t => (
+                <div key={t.tier} className={`p-4 rounded-xl bg-${t.color}-500/10 border border-${t.color}-500/20 text-center`}>
+                  <div className={`text-2xl font-bold text-${t.color}-400 mb-1`}>{t.tier}</div>
+                  <div className="text-sm font-medium text-white">{t.name}</div>
+                  <div className="text-xs text-neutral-500 mb-2">{t.score}</div>
+                  <div className="text-xs text-neutral-400">{t.desc}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-center text-neutral-500 text-sm mt-6">
+              Trust is earned through consistent good behavior and lost quickly through failures.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* The Challenge */}
       <section className="py-20 px-6 border-t border-white/5">
         <div className="max-w-6xl mx-auto">
