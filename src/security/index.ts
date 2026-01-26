@@ -140,6 +140,24 @@ export {
 } from './tee.js';
 
 // =============================================================================
+// TEE Production Verifiers
+// =============================================================================
+
+export {
+  // Production verifier
+  ProductionAttestationVerifier,
+  createProductionVerifier,
+
+  // Platform-specific verification
+  verifySGXProduction,
+  verifyNitroProduction,
+  verifySEVProduction,
+
+  // Configuration
+  type ProductionAttestationConfig,
+} from './tee-production.js';
+
+// =============================================================================
 // Pairwise DID Service
 // =============================================================================
 

@@ -384,3 +384,66 @@ export class ProofService {
 export function createProofService(config?: SigningConfig): ProofService {
   return new ProofService(config);
 }
+
+// =============================================================================
+// MERKLE AGGREGATION
+// =============================================================================
+
+export {
+  // Types
+  type MerkleNode,
+  type MerkleProof,
+  type MerkleAnchor,
+  type ExternalAnchor,
+  type BatchAggregationResult,
+  type MerkleAggregationConfig,
+
+  // Functions
+  buildMerkleTree,
+  generateMerkleProof,
+  verifyMerkleProof,
+
+  // Service
+  MerkleAggregationService,
+  createMerkleAggregationService,
+} from './merkle.js';
+
+// =============================================================================
+// ZERO-KNOWLEDGE PROOFS
+// =============================================================================
+
+export {
+  // Types
+  type PedersenCommitment,
+  type RangeProof,
+  type ThresholdProof,
+  type MembershipProof,
+  type TrustTierProof,
+  type CompositeProof,
+  type ZKVerificationResult,
+  type ZKProofConfig,
+
+  // Primitives
+  createCommitment,
+  verifyCommitment,
+
+  // Range proofs
+  generateRangeProof,
+  verifyRangeProof,
+
+  // Threshold proofs
+  generateThresholdProof,
+  verifyThresholdProof,
+
+  // Membership proofs
+  generateMembershipProof,
+  verifyMembershipProof,
+
+  // Trust tier proofs
+  generateTrustTierProof,
+  verifyTrustTierProof,
+
+  // Service
+  ZKProofService,
+  createZKProofService,
+} from './zk-proofs.js';
