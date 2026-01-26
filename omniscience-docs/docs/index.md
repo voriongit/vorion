@@ -49,7 +49,7 @@ The internal anatomy: memory systems, reasoning engines, planning algorithms, an
 How multiple agents collaborate: hierarchical control, swarm intelligence, event-driven coordination, and consensus protocols.
 
 ### [Protocols & Standards](/protocols)
-The interoperability layer: MCP (Model Context Protocol), A2A (Agent-to-Agent), decentralized identity, and the BASIS governance standard.
+The interoperability layer: MCP (Model Context Protocol), A2A (Agent-to-Agent), decentralized identity, and the ACI governance specification.
 
 ### [Domain Applications](/domains)
 Specialized implementations in software engineering, scientific research, financial trading, and enterprise automation.
@@ -72,7 +72,7 @@ The agentic AI landscape is evolving rapidly:
 | 2023 | AutoGPT, BabyAGI spark autonomous agent research |
 | 2024 | Tool use becomes standard (function calling) |
 | 2025 | MCP, A2A protocols emerge for interoperability |
-| 2026 | Governance frameworks (BASIS) address safety |
+| 2026 | ACI Spec v1.1.0 published, governance frameworks mature |
 
 **We're building the infrastructure for AI agents to work safely alongside humans.**
 
@@ -91,9 +91,13 @@ The agentic AI landscape is evolving rapidly:
 
 Omniscience is maintained by the [Vorion](https://vorion.org) community:
 
-- **[BASIS Standard](https://vorion.org/basis)** — Open standard for AI agent governance
-- **[Cognigate](https://cognigate.dev)** — Reference implementation of BASIS
+- **[ACI Specification](https://npmjs.com/package/@vorionsys/aci-spec)** — Agent Capability Interface standard (v1.1.0)
+- **[Cognigate](https://cognigate.dev)** — Reference implementation of ACI governance
 - **[AgentAnchor](https://agentanchorai.com)** — Agent certification platform
+
+```bash
+npm install @vorionsys/aci-spec
+```
 
 ---
 

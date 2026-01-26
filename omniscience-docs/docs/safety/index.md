@@ -68,7 +68,7 @@ As AI agents gain autonomy and capability, ensuring their safe and responsible o
 │                              │                                          │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
 │  │                    Trust Verification                              │ │
-│  │  • ATSF scoring                                                   │ │
+│  │  • ACI trust scoring (0-1000)                                     │ │
 │  │  • Credential verification                                        │ │
 │  │  • Reputation systems                                             │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
@@ -288,6 +288,12 @@ class ComplianceManager:
 
 ## See Also
 
-- [BASIS Standard](../protocols/basis-standard.md) - Trust framework
+- [ACI Specification](../protocols/basis-standard.md) - Trust framework (0-1000 scale)
 - [Agent Identity](../protocols/agent-identity.md) - Authentication
 - [Multi-Agent Debate](../orchestration/multi-agent-debate.md) - Verification through debate
+
+### Quick Install
+
+```bash
+npm install @vorionsys/aci-spec
+```

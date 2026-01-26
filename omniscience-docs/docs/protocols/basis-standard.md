@@ -1,22 +1,28 @@
 ---
 sidebar_position: 5
-title: BASIS Standard
-description: Blockchain Agent Standard for Identity and Security
-tags: [protocols, basis, trust, governance, blockchain, identity]
+title: ACI Specification
+description: Agent Capability Interface - Open Standard for AI Governance
+tags: [protocols, aci, trust, governance, identity, npm]
 ---
 
-# BASIS Standard
+# ACI Specification
 
-## Blockchain Agent Standard for Identity and Security
+## Agent Capability Interface - Open Standard for AI Governance
 
-BASIS is a comprehensive framework for establishing trust, identity, and governance for autonomous AI agents. It combines decentralized identity, verifiable credentials, trust scoring, and on-chain verification into a cohesive standard.
+The ACI (Agent Capability Interface) specification is a comprehensive framework for establishing trust, identity, and governance for autonomous AI agents. It defines a 6-tier trust model (0-1000 scale), capability gating, and policy enforcement protocols.
+
+```bash
+npm install @vorionsys/aci-spec
+```
+
+**Package**: [@vorionsys/aci-spec](https://npmjs.com/package/@vorionsys/aci-spec) | **Version**: 1.1.0 | **License**: Apache 2.0
 
 ## Overview
 
-### The BASIS Vision
+### The ACI Vision
 
 ```
-                         BASIS Ecosystem
+                         ACI Ecosystem
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                                                                          │
 │  ┌────────────────────────────────────────────────────────────────────┐  │
@@ -138,19 +144,45 @@ Examples:
 }
 ```
 
-## Agent Trust Scoring Framework (ATSF)
+## ACI Trust Scoring (0-1000 Scale)
+
+### Trust Tiers
+
+The ACI spec defines 6 trust tiers on a 0-1000 scale:
+
+| Tier | Score Range | Name | Autonomy Level |
+|------|-------------|------|----------------|
+| T0 | 0-99 | Sandbox | Human approval required |
+| T1 | 100-299 | Provisional | Limited operations |
+| T2 | 300-499 | Established | Standard operations |
+| T3 | 500-699 | Trusted | Extended operations |
+| T4 | 700-899 | Verified | High autonomy |
+| T5 | 900-1000 | Certified | Full autonomy |
 
 ### Trust Score Structure
 
-ATSF provides multi-dimensional trust evaluation:
+```typescript
+import { TrustBand, TRUST_THRESHOLDS } from '@vorionsys/aci-spec';
+
+// Get trust tier from score
+const score = 650;
+const tier = TrustBand.fromScore(score); // T3 - Trusted
+
+// Check thresholds
+if (score >= TRUST_THRESHOLDS.T3.min) {
+  // Agent can perform extended operations
+}
+```
+
+ACI provides multi-dimensional trust evaluation:
 
 ```python
 @dataclass
-class ATSFScore:
-    """Complete ATSF trust score."""
+class ACITrustScore:
+    """Complete ACI trust score."""
 
-    # Overall composite score (0-1)
-    overall_score: float
+    # Overall composite score (0-1000)
+    overall_score: int  # 0-1000
 
     # Component scores
     components: ATSFComponents
@@ -712,5 +744,6 @@ BASIS continues to evolve:
 ## See Also
 
 - [Agent Identity](./agent-identity.md) - DID/VC foundations
-- [Trust Scoring](../safety/trust-scoring.md) - ATSF deep dive
-- [BASIS Documentation](https://vorion.org/basis) - Official specification
+- [Trust Scoring](../safety/trust-scoring.md) - ACI trust deep dive
+- [ACI Specification on npm](https://npmjs.com/package/@vorionsys/aci-spec) - Official package
+- [Vorion Platform](https://vorion.org) - Reference implementation
