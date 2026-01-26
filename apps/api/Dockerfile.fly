@@ -1,0 +1,22 @@
+# Fly.io Dockerfile for Vorion API
+# NOTE: This runs in demo/proxy mode - for full agent execution, use a VPS
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy and install dependencies
+COPY apps/api/package*.json ./
+RUN npm ci --only=production
+
+# Copy built files
+COPY apps/api/dist ./dist
+COPY apps/api/.env.fly ./.env
+
+ENV NODE_ENV=production
+ENV PORT=8080
+ENV HOST=0.0.0.0
+ENV DEMO_MODE=true
+
+EXPOSE 8080
+
+CMD ["node", "dist/index.js"]
