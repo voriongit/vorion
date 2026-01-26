@@ -85,16 +85,41 @@ A numerical value (0-1000) representing an entity's trustworthiness. Calculated 
 - **Context** (15%): Environmental signals
 
 ### Trust Levels (L0-L5)
-Six-tier classification based on trust scores:
+
+Vorion implements a **dual-tier system** to separate external certification from operational autonomy:
+
+#### RuntimeTier (Operational Autonomy)
+Used by the TrustEngine for day-to-day governance decisions. Defines what an agent can do in a specific deployment:
 
 | Level | Name | Score Range | Description |
 |-------|------|-------------|-------------|
-| L0 | Sandbox | 0-99 | Restricted testing environment |
-| L1 | Provisional | 100-299 | New or recovering agents |
-| L2 | Standard | 300-499 | Normal operational trust |
-| L3 | Trusted | 500-699 | Elevated privileges |
-| L4 | Certified | 700-899 | Audited and verified |
-| L5 | Autonomous | 900-1000 | Maximum autonomy |
+| L0 | Sandbox | 0-99 | Isolated testing, no external access |
+| L1 | Provisional | 100-299 | Limited operations, high oversight |
+| L2 | Standard | 300-499 | Normal operations with guardrails |
+| L3 | Trusted | 500-699 | Standard operations without approval |
+| L4 | Certified | 700-899 | Independent operation within bounds |
+| L5 | Autonomous | 900-1000 | Full authority, minimal oversight |
+
+#### CertificationTier (External Attestation)
+Defined in the ACI (Agent Certification Interface) spec. Represents the level of external verification an agent has received:
+
+| Level | Name | Score Range | Description |
+|-------|------|-------------|-------------|
+| T0 | Unverified | 0-99 | No external verification |
+| T1 | Registered | 100-299 | Organization identity verified |
+| T2 | Tested | 300-499 | Automated capability tests passed |
+| T3 | Certified | 500-699 | Third-party audit completed |
+| T4 | Verified | 700-899 | Continuous behavioral monitoring |
+| T5 | Sovereign | 900-1000 | Highest assurance level |
+
+#### Tier Mapping
+These tiers are conceptually different but can be mapped:
+- **CertificationTier** answers: "What has this agent proven it can do?"
+- **RuntimeTier** answers: "What is this agent allowed to do here?"
+
+An agent with high certification (T4 Verified) might still operate at lower runtime autonomy (L2 Standard) in a sensitive environment.
+
+**Canonical definitions**: `@vorion/contracts/aci/tiers`
 
 ### Trust Signal
 An event that affects an entity's trust score. Signals have:
@@ -197,6 +222,8 @@ Core ATSF runtime package providing:
 - Persistence layer
 - LangChain integration
 - Proof generation
+
+> **Note on Package Naming**: The ATSF core package uses `@vorionsys` namespace for historical reasons. All other packages use `@vorion` namespace. New packages should use `@vorion/`. A rename to `@vorion/atsf-core` is planned for v2.0.
 
 ### @vorion/basis
 Blockchain contracts and governance primitives for BASIS compliance.

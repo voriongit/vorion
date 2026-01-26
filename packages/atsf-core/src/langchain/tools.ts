@@ -105,7 +105,8 @@ export function createTrustTools(
         return JSON.stringify({
           levels,
           description:
-            'Trust levels range from L0 (Untrusted) to L5 (Certified). ' +
+            'Trust levels range from L0 (Sandbox) to L5 (Autonomous). ' +
+            'L0=Sandbox, L1=Provisional, L2=Standard, L3=Trusted, L4=Certified, L5=Autonomous. ' +
             'Higher levels grant access to more sensitive actions.',
         });
       },

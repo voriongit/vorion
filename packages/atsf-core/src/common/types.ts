@@ -21,16 +21,22 @@ export type Timestamp = string;
 /**
  * Trust level (L0-L5)
  *
- * Legacy trust level representation using numeric values 0-5.
- * Maps to canonical TrustBand enum from @vorion/contracts:
- * - L0/T0: Untrusted (0-20)
- * - L1/T1: Supervised (21-40)
- * - L2/T2: Constrained (41-55)
- * - L3/T3: Trusted (56-70)
- * - L4/T4: Autonomous (71-85)
- * - L5/T5: Mission Critical (86-100)
+ * Trust level representation using numeric values 0-5 on a 0-1000 scale.
  *
- * @see {@link @vorion/contracts!TrustBand} for canonical enum
+ * **Runtime Tiers** (operational autonomy - used by TrustEngine):
+ * - L0: Sandbox (0-99) - Isolated testing, no external access
+ * - L1: Provisional (100-299) - Limited operations, high oversight
+ * - L2: Standard (300-499) - Normal operations with guardrails
+ * - L3: Trusted (500-699) - Standard operations without approval
+ * - L4: Certified (700-899) - Independent operation within bounds
+ * - L5: Autonomous (900-1000) - Full authority, minimal oversight
+ *
+ * For the complete dual-tier system (CertificationTier vs RuntimeTier),
+ * see @vorion/contracts/aci/tiers which provides:
+ * - CertificationTier: External attestation status (Unverified → Sovereign)
+ * - RuntimeTier: Deployment-specific autonomy (Sandbox → Sovereign)
+ *
+ * @see {@link @vorion/contracts/aci/tiers} for canonical tier definitions
  */
 export type TrustLevel = 0 | 1 | 2 | 3 | 4 | 5;
 

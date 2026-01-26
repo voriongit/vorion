@@ -294,6 +294,20 @@ def calculate_trust_score(
 | Interfaces | PascalCase + I prefix | `IConstraint` |
 | Types | PascalCase | `EvaluationResult` |
 
+### Package Naming
+
+All new packages should use the `@vorion/` namespace:
+
+```json
+{
+  "name": "@vorion/package-name"
+}
+```
+
+**Note**: The `@vorionsys/atsf-core` package uses a legacy namespace for historical reasons. A rename to `@vorion/atsf-core` is planned for v2.0. When referencing ATSF in documentation:
+- Use `@vorionsys/atsf-core` for current installation instructions
+- Note the planned migration to `@vorion/atsf-core`
+
 ### File Structure
 
 ```typescript
