@@ -1,0 +1,248 @@
+# Phase 6 Trust Engine Alerting Rules
+#
+# These rules detect anomalies and critical conditions in the ACI governance system.
+# Configure alert destinations (PagerDuty, Slack, etc.) in your alertmanager.yml
+
+groups:
+  - name: phase6-critical
+    interval: 30s
+    rules:
+      # Critical: Gaming alert detected
+      - alert: Phase6GamingAlertCritical
+        expr: phase6_gaming_alerts_active{severity="CRITICAL"} > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: trust-engineering
+          component: phase6
+        annotations:
+          summary: "Critical gaming alert detected"
+          description: "{{ $value }} critical gaming alerts are active. Agent(s) may be attempting to manipulate trust scores."
+          runbook_url: "https://docs.vorion.dev/runbooks/phase6-gaming-alert"
+          dashboard: "https://grafana.vorion.dev/d/phase6-trust-engine"
+
+      # Critical: High rate of ceiling violations
+      - alert: Phase6CeilingViolationSpike
+        expr: |
+          (
+            sum(rate(phase6_ceiling_events_total{compliance_status="VIOLATION"}[5m])) /
+            sum(rate(phase6_ceiling_events_total[5m]))
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: trust-engineering
+          component: phase6
+        annotations:
+          summary: "High rate of trust ceiling violations"
+          description: "More than 10% of ceiling events are violations. This may indicate systematic trust boundary issues."
+          runbook_url: "https://docs.vorion.dev/runbooks/phase6-ceiling-violations"
+
+      # Critical: Role gate denial rate too high
+      - alert: Phase6RoleGateDenialSpike
+        expr: |
+          (
+            sum(rate(phase6_role_gate_decisions_total{decision="DENY"}[5m])) /
+            sum(rate(phase6_role_gate_evaluations_total[5m]))
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: critical
+          team: trust-engineering
+          component: phase6
+        annotations:
+          summary: "High role gate denial rate"
+          description: "More than 30% of role gate evaluations are being denied. Check for widespread trust degradation or policy misconfiguration."
+
+  - name: phase6-warning
+    interval: 1m
+    rules:
+      # Warning: Gaming alerts increasing
+      - alert: Phase6GamingAlertsIncreasing
+        expr: |
+          delta(phase6_gaming_alerts_total[10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: trust-engineering
+          component: phase6
+        annotations:
+          summary: "Gaming alerts are increasing"
+          description: "{{ $value }} new gaming alerts in the last 10 minutes. Investigate for coordinated trust manipulation."
+
+      # Warning: Role gate latency high
+      - alert: Phase6RoleGateLatencyHigh
+        expr: |
+          histogram_quantile(0.95, rate(phase6_role_gate_duration_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: trust-engineering
+          component: phase6
+        annotations:
+          summary: "Role gate evaluation latency is high"
+          description: "P95 role gate latency is {{ $value | humanizeDuration }}. This may impact agent operations."
+
+      # Warning: Escalation rate high
+      - alert: Phase6EscalationRateHigh
+        expr: |
+          (
+            sum(rate(phase6_role_gate_decisions_total{decision="ESCALATE"}[15m])) /
+            sum(rate(phase6_role_gate_evaluations_total[15m]))
+          ) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          team: trust-engineering
+          component: phase6
+        annotations:
+          summary: "High escalation rate for role gates"
+          description: "More than 10% of role gate evaluations require human escalation. Review policy thresholds."
+
+      # Warning: Many agents in low trust tiers
+      - alert: Phase6LowTrustAgentSpike
+        expr: |
+          (
+            sum(phase6_agents_by_tier{tier=~"T0|T1"}) /
+            sum(phase6_agents_by_tier)
+          ) > 0.4
+        for: 15m
+        labels:
+          severity: warning
+          team: trust-engineering
+          component: phase6
+        annotations:
+          summary: "High percentage of low-trust agents"
+          description: "{{ $value | humanizePercentage }} of agents are in T0 or T1 tiers. Consider reviewing trust recovery policies."
+
+      # Warning: Provenance verification failures
+      - alert: Phase6ProvenanceVerificationFailures
+        expr: |
+          rate(phase6_provenance_verification_failures_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: trust-engineering
+          component: phase6
+        annotations:
+          summary: "Provenance verification failures detected"
+          description: "{{ $value | humanize }} provenance verification failures per second. Check lineage integrity."
+
+  - name: phase6-info
+    interval: 5m
+    rules:
+      # Info: Unusual tier distribution changes
+      - alert: Phase6TierDistributionShift
+        expr: |
+          abs(delta(phase6_agents_by_tier[1h])) > 10
+        for: 30m
+        labels:
+          severity: info
+          team: trust-engineering
+          component: phase6
+        annotations:
+          summary: "Significant tier distribution change"
+          description: "Tier {{ $labels.tier }} has changed by {{ $value }} agents in the last hour."
+
+      # Info: New ACI preset deployed
+      - alert: Phase6NewPresetDeployed
+        expr: |
+          delta(phase6_presets_total{type="axiom"}[1h]) > 0
+        labels:
+          severity: info
+          team: trust-engineering
+          component: phase6
+        annotations:
+          summary: "New Axiom preset deployed"
+          description: "{{ $value }} new Axiom preset(s) deployed in the last hour."
+
+  - name: phase6-slo
+    interval: 1m
+    rules:
+      # SLO: Role gate availability
+      - alert: Phase6RoleGateAvailabilitySLO
+        expr: |
+          (
+            1 - (
+              sum(rate(phase6_role_gate_errors_total[5m])) /
+              sum(rate(phase6_role_gate_evaluations_total[5m]))
+            )
+          ) < 0.999
+        for: 5m
+        labels:
+          severity: warning
+          team: trust-engineering
+          component: phase6
+          slo: availability
+        annotations:
+          summary: "Role gate availability below SLO"
+          description: "Role gate availability is {{ $value | humanizePercentage }}, below 99.9% SLO target."
+
+      # SLO: Role gate latency
+      - alert: Phase6RoleGateLatencySLO
+        expr: |
+          histogram_quantile(0.99, rate(phase6_role_gate_duration_seconds_bucket[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          team: trust-engineering
+          component: phase6
+          slo: latency
+        annotations:
+          summary: "Role gate latency above SLO"
+          description: "P99 role gate latency is {{ $value | humanizeDuration }}, above 200ms SLO target."
+
+# =============================================================================
+# ALERT RECEIVERS CONFIGURATION (for alertmanager.yml)
+# =============================================================================
+#
+# receivers:
+#   - name: 'phase6-critical'
+#     pagerduty_configs:
+#       - service_key: '<PAGERDUTY_SERVICE_KEY>'
+#         severity: 'critical'
+#         description: '{{ .GroupLabels.alertname }}'
+#         details:
+#           summary: '{{ .CommonAnnotations.summary }}'
+#           description: '{{ .CommonAnnotations.description }}'
+#     slack_configs:
+#       - api_url: '<SLACK_WEBHOOK_URL>'
+#         channel: '#trust-engine-alerts'
+#         title: ':rotating_light: {{ .GroupLabels.alertname }}'
+#         text: '{{ .CommonAnnotations.description }}'
+#         color: 'danger'
+#
+#   - name: 'phase6-warning'
+#     slack_configs:
+#       - api_url: '<SLACK_WEBHOOK_URL>'
+#         channel: '#trust-engine-alerts'
+#         title: ':warning: {{ .GroupLabels.alertname }}'
+#         text: '{{ .CommonAnnotations.description }}'
+#         color: 'warning'
+#
+#   - name: 'phase6-info'
+#     slack_configs:
+#       - api_url: '<SLACK_WEBHOOK_URL>'
+#         channel: '#trust-engine-notifications'
+#         title: ':information_source: {{ .GroupLabels.alertname }}'
+#         text: '{{ .CommonAnnotations.description }}'
+#         color: 'good'
+#
+# route:
+#   receiver: 'default'
+#   routes:
+#     - match:
+#         component: phase6
+#         severity: critical
+#       receiver: 'phase6-critical'
+#       repeat_interval: 5m
+#     - match:
+#         component: phase6
+#         severity: warning
+#       receiver: 'phase6-warning'
+#       repeat_interval: 30m
+#     - match:
+#         component: phase6
+#         severity: info
+#       receiver: 'phase6-info'
+#       repeat_interval: 6h
