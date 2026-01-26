@@ -1,0 +1,868 @@
+openapi: 3.1.0
+info:
+  title: ACI Phase 6 Trust Engine API
+  description: |
+    Production-grade API for AI agent trust governance based on the
+    Agent Classification Identifier (ACI) standard.
+
+    ## Architecture Decisions
+    - **Q1**: Ceiling Enforcement - Dual-layer trust ceilings with regulatory compliance
+    - **Q2**: Hierarchical Context - 4-tier context (Deployment → Org → Agent → Operation)
+    - **Q3**: Role Gates - 3-layer evaluation (Kernel → Policy → BASIS)
+    - **Q4**: Federated Presets - ACI → Vorion → Axiom derivation chains
+    - **Q5**: Provenance - Immutable origin tracking with policy modifiers
+  version: 1.0.0
+  contact:
+    name: Vorion
+    url: https://vorion.ai
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.agentanchor.ai
+    description: Production
+  - url: https://staging.agentanchor.ai
+    description: Staging
+  - url: http://localhost:3000
+    description: Local Development
+
+tags:
+  - name: Stats
+    description: Dashboard statistics
+  - name: Context
+    description: Q2 - Hierarchical Context
+  - name: Role Gates
+    description: Q3 - Stratified Role Gates
+  - name: Ceiling
+    description: Q1 - Ceiling Enforcement
+  - name: Alerts
+    description: Q1 - Gaming Detection Alerts
+  - name: Presets
+    description: Q4 - Federated Weight Presets
+  - name: Provenance
+    description: Q5 - Provenance Tracking
+
+paths:
+  /api/phase6/stats:
+    get:
+      tags: [Stats]
+      summary: Get dashboard statistics
+      description: Returns aggregated statistics from all Phase 6 components
+      operationId: getStats
+      responses:
+        '200':
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+
+  /api/phase6/context:
+    get:
+      tags: [Context]
+      summary: Get context hierarchy
+      description: Returns hierarchical context data (deployment, org, agent, operation)
+      operationId: getContextHierarchy
+      parameters:
+        - name: tier
+          in: query
+          description: Filter by context tier
+          schema:
+            type: string
+            enum: [deployment, organization, agent, operation]
+        - name: deploymentId
+          in: query
+          description: Filter by deployment ID
+          schema:
+            type: string
+        - name: orgId
+          in: query
+          description: Filter by organization ID
+          schema:
+            type: string
+        - name: agentId
+          in: query
+          description: Filter by agent ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Context hierarchy data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextHierarchyResponse'
+    post:
+      tags: [Context]
+      summary: Create a context
+      description: Creates a new context at the specified tier
+      operationId: createContext
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContextRequest'
+      responses:
+        '201':
+          description: Context created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DeploymentContext'
+
+  /api/phase6/role-gates:
+    get:
+      tags: [Role Gates]
+      summary: Get role gate evaluations
+      description: Returns role gate evaluation history
+      operationId: getRoleGateEvaluations
+      parameters:
+        - name: agentId
+          in: query
+          description: Filter by agent ID
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum results to return
+          schema:
+            type: integer
+            default: 50
+        - name: includeMatrix
+          in: query
+          description: Include role-tier permission matrix
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Role gate evaluations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleGateEvaluationsResponse'
+    post:
+      tags: [Role Gates]
+      summary: Evaluate a role gate
+      description: |
+        Evaluates whether an agent can assume a requested role.
+        Uses 3-layer evaluation: Kernel → Policy → BASIS
+      operationId: evaluateRoleGate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleGateRequest'
+      responses:
+        '200':
+          description: Role gate evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleGateResponse'
+
+  /api/phase6/ceiling:
+    get:
+      tags: [Ceiling]
+      summary: Get ceiling events
+      description: Returns ceiling enforcement event history
+      operationId: getCeilingEvents
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: includeConfig
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Ceiling events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CeilingEventsResponse'
+    post:
+      tags: [Ceiling]
+      summary: Check ceiling
+      description: Check a proposed trust score against regulatory and organizational ceilings
+      operationId: checkCeiling
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CeilingCheckRequest'
+      responses:
+        '200':
+          description: Ceiling check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CeilingCheckResponse'
+
+  /api/phase6/alerts:
+    get:
+      tags: [Alerts]
+      summary: Get gaming alerts
+      description: Returns gaming detection alerts
+      operationId: getGamingAlerts
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/AlertStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Gaming alerts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GamingAlertsResponse'
+    post:
+      tags: [Alerts]
+      summary: Create gaming alert
+      description: Creates a new gaming detection alert
+      operationId: createGamingAlert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGamingAlertRequest'
+      responses:
+        '201':
+          description: Alert created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alert:
+                    $ref: '#/components/schemas/GamingAlert'
+    patch:
+      tags: [Alerts]
+      summary: Update alert status
+      description: Updates the status of a gaming alert
+      operationId: updateAlertStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAlertStatusRequest'
+      responses:
+        '200':
+          description: Alert updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alert:
+                    $ref: '#/components/schemas/GamingAlert'
+
+  /api/phase6/presets:
+    get:
+      tags: [Presets]
+      summary: Get weight presets
+      description: Returns federated weight presets (ACI, Vorion, Axiom)
+      operationId: getPresets
+      parameters:
+        - name: tier
+          in: query
+          schema:
+            type: string
+            enum: [aci, vorion, axiom]
+        - name: deploymentId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Weight presets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresetsResponse'
+    post:
+      tags: [Presets]
+      summary: Verify preset lineage
+      description: Verifies the hash chain lineage of an Axiom preset
+      operationId: verifyPresetLineage
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [verify-lineage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [axiomPresetId]
+              properties:
+                axiomPresetId:
+                  type: string
+      responses:
+        '200':
+          description: Lineage verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineageVerificationResponse'
+
+  /api/phase6/provenance:
+    get:
+      tags: [Provenance]
+      summary: Get provenance records
+      description: Returns agent provenance records
+      operationId: getProvenance
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Provenance records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvenanceResponse'
+    post:
+      tags: [Provenance]
+      summary: Create provenance record
+      description: Creates a new immutable provenance record for an agent
+      operationId: createProvenance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProvenanceRequest'
+      responses:
+        '201':
+          description: Provenance created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  record:
+                    $ref: '#/components/schemas/Provenance'
+
+components:
+  schemas:
+    # Enums
+    TrustTier:
+      type: string
+      enum: [T0, T1, T2, T3, T4, T5]
+      description: |
+        Trust tiers:
+        - T0: Sandbox (0-99)
+        - T1: Probation (100-299)
+        - T2: Limited (300-499)
+        - T3: Standard (500-699)
+        - T4: Trusted (700-899)
+        - T5: Sovereign (900-1000)
+
+    AgentRole:
+      type: string
+      enum: [R_L0, R_L1, R_L2, R_L3, R_L4, R_L5, R_L6, R_L7, R_L8]
+      description: Agent roles from Listener (R-L0) to Ecosystem Controller (R-L8)
+
+    CreationType:
+      type: string
+      enum: [FRESH, CLONED, EVOLVED, PROMOTED, IMPORTED]
+      description: Agent creation types with trust modifiers
+
+    RoleGateDecision:
+      type: string
+      enum: [ALLOW, DENY, ESCALATE]
+
+    ComplianceStatus:
+      type: string
+      enum: [COMPLIANT, WARNING, VIOLATION]
+
+    ComplianceFramework:
+      type: string
+      enum: [EU_AI_ACT, NIST_AI_RMF, ISO_42001, DEFAULT]
+
+    GamingAlertType:
+      type: string
+      enum: [RAPID_CHANGE, OSCILLATION, BOUNDARY_TESTING, CEILING_BREACH]
+
+    AlertSeverity:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    AlertStatus:
+      type: string
+      enum: [ACTIVE, INVESTIGATING, RESOLVED, FALSE_POSITIVE]
+
+    # Context Types
+    DeploymentContext:
+      type: object
+      properties:
+        id:
+          type: string
+        deploymentId:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        environment:
+          type: string
+          enum: [development, staging, production]
+        regulatoryJurisdiction:
+          type: string
+        maxTrustCeiling:
+          type: integer
+        contextHash:
+          type: string
+        frozenAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    # Role Gate Types
+    RoleGateRequest:
+      type: object
+      required: [agentId, requestedRole, currentTier]
+      properties:
+        agentId:
+          type: string
+        requestedRole:
+          $ref: '#/components/schemas/AgentRole'
+        currentTier:
+          $ref: '#/components/schemas/TrustTier'
+        currentScore:
+          type: integer
+        operationId:
+          type: string
+        attestations:
+          type: array
+          items:
+            type: string
+
+    RoleGateResponse:
+      type: object
+      properties:
+        evaluation:
+          $ref: '#/components/schemas/RoleGateEvaluation'
+        layers:
+          type: object
+          properties:
+            kernel:
+              type: object
+              properties:
+                allowed:
+                  type: boolean
+            policy:
+              type: object
+              properties:
+                result:
+                  $ref: '#/components/schemas/RoleGateDecision'
+                applied:
+                  type: string
+            basis:
+              type: object
+              properties:
+                overrideUsed:
+                  type: boolean
+
+    RoleGateEvaluation:
+      type: object
+      properties:
+        id:
+          type: string
+        agentId:
+          type: string
+        requestedRole:
+          $ref: '#/components/schemas/AgentRole'
+        currentTier:
+          $ref: '#/components/schemas/TrustTier'
+        currentScore:
+          type: integer
+        kernelAllowed:
+          type: boolean
+        policyResult:
+          $ref: '#/components/schemas/RoleGateDecision'
+        policyApplied:
+          type: string
+        basisOverrideUsed:
+          type: boolean
+        finalDecision:
+          $ref: '#/components/schemas/RoleGateDecision'
+        decisionReason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    RoleGateEvaluationsResponse:
+      type: object
+      properties:
+        evaluations:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleGateEvaluation'
+        summary:
+          type: object
+          properties:
+            total:
+              type: integer
+            byDecision:
+              type: object
+
+    # Ceiling Types
+    CeilingCheckRequest:
+      type: object
+      required: [agentId, proposedScore]
+      properties:
+        agentId:
+          type: string
+        previousScore:
+          type: integer
+        proposedScore:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        complianceFramework:
+          $ref: '#/components/schemas/ComplianceFramework'
+        organizationalCeiling:
+          type: integer
+
+    CeilingCheckResponse:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            agentId:
+              type: string
+            proposedScore:
+              type: integer
+            finalScore:
+              type: integer
+            effectiveCeiling:
+              type: integer
+            ceilingApplied:
+              type: boolean
+            complianceStatus:
+              $ref: '#/components/schemas/ComplianceStatus'
+            gamingIndicators:
+              type: array
+              items:
+                $ref: '#/components/schemas/GamingAlertType'
+        ceilingDetails:
+          type: object
+
+    CeilingEventsResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/CeilingEvent'
+        summary:
+          type: object
+
+    CeilingEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        agentId:
+          type: string
+        previousScore:
+          type: integer
+        proposedScore:
+          type: integer
+        finalScore:
+          type: integer
+        ceilingApplied:
+          type: boolean
+        complianceStatus:
+          $ref: '#/components/schemas/ComplianceStatus'
+        createdAt:
+          type: string
+          format: date-time
+
+    # Gaming Alert Types
+    GamingAlert:
+      type: object
+      properties:
+        id:
+          type: string
+        agentId:
+          type: string
+        alertType:
+          $ref: '#/components/schemas/GamingAlertType'
+        severity:
+          $ref: '#/components/schemas/AlertSeverity'
+        status:
+          $ref: '#/components/schemas/AlertStatus'
+        details:
+          type: string
+        occurrences:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateGamingAlertRequest:
+      type: object
+      required: [agentId, alertType, severity, details]
+      properties:
+        agentId:
+          type: string
+        alertType:
+          $ref: '#/components/schemas/GamingAlertType'
+        severity:
+          $ref: '#/components/schemas/AlertSeverity'
+        details:
+          type: string
+        occurrences:
+          type: integer
+
+    UpdateAlertStatusRequest:
+      type: object
+      required: [alertId, status]
+      properties:
+        alertId:
+          type: string
+        status:
+          $ref: '#/components/schemas/AlertStatus'
+        resolvedBy:
+          type: string
+        resolutionNotes:
+          type: string
+
+    GamingAlertsResponse:
+      type: object
+      properties:
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/GamingAlert'
+        summary:
+          type: object
+
+    # Provenance Types
+    Provenance:
+      type: object
+      properties:
+        id:
+          type: string
+        agentId:
+          type: string
+        creationType:
+          $ref: '#/components/schemas/CreationType'
+        parentAgentId:
+          type: string
+        createdBy:
+          type: string
+        trustModifier:
+          type: integer
+        provenanceHash:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateProvenanceRequest:
+      type: object
+      required: [agentId, creationType, createdBy]
+      properties:
+        agentId:
+          type: string
+        creationType:
+          $ref: '#/components/schemas/CreationType'
+        parentAgentId:
+          type: string
+        createdBy:
+          type: string
+        metadata:
+          type: object
+
+    ProvenanceResponse:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/Provenance'
+        summary:
+          type: object
+        lineage:
+          type: array
+          items:
+            $ref: '#/components/schemas/Provenance'
+
+    # Preset Types
+    ACIPreset:
+      type: object
+      properties:
+        id:
+          type: string
+        presetId:
+          type: string
+        name:
+          type: string
+        weights:
+          type: object
+        presetHash:
+          type: string
+
+    PresetsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            aci:
+              type: array
+              items:
+                $ref: '#/components/schemas/ACIPreset'
+            vorion:
+              type: array
+            axiom:
+              type: array
+            lineages:
+              type: array
+
+    LineageVerificationResponse:
+      type: object
+      properties:
+        verified:
+          type: boolean
+        lineage:
+          type: object
+        hashChainValid:
+          type: boolean
+        reason:
+          type: string
+
+    # Dashboard Types
+    DashboardResponse:
+      type: object
+      properties:
+        stats:
+          $ref: '#/components/schemas/Phase6Stats'
+        tierDistribution:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrustTierData'
+        recentEvents:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecentEvent'
+        version:
+          type: object
+          properties:
+            major:
+              type: integer
+            minor:
+              type: integer
+            patch:
+              type: integer
+            label:
+              type: string
+
+    Phase6Stats:
+      type: object
+      properties:
+        contextStats:
+          type: object
+          properties:
+            deployments:
+              type: integer
+            organizations:
+              type: integer
+            agents:
+              type: integer
+            activeOperations:
+              type: integer
+        ceilingStats:
+          type: object
+        roleGateStats:
+          type: object
+        presetStats:
+          type: object
+
+    TrustTierData:
+      type: object
+      properties:
+        tier:
+          $ref: '#/components/schemas/TrustTier'
+        label:
+          type: string
+        range:
+          type: string
+        count:
+          type: integer
+
+    RecentEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [ceiling, role_gate, context, provenance]
+        agentId:
+          type: string
+        status:
+          $ref: '#/components/schemas/ComplianceStatus'
+        timestamp:
+          type: string
+          format: date-time
+
+    ContextHierarchyResponse:
+      type: object
+      properties:
+        data:
+          type: object
+
+    CreateContextRequest:
+      type: object
+      required: [tier]
+      properties:
+        tier:
+          type: string
+          enum: [deployment, organization, agent, operation]
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []
