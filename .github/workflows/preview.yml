@@ -105,7 +105,7 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: packages-dist
           path: packages
@@ -194,7 +194,7 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: packages-dist
           path: packages
