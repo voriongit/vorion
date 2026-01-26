@@ -53,7 +53,7 @@ jobs:
           cache: 'npm'
 
       - name: Cache Turbo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}
@@ -82,7 +82,7 @@ jobs:
           cache: 'npm'
 
       - name: Cache Turbo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}
@@ -131,7 +131,7 @@ jobs:
           cache: 'npm'
 
       - name: Cache Turbo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}
@@ -166,7 +166,7 @@ jobs:
           cache: 'npm'
 
       - name: Cache Turbo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}
@@ -229,7 +229,7 @@ jobs:
           cache: 'npm'
 
       - name: Cache Turbo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}
