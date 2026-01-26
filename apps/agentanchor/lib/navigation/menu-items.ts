@@ -11,6 +11,7 @@ import {
   Shield,
   FlaskConical,
   AlertTriangle,
+  Layers,
 } from 'lucide-react'
 
 export type UserRole = 'trainer' | 'consumer' | 'both'
@@ -65,6 +66,14 @@ export const menuItems: MenuItem[] = [
   },
 
   // === GOVERN - Trust, policies, escalations, audit ===
+  {
+    id: 'trust-engine',
+    label: 'Trust Engine',
+    href: '/trust-engine',
+    icon: Layers,
+    badge: 'P6',
+    section: 'govern',
+  },
   {
     id: 'governance',
     label: 'Governance',
