@@ -7,11 +7,11 @@ import LiveSiteCard from '../components/LiveSiteCard.astro';
 const projects = [
   {
     title: 'Vorion Platform',
-    description: 'Enterprise AI governance platform providing trust scoring, policy enforcement, audit trails, and human oversight for autonomous AI systems.',
+    description: 'Enterprise AI governance platform providing trust scoring, policy enforcement, audit trails, and human oversight for autonomous AI systems. Phase 6 architecture finalized.',
     href: '/projects/vorion',
     status: 'active' as const,
     icon: '🏛️',
-    tags: ['Enterprise', 'Governance', 'Trust'],
+    tags: ['Enterprise', 'Governance', 'Phase 6'],
   },
   {
     title: 'AgentAnchor',
@@ -23,12 +23,12 @@ const projects = [
     tags: ['B2B', 'Compliance', 'Dashboard'],
   },
   {
-    title: 'BASIS Standard',
-    description: 'Open governance standard for AI agents. Defines 6-tier trust levels, behavioral scoring, and policy enforcement protocols.',
-    href: '/projects/basis',
+    title: 'ACI Specification',
+    description: 'Agent Capability Interface standard for AI governance. Defines 6-tier trust levels (0-1000), behavioral scoring, and policy enforcement protocols. Published to npm.',
+    href: '/projects/aci-spec',
     status: 'shipped' as const,
     icon: '📐',
-    tags: ['Standard', 'Open Source', 'v1.0.0'],
+    tags: ['Standard', 'Apache 2.0', 'v1.1.0'],
   },
   {
     title: 'ATSF Framework',
@@ -80,9 +80,9 @@ const liveSites = [
     status: 'online' as const,
   },
   {
-    title: 'BASIS Standard',
-    description: 'Open governance specification',
-    url: 'https://basis.vorion.org',
+    title: 'ACI Spec (npm)',
+    description: '@vorionsys/aci-spec v1.1.0',
+    url: 'https://www.npmjs.com/package/@vorionsys/aci-spec',
     status: 'online' as const,
   },
   {
@@ -100,6 +100,16 @@ const liveSites = [
 ];
 
 const packages = [
+  {
+    name: '@vorionsys/aci-spec',
+    description: 'Agent Capability Interface specification - the open standard for AI governance. Published on npm.',
+    features: [
+      '6-tier trust levels (0-1000 scale)',
+      'TrustBand, TRUST_THRESHOLDS, OBSERVATION_CEILINGS',
+      '7 specification documents + OWASP guides',
+      'TypeScript + ESM/CJS dual format',
+    ],
+  },
   {
     name: '@vorion/ai-gateway',
     description: 'Multi-provider AI routing with intelligent model selection, PII detection, and cost optimization.',
@@ -124,20 +134,10 @@ const packages = [
     name: '@vorionsys/atsf-core',
     description: 'Core runtime for the Agentic Trust Scoring Framework with behavioral trust calculation.',
     features: [
-      '6-tier trust levels per BASIS spec',
+      '6-tier trust levels per ACI spec',
       'Accelerated decay on failures',
       'Recovery mechanisms for trust restoration',
       'Event emission for observability',
-    ],
-  },
-  {
-    name: '@vorion/agent-sdk',
-    description: 'TypeScript SDK for connecting AI agents to Aurais Mission Control.',
-    features: [
-      'WebSocket connection with auto-reconnect',
-      'Task assignment and progress reporting',
-      'Human approval request workflow',
-      'Type-safe event handling',
     ],
   },
 ];
@@ -157,7 +157,7 @@ const packages = [
       <div class="text-center max-w-4xl mx-auto">
         <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-vorion-500/10 border border-vorion-500/20 text-vorion-400 text-sm font-medium mb-8">
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          4 Platforms Live
+          Phase 6 Complete — ACI Spec v1.1.0 Published
         </div>
 
         <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
@@ -276,7 +276,7 @@ const packages = [
       <div class="text-center mb-12">
         <h2 class="text-2xl sm:text-3xl font-bold text-white mb-4">6-Tier Trust Architecture</h2>
         <p class="text-slate-400 max-w-2xl mx-auto">
-          The BASIS standard defines six trust levels for AI agents, from sandboxed newcomers to fully autonomous systems.
+          The ACI specification defines six trust levels (0-1000 scale) for AI agents, from sandboxed newcomers to fully autonomous systems.
         </p>
       </div>
 
@@ -284,10 +284,10 @@ const packages = [
         {[
           { level: 0, name: 'Sandbox', score: '0-99', color: 'from-slate-600 to-slate-700' },
           { level: 1, name: 'Provisional', score: '100-299', color: 'from-slate-500 to-slate-600' },
-          { level: 2, name: 'Standard', score: '300-499', color: 'from-vorion-600 to-vorion-700' },
+          { level: 2, name: 'Established', score: '300-499', color: 'from-vorion-600 to-vorion-700' },
           { level: 3, name: 'Trusted', score: '500-699', color: 'from-vorion-500 to-vorion-600' },
-          { level: 4, name: 'Certified', score: '700-899', color: 'from-emerald-600 to-emerald-700' },
-          { level: 5, name: 'Autonomous', score: '900-1000', color: 'from-emerald-500 to-emerald-600' },
+          { level: 4, name: 'Verified', score: '700-899', color: 'from-emerald-600 to-emerald-700' },
+          { level: 5, name: 'Certified', score: '900-1000', color: 'from-emerald-500 to-emerald-600' },
         ].map(tier => (
           <div class="p-4 rounded-xl bg-slate-900/50 border border-slate-800 text-center">
             <div class:list={[

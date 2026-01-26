@@ -46,7 +46,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-cyan-400 text-sm font-medium">
             <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></span>
-            Now Live — Enterprise AI Governance Platform
+            Now Live — Built on ACI Spec v1.1.0
           </div>
 
           <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
@@ -354,12 +354,12 @@ export default function Home() {
                 <div className="p-4 bg-white/5 border-b border-white/10 text-gray-300">Critical</div>
               </div>
               {[
-                { tier: 'Certified (900+)', cells: ['green', 'green', 'yellow', 'red'] },
-                { tier: 'Verified (800+)', cells: ['green', 'yellow', 'yellow', 'red'] },
-                { tier: 'Trusted (600+)', cells: ['yellow', 'yellow', 'red', 'red'] },
-                { tier: 'Established (400+)', cells: ['yellow', 'yellow', 'red', 'red'] },
-                { tier: 'Provisional (200+)', cells: ['yellow', 'red', 'red', 'red'] },
-                { tier: 'Untrusted (0+)', cells: ['red', 'red', 'red', 'red'] },
+                { tier: 'T5 Certified (900+)', cells: ['green', 'green', 'yellow', 'red'] },
+                { tier: 'T4 Verified (700+)', cells: ['green', 'yellow', 'yellow', 'red'] },
+                { tier: 'T3 Trusted (500+)', cells: ['yellow', 'yellow', 'red', 'red'] },
+                { tier: 'T2 Established (300+)', cells: ['yellow', 'yellow', 'red', 'red'] },
+                { tier: 'T1 Provisional (100+)', cells: ['yellow', 'red', 'red', 'red'] },
+                { tier: 'T0 Sandbox (0+)', cells: ['red', 'red', 'red', 'red'] },
               ].map((row, i) => (
                 <div key={i} className="grid grid-cols-5 text-center text-sm">
                   <div className="p-3 border-r border-b border-white/10 font-medium text-gray-300 bg-white/5">{row.tier}</div>
@@ -536,7 +536,11 @@ export default function Home() {
               <span className="ml-2">governance-example.ts</span>
             </div>
             <pre className="text-gray-300">
-{`import { MatrixRouter, CircuitBreakerService } from '@agentanchor/governance';
+{`import { TrustBand, TRUST_THRESHOLDS } from '@vorionsys/aci-spec';
+import { MatrixRouter, CircuitBreakerService } from '@agentanchor/governance';
+
+// Get trust tier from ACI spec (0-1000 scale)
+const trustTier = TrustBand.fromScore(agent.trustScore);
 
 // Route action through Risk x Trust Matrix
 const routing = await MatrixRouter.route({
@@ -564,7 +568,7 @@ await CircuitBreakerService.pauseAgent({
 
           <div className="mt-12 text-center">
             <p className="text-gray-400 mb-6">
-              Full SDK documentation available. Start building governed AI agents with our TypeScript SDK today.
+              Built on the open ACI specification (<code className="text-cyan-400">npm install @vorionsys/aci-spec</code>). Start building governed AI agents today.
             </p>
             <a
               href={`${urls.app}/docs/api`}

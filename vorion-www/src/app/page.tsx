@@ -38,7 +38,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 text-sm mb-8">
             <Shield className="w-4 h-4" />
-            Enterprise AI Governance Infrastructure
+            Phase 6 Complete — ACI Spec v1.1.0 Published
           </div>
 
           <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight mb-6">
@@ -60,8 +60,8 @@ export default function Home() {
             <Link href="#demo" className="px-6 py-3 border border-white/10 rounded text-white hover:bg-white/5 transition-colors">
               See Live Demo
             </Link>
-            <a href="https://npmjs.com/package/atsf-core" target="_blank" className="px-6 py-3 border border-white/10 rounded text-white hover:bg-white/5 transition-colors flex items-center gap-2">
-              <Package className="w-4 h-4" /> npm install atsf-core
+            <a href="https://npmjs.com/package/@vorionsys/aci-spec" target="_blank" className="px-6 py-3 border border-white/10 rounded text-white hover:bg-white/5 transition-colors flex items-center gap-2">
+              <Package className="w-4 h-4" /> npm install @vorionsys/aci-spec
             </a>
           </div>
         </div>
@@ -103,9 +103,9 @@ export default function Home() {
       {/* The Solution - Platform Features */}
       <section id="platform" className="py-20 px-6 bg-gradient-to-b from-transparent to-indigo-500/5">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-white mb-4 text-center">The ATSF Solution</h2>
+          <h2 className="text-3xl font-bold text-white mb-4 text-center">The ACI Standard</h2>
           <p className="text-neutral-400 text-center mb-12 max-w-2xl mx-auto">
-            A comprehensive trust infrastructure that gives enterprises visibility, control, and accountability.
+            A comprehensive trust infrastructure that gives enterprises visibility, control, and accountability. Now published on npm.
           </p>
 
           <div className="grid md:grid-cols-2 gap-8">
@@ -144,7 +144,7 @@ export default function Home() {
         <div className="max-w-5xl mx-auto">
           <h2 className="text-3xl font-bold text-white mb-4 text-center">See It In Action</h2>
           <p className="text-neutral-400 text-center mb-8">
-            Watch how ATSF evaluates and governs AI agent actions in real-time.
+            Watch how ACI-powered governance evaluates and governs AI agent actions in real-time.
           </p>
           <AnimatedDemo />
         </div>
@@ -206,10 +206,11 @@ export default function Home() {
           </div>
           <div className="bg-neutral-900 p-6 rounded-xl text-left max-w-2xl mx-auto border border-white/10">
             <pre className="text-sm text-neutral-300 overflow-x-auto">
-              <code>{`import { createTrustEngine } from 'atsf-core';
+              <code>{`import { TrustBand, TRUST_THRESHOLDS } from '@vorionsys/aci-spec';
+import { createTrustEngine } from '@vorionsys/atsf-core';
 
 const engine = createTrustEngine();
-await engine.initializeEntity('agent-001', 2);
+await engine.initializeEntity('agent-001', TrustBand.T2);
 
 // Your existing code - unchanged
 const callback = engine.createCallback('agent-001');
@@ -234,7 +235,7 @@ await agent.invoke(input, { callbacks: [callback] });`}</code>
             <div className="flex flex-col justify-center space-y-4">
               <div className="p-5 rounded-xl bg-white/5 border border-white/10">
                 <h3 className="font-bold text-white mb-2">Join the Community</h3>
-                <p className="text-sm text-neutral-400 mb-3">Chat with developers building with ATSF.</p>
+                <p className="text-sm text-neutral-400 mb-3">Chat with developers building with ACI.</p>
                 <a href="https://discord.gg/basis-protocol" target="_blank" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded transition-colors text-sm font-medium">
                   <MessageCircle className="w-4 h-4" /> Join Discord
                 </a>
@@ -249,7 +250,7 @@ await agent.invoke(input, { callbacks: [callback] });`}</code>
               <div className="p-5 rounded-xl bg-white/5 border border-white/10">
                 <h3 className="font-bold text-white mb-2">Install Now</h3>
                 <code className="block text-sm text-indigo-400 bg-neutral-900 px-3 py-2 rounded font-mono">
-                  npm install atsf-core
+                  npm install @vorionsys/aci-spec
                 </code>
               </div>
             </div>
