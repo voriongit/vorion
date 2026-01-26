@@ -139,7 +139,7 @@ jobs:
             turbo-${{ runner.os }}-
 
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: packages-dist
           path: packages
@@ -174,7 +174,7 @@ jobs:
             turbo-${{ runner.os }}-
 
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: packages-dist
           path: packages
@@ -237,7 +237,7 @@ jobs:
             turbo-${{ runner.os }}-
 
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: packages-dist
           path: packages
