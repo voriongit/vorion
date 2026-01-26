@@ -2,17 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================
+   CSS Custom Properties
+   ============================================ */
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
+
+  /* Accessibility: Focus ring colors */
+  --focus-ring-color: 59, 130, 246; /* blue-500 */
+  --focus-ring-offset: 2px;
 }
 
+/* Dark mode via class (set by JS) or media query fallback */
+.dark,
 @media (prefers-color-scheme: dark) {
   :root {
     --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+    --background-start-rgb: 17, 24, 39; /* gray-900 */
+    --background-end-rgb: 17, 24, 39;
   }
 }
 
@@ -26,19 +35,125 @@ body {
     rgb(var(--background-start-rgb));
 }
 
+/* ============================================
+   Accessibility: Screen Reader Only
+   ============================================ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.sr-only.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* ============================================
+   Accessibility: Reduced Motion
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================
+   Accessibility: High Contrast Mode
+   ============================================ */
+@media (prefers-contrast: high) {
+  :root {
+    --foreground-rgb: 0, 0, 0;
+    --background-start-rgb: 255, 255, 255;
+    --background-end-rgb: 255, 255, 255;
+  }
+
+  .dark {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+
+  /* Increase border contrast */
+  .card,
+  .input,
+  button {
+    border-width: 2px !important;
+  }
+}
+
+/* ============================================
+   Accessibility: Focus Styles
+   ============================================ */
+@layer base {
+  /* Visible focus for keyboard navigation */
+  :focus-visible {
+    outline: 2px solid rgb(var(--focus-ring-color));
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  /* Remove default focus for mouse users */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Ensure interactive elements have minimum touch target */
+  button,
+  [role="button"],
+  a,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Exception for inline links */
+  a:not([class]) {
+    min-height: auto;
+    min-width: auto;
+  }
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Focus ring utility classes */
+  .focus-ring {
+    @apply focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:outline-none;
+  }
+
+  .focus-ring-inset {
+    @apply focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset focus-visible:outline-none;
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors;
+    @apply bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:outline-none;
   }
 
   .btn-secondary {
-    @apply bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-semibold py-2 px-4 rounded-lg transition-colors;
+    @apply bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-semibold py-2 px-4 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:outline-none;
   }
 
   .card {
@@ -52,4 +167,12 @@ body {
   .label {
     @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2;
   }
+
+  /* Trust tier color classes */
+  .trust-tier-0 { @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200; }
+  .trust-tier-1 { @apply bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200; }
+  .trust-tier-2 { @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200; }
+  .trust-tier-3 { @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200; }
+  .trust-tier-4 { @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200; }
+  .trust-tier-5 { @apply bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200; }
 }

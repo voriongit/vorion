@@ -19,6 +19,20 @@ interface AppShellProps {
   userRole?: UserRole
 }
 
+/**
+ * Skip link component for keyboard accessibility
+ */
+function SkipLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+    >
+      {children}
+    </a>
+  )
+}
+
 export default function AppShell({ children, userRole = 'consumer' }: AppShellProps) {
   const { isCollapsed, isMobileOpen, toggleCollapse, toggleMobile, closeMobile } = useSidebar()
   const isMobile = useIsMobile()
@@ -48,12 +62,25 @@ export default function AppShell({ children, userRole = 'consumer' }: AppShellPr
     }
   }, [isMobileOpen])
 
+  // Announce route changes to screen readers
+  useEffect(() => {
+    const pageTitle = document.title
+    const announcement = document.getElementById('route-announcement')
+    if (announcement) {
+      announcement.textContent = `Navigated to ${pageTitle}`
+    }
+  }, [pathname])
+
   // Avoid hydration mismatch
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900" role="status" aria-label="Loading application">
         <div className="flex items-center justify-center h-screen">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <div
+            className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"
+            aria-hidden="true"
+          />
+          <span className="sr-only">Loading AgentAnchor...</span>
         </div>
       </div>
     )
@@ -63,6 +90,19 @@ export default function AppShell({ children, userRole = 'consumer' }: AppShellPr
     <FloorMemoryProvider>
       <QuickTravelProvider>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+          {/* Skip Links for keyboard navigation */}
+          <SkipLink href="#main-content">Skip to main content</SkipLink>
+          <SkipLink href="#main-navigation">Skip to navigation</SkipLink>
+
+          {/* Screen reader announcements */}
+          <div
+            id="route-announcement"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="sr-only"
+          />
+
           {/* Desktop Sidebar - hidden on mobile via CSS */}
           <Sidebar
             isCollapsed={isCollapsed}
@@ -85,7 +125,11 @@ export default function AppShell({ children, userRole = 'consumer' }: AppShellPr
 
           {/* Main Content */}
           <main
-            className={`pt-16 min-h-screen transition-all duration-300 ${
+            id="main-content"
+            role="main"
+            aria-label="Main content"
+            tabIndex={-1}
+            className={`pt-16 min-h-screen transition-all duration-300 focus:outline-none ${
               isCollapsed ? 'lg:ml-16' : 'lg:ml-64'
             }`}
           >
