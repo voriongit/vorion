@@ -40,6 +40,9 @@ export * from './cognigate/index.js';
 // Proof/audit chain
 export * from './proof/index.js';
 
+// CHAIN - Blockchain anchoring
+export * from './chain/index.js';
+
 // Decision Provenance (DPO)
 export * from './provenance/index.js';
 

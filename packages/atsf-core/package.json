@@ -30,6 +30,10 @@
       "types": "./dist/proof/index.d.ts",
       "import": "./dist/proof/index.js"
     },
+    "./chain": {
+      "types": "./dist/chain/index.d.ts",
+      "import": "./dist/chain/index.js"
+    },
     "./cognigate": {
       "types": "./dist/cognigate/index.d.ts",
       "import": "./dist/cognigate/index.js"
