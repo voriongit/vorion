@@ -1,0 +1,87 @@
+name: Generate Changelog
+
+on:
+  push:
+    branches: [master]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for changelog generation'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install changelog tools
+        run: |
+          npm install -g conventional-changelog-cli
+          npm install -g auto-changelog
+
+      - name: Generate Conventional Changelog
+        run: |
+          conventional-changelog -p conventionalcommits -i CHANGELOG.md -s -r 0
+
+      - name: Generate Release Notes
+        if: github.event_name == 'release'
+        run: |
+          # Generate release-specific notes
+          conventional-changelog -p conventionalcommits -r 2 > RELEASE_NOTES.md
+
+      - name: Update CHANGELOG
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Check if CHANGELOG.md has changes
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changelog changes"
+          else
+            git add CHANGELOG.md
+            git commit -m "docs: update CHANGELOG.md [skip ci]"
+            git push
+          fi
+
+      - name: Create Release PR
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: prepare release ${{ github.event.inputs.version }}"
+          title: "Release ${{ github.event.inputs.version }}"
+          body: |
+            ## Release ${{ github.event.inputs.version }}
+
+            This PR prepares the release of version ${{ github.event.inputs.version }}.
+
+            ### Changelog
+
+            See CHANGELOG.md for details.
+
+            ### Checklist
+
+            - [ ] Changelog reviewed
+            - [ ] Version numbers updated
+            - [ ] Tests passing
+            - [ ] Documentation updated
+          branch: release/${{ github.event.inputs.version }}
+          base: master

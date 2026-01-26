@@ -1,0 +1,1326 @@
+openapi: 3.1.0
+info:
+  title: Vorion ACI Trust Engine API
+  description: |
+    The Agent Classification Identifier (ACI) Trust Engine API provides endpoints for
+    managing AI agent trust, role-based access control, capability ceilings, and
+    provenance tracking.
+
+    ## Authentication
+    All endpoints require authentication via Bearer token or API key.
+
+    ## Rate Limits
+    - Default: 100 requests/minute
+    - Authenticated: 200 requests/minute
+    - Role gates: 30 requests/minute (burst: 10)
+
+    ## Error Codes
+    All errors follow the format: `P6_ERROR_CODE`
+  version: 1.0.0
+  contact:
+    name: Vorion Team
+    url: https://vorion.dev
+    email: support@vorion.dev
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.vorion.dev/v1
+    description: Production
+  - url: https://staging-api.vorion.dev/v1
+    description: Staging
+  - url: http://localhost:3000/api/v1
+    description: Local development
+
+tags:
+  - name: Stats
+    description: Dashboard statistics and metrics
+  - name: Role Gates
+    description: Role-based access control evaluation
+  - name: Ceiling
+    description: Capability ceiling checks
+  - name: Provenance
+    description: Decision provenance tracking
+  - name: Alerts
+    description: Gaming detection alerts
+  - name: Presets
+    description: ACI configuration presets
+  - name: Webhooks
+    description: Event webhook management
+  - name: Health
+    description: Service health checks
+
+paths:
+  /phase6/stats:
+    get:
+      operationId: getStats
+      summary: Get dashboard statistics
+      description: Returns aggregated statistics for the Phase 6 Trust Engine dashboard
+      tags: [Stats]
+      security:
+        - bearerAuth: []
+        - apiKey: []
+      parameters:
+        - name: timeRange
+          in: query
+          description: Time range for statistics
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
+            default: 24h
+        - name: organizationId
+          in: query
+          description: Filter by organization (multi-tenant)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /phase6/role-gates:
+    get:
+      operationId: listRoleGates
+      summary: List role gate configurations
+      tags: [Role Gates]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - name: role
+          in: query
+          schema:
+            $ref: '#/components/schemas/AgentRole'
+        - name: tier
+          in: query
+          schema:
+            $ref: '#/components/schemas/TrustTier'
+      responses:
+        '200':
+          description: List of role gates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RoleGate'
+                  nextPageToken:
+                    type: string
+                  totalCount:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      operationId: createRoleGate
+      summary: Create a new role gate
+      tags: [Role Gates]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleGateCreateRequest'
+      responses:
+        '201':
+          description: Role gate created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleGate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /phase6/role-gates/evaluate:
+    post:
+      operationId: evaluateRoleGate
+      summary: Evaluate role gate access
+      description: |
+        Evaluates whether an agent with the given trust tier is allowed to perform
+        the specified role. Returns the decision with provenance information.
+      tags: [Role Gates]
+      security:
+        - bearerAuth: []
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleGateRequest'
+            examples:
+              basic:
+                summary: Basic evaluation
+                value:
+                  agentId: "agent_abc123"
+                  role: "DATA_ANALYST"
+                  tier: "VERIFIED"
+              withContext:
+                summary: With context
+                value:
+                  agentId: "agent_abc123"
+                  role: "SYSTEM_ADMIN"
+                  tier: "TRUSTED"
+                  context:
+                    resourceId: "db_prod_001"
+                    action: "write"
+                    environment: "production"
+      responses:
+        '200':
+          description: Role gate evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleGateResponse'
+              examples:
+                allowed:
+                  summary: Access allowed
+                  value:
+                    allowed: true
+                    decision: "ALLOW"
+                    reason: "Agent meets minimum trust tier requirement"
+                    evaluatedAt: "2024-01-15T10:30:00Z"
+                    provenanceId: "prov_xyz789"
+                denied:
+                  summary: Access denied
+                  value:
+                    allowed: false
+                    decision: "DENY"
+                    reason: "Trust tier BASIC does not meet minimum requirement VERIFIED for role DATA_ANALYST"
+                    evaluatedAt: "2024-01-15T10:30:00Z"
+                    requiredTier: "VERIFIED"
+                    escalationPath: "/phase6/escalation/request"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /phase6/role-gates/{gateId}:
+    get:
+      operationId: getRoleGate
+      summary: Get role gate by ID
+      tags: [Role Gates]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Role gate details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleGate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      operationId: updateRoleGate
+      summary: Update role gate
+      tags: [Role Gates]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleGateUpdateRequest'
+      responses:
+        '200':
+          description: Role gate updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleGate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: deleteRoleGate
+      summary: Delete role gate
+      tags: [Role Gates]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Role gate deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /phase6/ceiling/check:
+    post:
+      operationId: checkCeiling
+      summary: Check capability ceiling
+      description: |
+        Checks if an agent has exceeded their capability ceiling for a given
+        resource type. Ceilings prevent agents from accumulating excessive
+        capabilities that could pose security risks.
+      tags: [Ceiling]
+      security:
+        - bearerAuth: []
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CeilingCheckRequest'
+      responses:
+        '200':
+          description: Ceiling check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CeilingCheckResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /phase6/ceiling/usage:
+    get:
+      operationId: getCeilingUsage
+      summary: Get ceiling usage statistics
+      tags: [Ceiling]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: resourceType
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ceiling usage statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CeilingUsage'
+
+  /phase6/provenance:
+    get:
+      operationId: listProvenance
+      summary: List provenance records
+      description: Query provenance records for audit and debugging purposes
+      tags: [Provenance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - name: agentId
+          in: query
+          schema:
+            type: string
+        - name: decisionType
+          in: query
+          schema:
+            type: string
+            enum: [ROLE_GATE, CEILING, ESCALATION]
+        - name: startTime
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endTime
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Provenance records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProvenanceRecord'
+                  nextPageToken:
+                    type: string
+
+    post:
+      operationId: createProvenance
+      summary: Create provenance record
+      description: Record a new decision for provenance tracking
+      tags: [Provenance]
+      security:
+        - bearerAuth: []
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProvenanceCreateRequest'
+      responses:
+        '201':
+          description: Provenance record created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvenanceRecord'
+
+  /phase6/provenance/{provenanceId}:
+    get:
+      operationId: getProvenance
+      summary: Get provenance record by ID
+      tags: [Provenance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: provenanceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Provenance record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvenanceRecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /phase6/provenance/{provenanceId}/chain:
+    get:
+      operationId: getProvenanceChain
+      summary: Get provenance chain
+      description: Returns the full chain of decisions leading to this provenance record
+      tags: [Provenance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: provenanceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: depth
+          in: query
+          description: Maximum chain depth to traverse
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+      responses:
+        '200':
+          description: Provenance chain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  root:
+                    $ref: '#/components/schemas/ProvenanceRecord'
+                  chain:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProvenanceRecord'
+                  depth:
+                    type: integer
+
+  /phase6/alerts:
+    get:
+      operationId: listAlerts
+      summary: List gaming detection alerts
+      tags: [Alerts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/PageToken'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, ACKNOWLEDGED, RESOLVED, DISMISSED]
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [CRITICAL, HIGH, MEDIUM, LOW, INFO]
+        - name: agentId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GamingAlert'
+                  nextPageToken:
+                    type: string
+                  totalCount:
+                    type: integer
+
+  /phase6/alerts/{alertId}:
+    get:
+      operationId: getAlert
+      summary: Get alert by ID
+      tags: [Alerts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Alert details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GamingAlert'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      operationId: updateAlert
+      summary: Update alert status
+      tags: [Alerts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [ACKNOWLEDGED, RESOLVED, DISMISSED]
+                resolution:
+                  type: string
+                  description: Resolution notes
+      responses:
+        '200':
+          description: Alert updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GamingAlert'
+
+  /phase6/presets:
+    get:
+      operationId: listPresets
+      summary: List ACI presets
+      tags: [Presets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [compliance, security, performance, custom]
+      responses:
+        '200':
+          description: List of presets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ACIPreset'
+
+    post:
+      operationId: createPreset
+      summary: Create custom preset
+      tags: [Presets]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ACIPresetCreateRequest'
+      responses:
+        '201':
+          description: Preset created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ACIPreset'
+
+  /phase6/presets/{presetId}/apply:
+    post:
+      operationId: applyPreset
+      summary: Apply preset configuration
+      tags: [Presets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: presetId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dryRun:
+                  type: boolean
+                  default: false
+                  description: Preview changes without applying
+      responses:
+        '200':
+          description: Preset applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  changes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                        before:
+                          type: object
+                        after:
+                          type: object
+
+  /phase6/webhooks:
+    get:
+      operationId: listWebhooks
+      summary: List webhooks
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of webhooks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Webhook'
+
+    post:
+      operationId: createWebhook
+      summary: Create webhook
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookCreateRequest'
+      responses:
+        '201':
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+
+  /phase6/webhooks/{webhookId}:
+    delete:
+      operationId: deleteWebhook
+      summary: Delete webhook
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Webhook deleted
+
+  /phase6/webhooks/{webhookId}/test:
+    post:
+      operationId: testWebhook
+      summary: Test webhook
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  responseTime:
+                    type: integer
+                    description: Response time in milliseconds
+
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      tags: [Health]
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, unhealthy]
+                  version:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        enum: [up, down]
+                      redis:
+                        type: string
+                        enum: [up, down]
+
+  /health/ready:
+    get:
+      operationId: readinessCheck
+      summary: Readiness check
+      tags: [Health]
+      responses:
+        '200':
+          description: Service ready
+        '503':
+          description: Service not ready
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from authentication
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for service-to-service communication
+
+  parameters:
+    PageSize:
+      name: pageSize
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+    PageToken:
+      name: pageToken
+      in: query
+      description: Token for pagination
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: P6_INVALID_REQUEST
+            message: Invalid request parameters
+            details:
+              field: agentId
+              issue: required field missing
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: P6_UNAUTHORIZED
+            message: Authentication required
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: P6_NOT_FOUND
+            message: Resource not found
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: P6_CONFLICT
+            message: Resource already exists
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: P6_RATE_LIMITED
+            message: Rate limit exceeded
+            retryAfter: 30
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: P6_INTERNAL_ERROR
+            message: An unexpected error occurred
+            requestId: req_abc123
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Error code (P6_*)
+        message:
+          type: string
+        details:
+          type: object
+        requestId:
+          type: string
+        retryAfter:
+          type: integer
+
+    TrustTier:
+      type: string
+      enum: [UNKNOWN, BASIC, VERIFIED, TRUSTED, PRIVILEGED]
+      description: |
+        Trust tier levels:
+        - UNKNOWN: Unverified agent
+        - BASIC: Basic verification completed
+        - VERIFIED: Identity verified
+        - TRUSTED: Established trust history
+        - PRIVILEGED: Highest trust level
+
+    AgentRole:
+      type: string
+      enum:
+        - READER
+        - WRITER
+        - DATA_ANALYST
+        - CODE_EXECUTOR
+        - SYSTEM_ADMIN
+        - EXTERNAL_COMMUNICATOR
+        - RESOURCE_MANAGER
+        - AUDITOR
+      description: Available agent roles
+
+    DashboardStats:
+      type: object
+      properties:
+        roleGates:
+          type: object
+          properties:
+            total:
+              type: integer
+            allowed:
+              type: integer
+            denied:
+              type: integer
+            escalated:
+              type: integer
+            byTier:
+              type: object
+              additionalProperties:
+                type: integer
+        ceiling:
+          type: object
+          properties:
+            totalChecks:
+              type: integer
+            exceeded:
+              type: integer
+            nearLimit:
+              type: integer
+        provenance:
+          type: object
+          properties:
+            totalRecords:
+              type: integer
+            byType:
+              type: object
+              additionalProperties:
+                type: integer
+        alerts:
+          type: object
+          properties:
+            active:
+              type: integer
+            bySeverity:
+              type: object
+              additionalProperties:
+                type: integer
+        timestamp:
+          type: string
+          format: date-time
+
+    RoleGate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/AgentRole'
+        minimumTier:
+          $ref: '#/components/schemas/TrustTier'
+        description:
+          type: string
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleGateCondition'
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RoleGateCondition:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [TIME_WINDOW, RESOURCE_MATCH, ENVIRONMENT, CUSTOM]
+        config:
+          type: object
+
+    RoleGateCreateRequest:
+      type: object
+      required: [role, minimumTier]
+      properties:
+        role:
+          $ref: '#/components/schemas/AgentRole'
+        minimumTier:
+          $ref: '#/components/schemas/TrustTier'
+        description:
+          type: string
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleGateCondition'
+
+    RoleGateUpdateRequest:
+      type: object
+      properties:
+        minimumTier:
+          $ref: '#/components/schemas/TrustTier'
+        description:
+          type: string
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleGateCondition'
+        enabled:
+          type: boolean
+
+    RoleGateRequest:
+      type: object
+      required: [agentId, role, tier]
+      properties:
+        agentId:
+          type: string
+          description: Unique agent identifier
+        role:
+          $ref: '#/components/schemas/AgentRole'
+        tier:
+          $ref: '#/components/schemas/TrustTier'
+        context:
+          type: object
+          properties:
+            resourceId:
+              type: string
+            action:
+              type: string
+            environment:
+              type: string
+            metadata:
+              type: object
+
+    RoleGateResponse:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        decision:
+          type: string
+          enum: [ALLOW, DENY, ESCALATE]
+        reason:
+          type: string
+        evaluatedAt:
+          type: string
+          format: date-time
+        provenanceId:
+          type: string
+          format: uuid
+        requiredTier:
+          $ref: '#/components/schemas/TrustTier'
+        escalationPath:
+          type: string
+
+    CeilingCheckRequest:
+      type: object
+      required: [agentId, resourceType, requestedAmount]
+      properties:
+        agentId:
+          type: string
+        resourceType:
+          type: string
+          enum: [API_CALLS, DATA_ACCESS, COMPUTE, STORAGE, NETWORK]
+        requestedAmount:
+          type: integer
+        tier:
+          $ref: '#/components/schemas/TrustTier'
+
+    CeilingCheckResponse:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        currentUsage:
+          type: integer
+        ceiling:
+          type: integer
+        remaining:
+          type: integer
+        resetAt:
+          type: string
+          format: date-time
+        provenanceId:
+          type: string
+          format: uuid
+
+    CeilingUsage:
+      type: object
+      properties:
+        agentId:
+          type: string
+        usage:
+          type: array
+          items:
+            type: object
+            properties:
+              resourceType:
+                type: string
+              current:
+                type: integer
+              ceiling:
+                type: integer
+              percentage:
+                type: number
+              resetAt:
+                type: string
+                format: date-time
+
+    ProvenanceRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [ROLE_GATE, CEILING, ESCALATION, ALERT]
+        agentId:
+          type: string
+        decision:
+          type: string
+        reason:
+          type: string
+        context:
+          type: object
+        parentId:
+          type: string
+          format: uuid
+        merkleRoot:
+          type: string
+          description: Merkle tree root for integrity verification
+        signature:
+          type: string
+          description: Cryptographic signature
+        timestamp:
+          type: string
+          format: date-time
+
+    ProvenanceCreateRequest:
+      type: object
+      required: [type, agentId, decision]
+      properties:
+        type:
+          type: string
+          enum: [ROLE_GATE, CEILING, ESCALATION, ALERT]
+        agentId:
+          type: string
+        decision:
+          type: string
+        reason:
+          type: string
+        context:
+          type: object
+        parentId:
+          type: string
+          format: uuid
+
+    GamingAlert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - RAPID_TIER_ESCALATION
+            - UNUSUAL_ACCESS_PATTERN
+            - CEILING_CIRCUMVENTION
+            - CREDENTIAL_SHARING
+            - SYBIL_ATTACK
+        severity:
+          type: string
+          enum: [CRITICAL, HIGH, MEDIUM, LOW, INFO]
+        status:
+          type: string
+          enum: [ACTIVE, ACKNOWLEDGED, RESOLVED, DISMISSED]
+        agentId:
+          type: string
+        description:
+          type: string
+        evidence:
+          type: object
+        detectedAt:
+          type: string
+          format: date-time
+        acknowledgedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+        resolution:
+          type: string
+
+    ACIPreset:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [compliance, security, performance, custom]
+        config:
+          type: object
+          properties:
+            roleGates:
+              type: array
+              items:
+                $ref: '#/components/schemas/RoleGateCreateRequest'
+            ceilings:
+              type: object
+            alertThresholds:
+              type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    ACIPresetCreateRequest:
+      type: object
+      required: [name, config]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        config:
+          type: object
+
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum:
+              - role_gate.evaluated
+              - role_gate.denied
+              - ceiling.exceeded
+              - alert.created
+              - alert.resolved
+              - provenance.created
+        secret:
+          type: string
+          description: HMAC secret for signature verification (write-only)
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        lastTriggeredAt:
+          type: string
+          format: date-time
+
+    WebhookCreateRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+        secret:
+          type: string
+
+security:
+  - bearerAuth: []
+  - apiKey: []

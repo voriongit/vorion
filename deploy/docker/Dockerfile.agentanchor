@@ -1,0 +1,76 @@
+# syntax=docker/dockerfile:1
+
+# =============================================================================
+# Stage 1: Dependencies
+# =============================================================================
+FROM node:20-alpine AS deps
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Copy package files for dependency installation
+COPY package.json package-lock.json ./
+COPY packages/aci-client/package.json ./packages/aci-client/
+COPY packages/aci-cli/package.json ./packages/aci-cli/
+COPY apps/agentanchor/package.json ./apps/agentanchor/
+
+# Install dependencies with legacy peer deps
+RUN npm ci --legacy-peer-deps
+
+# =============================================================================
+# Stage 2: Builder
+# =============================================================================
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/aci-client/node_modules ./packages/aci-client/node_modules
+COPY --from=deps /app/packages/aci-cli/node_modules ./packages/aci-cli/node_modules
+COPY --from=deps /app/apps/agentanchor/node_modules ./apps/agentanchor/node_modules
+
+# Copy source code
+COPY . .
+
+# Build packages first
+RUN npx turbo build --filter=@vorion/aci-client --filter=@vorion/aci-cli
+
+# Build the application
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+
+RUN npx turbo build --filter=./apps/agentanchor
+
+# =============================================================================
+# Stage 3: Production Runner
+# =============================================================================
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+# Security: Run as non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Set environment
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# Copy built application
+COPY --from=builder /app/apps/agentanchor/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/agentanchor/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/agentanchor/.next/static ./apps/agentanchor/.next/static
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+
+USER nextjs
+
+EXPOSE 3000
+
+CMD ["node", "apps/agentanchor/server.js"]

@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: vorion-production
+
+resources:
+  - ../../base
+
+nameSuffix: -production
+
+commonLabels:
+  environment: production
+
+commonAnnotations:
+  app.kubernetes.io/version: "1.0.0"
+
+patches:
+  - path: patches/deployment.yaml
+  - path: patches/ingress.yaml
+  - path: patches/hpa.yaml
+
+configMapGenerator:
+  - name: agentanchor-config
+    behavior: merge
+    literals:
+      - nextauth-url=https://agentanchor.vorion.dev
+      - log-level=info
+
+images:
+  - name: ghcr.io/voriongit/agentanchor
+    newTag: v1.0.0

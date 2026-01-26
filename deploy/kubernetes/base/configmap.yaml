@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentanchor-config
+  namespace: vorion
+  labels:
+    app.kubernetes.io/name: agentanchor
+    app.kubernetes.io/component: config
+data:
+  nextauth-url: "https://agentanchor.vorion.dev"
+  otel-endpoint: "http://jaeger-collector.observability:4317"
+  log-level: "info"
+  node-env: "production"

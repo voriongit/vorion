@@ -1,0 +1,14 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agentanchor
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "200"
+spec:
+  tls:
+    - hosts:
+        - agentanchor.vorion.dev
+      secretName: agentanchor-production-tls
+  rules:
+    - host: agentanchor.vorion.dev

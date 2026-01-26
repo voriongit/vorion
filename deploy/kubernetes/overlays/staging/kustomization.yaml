@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: vorion-staging
+
+resources:
+  - ../../base
+
+nameSuffix: -staging
+
+commonLabels:
+  environment: staging
+
+patches:
+  - path: patches/deployment.yaml
+  - path: patches/ingress.yaml
+  - path: patches/hpa.yaml
+
+configMapGenerator:
+  - name: agentanchor-config
+    behavior: merge
+    literals:
+      - nextauth-url=https://staging.agentanchor.vorion.dev
+      - log-level=debug
+
+images:
+  - name: ghcr.io/voriongit/agentanchor
+    newTag: staging

@@ -1,0 +1,13 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agentanchor
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+spec:
+  tls:
+    - hosts:
+        - staging.agentanchor.vorion.dev
+      secretName: agentanchor-staging-tls
+  rules:
+    - host: staging.agentanchor.vorion.dev
