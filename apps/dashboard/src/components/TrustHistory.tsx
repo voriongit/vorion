@@ -20,12 +20,12 @@ interface TrustHistoryProps {
     className?: string;
 }
 
+// ACI-spec 4-dimension model colors
 const DIMENSION_COLORS: Record<string, string> = {
-    Reliability: '#10b981', // emerald
-    Accuracy: '#3b82f6',    // blue
-    Security: '#f59e0b',    // amber
-    Governance: '#8b5cf6',  // violet
-    Collaboration: '#ec4899', // pink
+    Observability: '#10b981',  // emerald - transparency & auditability
+    Capability: '#3b82f6',     // blue - skill demonstration
+    Behavior: '#8b5cf6',       // violet - policy adherence
+    Context: '#f59e0b',        // amber - environment adaptation
 };
 
 export function TrustHistory({

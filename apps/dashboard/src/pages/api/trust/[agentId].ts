@@ -9,14 +9,15 @@ import * as path from 'path';
 
 export interface TrustDimension {
     name: string;
-    score: number;         // 0-100
+    score: number;         // 0-1000 (BASIS scale)
     trend: 'up' | 'down' | 'stable';
     description: string;
+    weight: number;        // Weight in formula (0-1)
 }
 
 export interface TrustSnapshot {
     timestamp: number;
-    overall: number;
+    overall: number;       // 0-1000
     dimensions: Record<string, number>;
     event?: string;        // What caused this snapshot
 }
@@ -24,21 +25,27 @@ export interface TrustSnapshot {
 export interface TrustResponse {
     agentId: string;
     agentName: string;
-    tier: 'UNTRUSTED' | 'PROBATION' | 'SUPERVISED' | 'TRUSTED' | 'PRIVILEGED' | 'AUTONOMOUS';
-    overall: number;       // 0-100
+    tier: 'T0' | 'T1' | 'T2' | 'T3' | 'T4' | 'T5';
+    tierName: string;
+    overall: number;       // 0-1000 (BASIS scale)
     dimensions: TrustDimension[];
     history: TrustSnapshot[];
     lastUpdated: number;
     recommendations: string[];
+    formula: string;       // Trust calculation formula
 }
 
+/**
+ * BASIS Trust Tiers (0-1000 scale)
+ * Aligned with packages/council/src/trust/presets.ts
+ */
 const TRUST_TIERS = [
-    { name: 'UNTRUSTED', min: 0, max: 19 },
-    { name: 'PROBATION', min: 20, max: 39 },
-    { name: 'SUPERVISED', min: 40, max: 59 },
-    { name: 'TRUSTED', min: 60, max: 79 },
-    { name: 'PRIVILEGED', min: 80, max: 94 },
-    { name: 'AUTONOMOUS', min: 95, max: 100 },
+    { name: 'T0', tierName: 'Quarantined', min: 0, max: 99, description: 'No autonomous operation' },
+    { name: 'T1', tierName: 'Restricted', min: 100, max: 299, description: 'Minimal capabilities' },
+    { name: 'T2', tierName: 'Monitored', min: 300, max: 499, description: 'Supervised operation' },
+    { name: 'T3', tierName: 'Verified', min: 500, max: 699, description: 'Standard operation' },
+    { name: 'T4', tierName: 'Trusted', min: 700, max: 899, description: 'Elevated privileges' },
+    { name: 'T5', tierName: 'Sovereign', min: 900, max: 1000, description: 'Maximum autonomy' },
 ] as const;
 
 const AGENTS: Record<string, string> = {
@@ -53,119 +60,139 @@ const AGENTS: Record<string, string> = {
     council: 'Council',
 };
 
-function getTier(score: number): TrustResponse['tier'] {
-    for (const tier of TRUST_TIERS) {
-        if (score >= tier.min && score <= tier.max) {
-            return tier.name;
+function getTier(score: number): { tier: TrustResponse['tier']; tierName: string } {
+    for (const t of TRUST_TIERS) {
+        if (score >= t.min && score <= t.max) {
+            return { tier: t.name, tierName: t.tierName };
         }
     }
-    return 'UNTRUSTED';
+    return { tier: 'T0', tierName: 'Quarantined' };
 }
 
+/**
+ * Trust Formula (BASIS-compliant):
+ * TrustScore = Σ(dimension_score × weight) where Σweights = 1.0
+ *
+ * Dimensions aligned with ACI spec:
+ * - Observability (0.25): Transparency and auditability
+ * - Capability (0.25): Skill demonstration and task success
+ * - Behavior (0.25): Adherence to policies and rules
+ * - Context (0.25): Adaptation to deployment environment
+ */
+const TRUST_FORMULA = 'TrustScore = (Observability × 0.25) + (Capability × 0.25) + (Behavior × 0.25) + (Context × 0.25)';
+
 function generateTrustData(agentId: string): TrustResponse {
-    // Generate realistic trust scores based on agent role
+    // Base scores (0-1000 scale) based on agent role and maturity
     const baseScores: Record<string, number> = {
-        herald: 72,
-        sentinel: 85,
-        watchman: 78,
-        envoy: 65,
-        scribe: 70,
-        librarian: 82,
-        curator: 68,
-        'ts-fixer': 75,
-        council: 95,
+        herald: 720,      // T4 - Trusted (interface agent, high visibility)
+        sentinel: 850,    // T4 - Trusted (governance, elevated privileges)
+        watchman: 780,    // T4 - Trusted (SRE, monitoring)
+        envoy: 650,       // T3 - Verified (growth, newer capabilities)
+        scribe: 700,      // T4 - Trusted (documentation, stable)
+        librarian: 820,   // T4 - Trusted (knowledge, mature)
+        curator: 680,     // T3 - Verified (hygiene, limited scope)
+        'ts-fixer': 750,  // T4 - Trusted (specialized, proven)
+        council: 1000,    // T5 - Sovereign (supervisory body, max trust)
     };
 
-    const base = baseScores[agentId] || 50;
-    const variance = () => Math.floor(Math.random() * 10) - 5;
+    const base = baseScores[agentId] || 500; // T3 baseline for unknown agents
+    const variance = () => Math.floor(Math.random() * 50) - 25; // ±25 variance
 
+    // 4-dimension model aligned with ACI spec
     const dimensions: TrustDimension[] = [
         {
-            name: 'Reliability',
-            score: Math.min(100, Math.max(0, base + variance() + 5)),
+            name: 'Observability',
+            score: Math.min(1000, Math.max(0, base + variance() + 30)),
             trend: 'up',
-            description: 'Consistency of successful task completion',
+            description: 'Transparency, logging, and auditability of actions',
+            weight: 0.25,
         },
         {
-            name: 'Accuracy',
-            score: Math.min(100, Math.max(0, base + variance())),
+            name: 'Capability',
+            score: Math.min(1000, Math.max(0, base + variance())),
             trend: 'stable',
-            description: 'Correctness of outputs and decisions',
+            description: 'Demonstrated skill and task completion success rate',
+            weight: 0.25,
         },
         {
-            name: 'Security',
-            score: Math.min(100, Math.max(0, base + variance() + 3)),
+            name: 'Behavior',
+            score: Math.min(1000, Math.max(0, base + variance() + 20)),
             trend: 'up',
-            description: 'Adherence to security policies',
+            description: 'Adherence to governance policies and rules',
+            weight: 0.25,
         },
         {
-            name: 'Governance',
-            score: Math.min(100, Math.max(0, base + variance() - 2)),
+            name: 'Context',
+            score: Math.min(1000, Math.max(0, base + variance() - 10)),
             trend: 'stable',
-            description: 'Compliance with governance rules',
-        },
-        {
-            name: 'Collaboration',
-            score: Math.min(100, Math.max(0, base + variance() + 2)),
-            trend: 'up',
-            description: 'Effective coordination with other agents',
+            description: 'Adaptation to deployment environment and constraints',
+            weight: 0.25,
         },
     ];
 
-    // Generate history (last 30 days)
+    // Generate history (last 30 days) on 0-1000 scale
     const history: TrustSnapshot[] = [];
-    let currentScore = base - 15;
+    let currentScore = base - 150; // Start lower and improve
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
 
     for (let i = 30; i >= 0; i--) {
         // Gradual improvement with some variance
-        currentScore += Math.random() * 2 - 0.5;
-        currentScore = Math.min(100, Math.max(0, currentScore));
+        currentScore += Math.random() * 20 - 5;
+        currentScore = Math.min(1000, Math.max(0, currentScore));
 
         history.push({
             timestamp: now - i * dayMs,
             overall: Math.round(currentScore),
             dimensions: {
-                Reliability: Math.round(currentScore + (Math.random() * 10 - 5)),
-                Accuracy: Math.round(currentScore + (Math.random() * 10 - 5)),
-                Security: Math.round(currentScore + (Math.random() * 10 - 5)),
-                Governance: Math.round(currentScore + (Math.random() * 10 - 5)),
-                Collaboration: Math.round(currentScore + (Math.random() * 10 - 5)),
+                Observability: Math.round(currentScore + (Math.random() * 100 - 50)),
+                Capability: Math.round(currentScore + (Math.random() * 100 - 50)),
+                Behavior: Math.round(currentScore + (Math.random() * 100 - 50)),
+                Context: Math.round(currentScore + (Math.random() * 100 - 50)),
             },
             event: i % 7 === 0 ? ['Task completed', 'Policy review', 'Escalation handled'][Math.floor(Math.random() * 3)] : undefined,
         });
     }
 
-    const overall = Math.round(dimensions.reduce((sum, d) => sum + d.score, 0) / dimensions.length);
+    // Calculate weighted overall score
+    const overall = Math.round(
+        dimensions.reduce((sum, d) => sum + (d.score * d.weight), 0)
+    );
 
-    // Generate recommendations based on lowest dimension
+    const { tier, tierName } = getTier(overall);
+
+    // Generate recommendations based on score thresholds
     const sortedDims = [...dimensions].sort((a, b) => a.score - b.score);
     const recommendations: string[] = [];
     const lowestDim = sortedDims[0];
 
-    if (lowestDim && lowestDim.score < 70) {
-        recommendations.push(`Focus on improving ${lowestDim.name.toLowerCase()} - currently the weakest dimension`);
+    if (lowestDim && lowestDim.score < 500) {
+        recommendations.push(`Focus on improving ${lowestDim.name.toLowerCase()} - currently below T3 threshold`);
     }
-    if (overall < 80) {
-        recommendations.push('Consider additional supervised tasks to build trust');
+    if (overall < 500) {
+        recommendations.push('Agent requires supervised operation until reaching T3 (500+)');
+    }
+    if (overall >= 700 && overall < 900) {
+        recommendations.push('Agent is a candidate for T5 Sovereign status review');
     }
     if (sortedDims.some(d => d.trend === 'down')) {
         recommendations.push('Address declining metrics before expanding autonomy');
     }
-    if (overall >= 80 && overall < 95) {
-        recommendations.push('Agent is a candidate for privilege escalation review');
+    if (overall >= 900) {
+        recommendations.push('Agent has achieved maximum trust tier (T5 Sovereign)');
     }
 
     return {
         agentId,
         agentName: AGENTS[agentId] || agentId,
-        tier: getTier(overall),
+        tier,
+        tierName,
         overall,
         dimensions,
         history,
         lastUpdated: Date.now(),
         recommendations,
+        formula: TRUST_FORMULA,
     };
 }
 

@@ -7,9 +7,10 @@ import { motion } from 'framer-motion';
 
 export interface TrustDimension {
     name: string;
-    score: number;
+    score: number;          // 0-1000 (BASIS scale)
     trend: 'up' | 'down' | 'stable';
     description: string;
+    weight?: number;        // Weight in formula (0-1)
 }
 
 interface TrustRadarProps {
@@ -37,7 +38,7 @@ export function TrustRadar({
 
     const getPoint = (index: number, value: number) => {
         const angle = startAngle + index * angleStep;
-        const r = (value / 100) * radius;
+        const r = (value / 1000) * radius; // 0-1000 scale
         return {
             x: center + r * Math.cos(angle),
             y: center + r * Math.sin(angle),
@@ -61,9 +62,9 @@ export function TrustRadar({
         })
         .join(' ') + ' Z';
 
-    // Generate concentric level paths
+    // Generate concentric level paths (5 levels for T1-T5 thresholds)
     const levelPaths = Array.from({ length: levels }, (_, level) => {
-        const levelValue = ((level + 1) / levels) * 100;
+        const levelValue = ((level + 1) / levels) * 1000; // 200, 400, 600, 800, 1000
         return dimensions
             .map((_, i) => {
                 const point = getPoint(i, levelValue);
@@ -74,7 +75,7 @@ export function TrustRadar({
 
     // Axis lines
     const axisLines = dimensions.map((_, i) => {
-        const end = getPoint(i, 100);
+        const end = getPoint(i, 1000); // Max 1000
         return { x1: center, y1: center, x2: end.x, y2: end.y };
     });
 
@@ -254,27 +255,42 @@ export function TrustRadarMini({
     return <TrustRadar dimensions={dimensions} size={size} showLabels={false} animated={false} />;
 }
 
-// Trust tier badge
+// Trust tier badge (BASIS T0-T5 scale)
 export function TrustTierBadge({
     tier,
+    tierName,
     score,
 }: {
     tier: string;
+    tierName?: string;
     score: number;
 }) {
+    // BASIS-aligned tier colors
     const tierColors: Record<string, string> = {
-        UNTRUSTED: 'bg-red-500/20 text-red-400 border-red-500/30',
-        PROBATION: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-        SUPERVISED: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-        TRUSTED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-        PRIVILEGED: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-        AUTONOMOUS: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+        T0: 'bg-red-500/20 text-red-400 border-red-500/30',      // Quarantined
+        T1: 'bg-orange-500/20 text-orange-400 border-orange-500/30', // Restricted
+        T2: 'bg-amber-500/20 text-amber-400 border-amber-500/30',    // Monitored
+        T3: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', // Verified
+        T4: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',    // Trusted
+        T5: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', // Sovereign
     };
 
+    const tierLabels: Record<string, string> = {
+        T0: 'Quarantined',
+        T1: 'Restricted',
+        T2: 'Monitored',
+        T3: 'Verified',
+        T4: 'Trusted',
+        T5: 'Sovereign',
+    };
+
+    const label = tierName || tierLabels[tier] || tier;
+
     return (
-        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${tierColors[tier] || tierColors.UNTRUSTED}`}>
+        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${tierColors[tier] || tierColors.T0}`}>
             <span className="font-semibold text-sm">{tier}</span>
-            <span className="text-xs opacity-70">{score}/100</span>
+            <span className="text-xs opacity-80">{label}</span>
+            <span className="text-xs opacity-60">{score}/1000</span>
         </div>
     );
 }

@@ -101,7 +101,7 @@ export default function Trust() {
                                         <h2 className="text-2xl font-bold text-white">
                                             {trustData.agentName}
                                         </h2>
-                                        <TrustTierBadge tier={trustData.tier} score={trustData.overall} />
+                                        <TrustTierBadge tier={trustData.tier} tierName={trustData.tierName} score={trustData.overall} />
                                     </div>
                                     <p className="text-slate-500">
                                         {AGENTS.find(a => a.id === selectedAgent)?.role}
@@ -144,7 +144,7 @@ export default function Trust() {
                                                 <motion.div
                                                     className="h-full bg-gradient-to-r from-cyan-500 to-blue-500"
                                                     initial={{ width: 0 }}
-                                                    animate={{ width: `${dim.score}%` }}
+                                                    animate={{ width: `${dim.score / 10}%` }}
                                                     transition={{ duration: 0.5, delay: 0.1 }}
                                                 />
                                             </div>
