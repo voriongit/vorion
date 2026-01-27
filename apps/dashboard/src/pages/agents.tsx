@@ -2,10 +2,13 @@ import Layout from '../components/Layout'
 import { useState } from 'react'
 import {
     BOOTSTRAP_AGENTS,
-    BMAD_CORE_AGENTS,
-    BMAD_BMB_AGENTS,
-    BMAD_BMM_AGENTS,
-    BMAD_CIS_AGENTS,
+    VORION_CORE_AGENTS,
+    VORION_FACTORY_AGENTS,
+    VORION_FORGE_AGENTS,
+    VORION_LABS_AGENTS,
+    VORION_OPS_AGENTS,
+    VORION_SECURITY_AGENTS,
+    VORION_DATA_AGENTS,
     type AgentDefinition,
     type AgentArchetype,
 } from '../lib/agents'
@@ -68,6 +71,8 @@ function AgentSection({
 }) {
     const agentList = Object.values(agents);
 
+    if (agentList.length === 0) return null;
+
     return (
         <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
@@ -94,12 +99,15 @@ export default function Agents() {
     const [archetypeFilter, setArchetypeFilter] = useState<string>('');
 
     // Get total counts
-    const vorionCount = Object.keys(BOOTSTRAP_AGENTS).length;
-    const bmadCount =
-        Object.keys(BMAD_CORE_AGENTS).length +
-        Object.keys(BMAD_BMB_AGENTS).length +
-        Object.keys(BMAD_BMM_AGENTS).length +
-        Object.keys(BMAD_CIS_AGENTS).length;
+    const bootstrapCount = Object.keys(BOOTSTRAP_AGENTS).length;
+    const extendedCount =
+        Object.keys(VORION_CORE_AGENTS).length +
+        Object.keys(VORION_FACTORY_AGENTS).length +
+        Object.keys(VORION_FORGE_AGENTS).length +
+        Object.keys(VORION_LABS_AGENTS).length +
+        Object.keys(VORION_OPS_AGENTS).length +
+        Object.keys(VORION_SECURITY_AGENTS).length +
+        Object.keys(VORION_DATA_AGENTS).length;
 
     // Filter agents
     const filterAgents = (agents: Record<string, AgentDefinition>) => {
@@ -130,19 +138,19 @@ export default function Agents() {
                         Agent Registry
                     </h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        {vorionCount + bmadCount} agents across Vorion and BMAD frameworks
+                        {bootstrapCount + extendedCount} agents across Vorion modules
                     </p>
                 </div>
 
                 {/* Stats */}
                 <div className="flex gap-4">
                     <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-lg px-4 py-2">
-                        <div className="text-2xl font-bold text-cyan-400">{vorionCount}</div>
-                        <div className="text-xs text-slate-500">Vorion</div>
+                        <div className="text-2xl font-bold text-cyan-400">{bootstrapCount}</div>
+                        <div className="text-xs text-slate-500">Bootstrap</div>
                     </div>
                     <div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-lg px-4 py-2">
-                        <div className="text-2xl font-bold text-violet-400">{bmadCount}</div>
-                        <div className="text-xs text-slate-500">BMAD</div>
+                        <div className="text-2xl font-bold text-violet-400">{extendedCount}</div>
+                        <div className="text-xs text-slate-500">Extended</div>
                     </div>
                 </div>
             </div>
@@ -183,7 +191,7 @@ export default function Agents() {
                 )}
             </div>
 
-            {/* Vorion Section */}
+            {/* Bootstrap Section */}
             <AgentSection
                 title="Vorion Bootstrap"
                 description="Core autonomous agent infrastructure"
@@ -191,33 +199,54 @@ export default function Agents() {
                 color="bg-cyan-500"
             />
 
-            {/* BMAD Sections */}
+            {/* Extended Module Sections */}
             <AgentSection
-                title="BMAD Core"
+                title="Vorion Core"
                 description="Orchestration and knowledge management"
-                agents={filterAgents(BMAD_CORE_AGENTS)}
+                agents={filterAgents(VORION_CORE_AGENTS)}
                 color="bg-violet-500"
             />
 
             <AgentSection
-                title="BMAD BMB (Building Module)"
+                title="Vorion Factory"
                 description="Agent, module, and workflow creation"
-                agents={filterAgents(BMAD_BMB_AGENTS)}
+                agents={filterAgents(VORION_FACTORY_AGENTS)}
                 color="bg-rose-500"
             />
 
             <AgentSection
-                title="BMAD BMM (Modern Method)"
+                title="Vorion Forge"
                 description="Software development workflow agents"
-                agents={filterAgents(BMAD_BMM_AGENTS)}
+                agents={filterAgents(VORION_FORGE_AGENTS)}
                 color="bg-emerald-500"
             />
 
             <AgentSection
-                title="BMAD CIS (Creative Innovation)"
+                title="Vorion Labs"
                 description="Innovation, strategy, and creative agents"
-                agents={filterAgents(BMAD_CIS_AGENTS)}
+                agents={filterAgents(VORION_LABS_AGENTS)}
                 color="bg-amber-500"
+            />
+
+            <AgentSection
+                title="Vorion Ops"
+                description="DevOps, platform, and infrastructure agents"
+                agents={filterAgents(VORION_OPS_AGENTS)}
+                color="bg-blue-500"
+            />
+
+            <AgentSection
+                title="Vorion Security"
+                description="Security, compliance, and risk agents"
+                agents={filterAgents(VORION_SECURITY_AGENTS)}
+                color="bg-red-500"
+            />
+
+            <AgentSection
+                title="Vorion Data"
+                description="Data engineering, analytics, and ML agents"
+                agents={filterAgents(VORION_DATA_AGENTS)}
+                color="bg-teal-500"
             />
         </Layout>
     );

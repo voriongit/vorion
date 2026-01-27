@@ -2,11 +2,11 @@
  * @fileoverview Grouped Agent Select Component
  * @module @vorion/dashboard/components/GroupedAgentSelect
  *
- * A select dropdown that groups agents by framework (Vorion, BMAD)
- * with icons and personas for BMAD agents.
+ * A select dropdown that groups agents by Vorion module (Bootstrap, Core, Factory, Forge, Labs)
+ * with icons for extended agents.
  */
 
-import { AGENT_OPTIONS, getAgentIcon } from '../lib/agents';
+import { AGENT_OPTIONS, getAgentIcon, type AgentModule } from '../lib/agents';
 
 interface GroupedAgentSelectProps {
   value: string;
@@ -39,8 +39,8 @@ function getGroupedOptions(): AgentOptionGroup[] {
     });
   }
 
-  // Order groups
-  const order = ['Vorion', 'BMAD Core', 'BMAD BMB', 'BMAD BMM', 'BMAD CIS'];
+  // Order groups by Vorion module hierarchy
+  const order = ['Bootstrap', 'Core', 'Factory', 'Forge', 'Labs', 'Ops', 'Security', 'Data'];
   return order
     .filter((key): key is string => key in groups)
     .map((key) => groups[key]!);
@@ -92,18 +92,20 @@ export function AgentSelect({
   className = '',
   showIcons = true,
   placeholder = 'All Agents',
-  framework,
-}: GroupedAgentSelectProps & { framework?: 'vorion' | 'bmad' }) {
+  module,
+}: GroupedAgentSelectProps & { module?: AgentModule }) {
   let options = AGENT_OPTIONS;
 
-  // Filter by framework if specified
-  if (framework === 'vorion') {
+  // Filter by module if specified
+  if (module === 'bootstrap') {
     options = options.filter(
-      (o) => !o.value || (o as any).group === 'Vorion'
+      (o) => !o.value || (o as any).group === 'Bootstrap'
     );
-  } else if (framework === 'bmad') {
+  } else if (module) {
+    // Core, Factory, Forge, Labs
+    const moduleLabel = module.charAt(0).toUpperCase() + module.slice(1);
     options = options.filter(
-      (o) => !o.value || ((o as any).group || '').startsWith('BMAD')
+      (o) => !o.value || (o as any).group === moduleLabel
     );
   }
 

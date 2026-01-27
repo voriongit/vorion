@@ -16,16 +16,22 @@ const EVENT_TYPES = [
     { value: 'error', label: 'Errors' },
 ];
 
-const FRAMEWORKS = [
-    { value: '', label: 'All Frameworks' },
-    { value: 'vorion', label: 'Vorion' },
-    { value: 'bmad', label: 'BMAD' },
+const MODULES = [
+    { value: '', label: 'All Modules' },
+    { value: 'bootstrap', label: 'Bootstrap' },
+    { value: 'core', label: 'Core' },
+    { value: 'factory', label: 'Factory' },
+    { value: 'forge', label: 'Forge' },
+    { value: 'labs', label: 'Labs' },
+    { value: 'ops', label: 'Ops' },
+    { value: 'security', label: 'Security' },
+    { value: 'data', label: 'Data' },
 ];
 
 export default function Audit() {
     const [agentFilter, setAgentFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
-    const [frameworkFilter, setFrameworkFilter] = useState('');
+    const [moduleFilter, setModuleFilter] = useState('');
 
     const { data: stats } = useSWR('/api/audit/events?limit=1000', fetcher, { refreshInterval: 30000 });
 
@@ -35,14 +41,17 @@ export default function Audit() {
     const errorCount = events.filter((e: any) => !e.success).length;
     const escalationCount = events.filter((e: any) => e.eventType === 'escalation').length;
 
-    // Calculate framework stats
-    const vorionCount = events.filter((e: any) => {
+    // Calculate module stats
+    const bootstrapCount = events.filter((e: any) => {
         const agent = (e.agentId || '').toLowerCase();
-        return agent.startsWith('vorion') || ['architect', 'scribe', 'sentinel', 'builder', 'tester', 'council'].includes(agent);
+        return agent.startsWith('vorion.bootstrap') || ['architect', 'scribe', 'sentinel', 'builder', 'tester', 'council'].includes(agent);
     }).length;
-    const bmadCount = events.filter((e: any) => {
+    const extendedCount = events.filter((e: any) => {
         const agent = (e.agentId || '').toLowerCase();
-        return agent.startsWith('bmad') || agent.includes('bmm') || agent.includes('bmb') || agent.includes('cis');
+        return agent.startsWith('vorion.core') || agent.startsWith('vorion.factory') ||
+               agent.startsWith('vorion.forge') || agent.startsWith('vorion.labs') ||
+               agent.startsWith('vorion.ops') || agent.startsWith('vorion.security') ||
+               agent.startsWith('vorion.data');
     }).length;
 
     return (
@@ -79,20 +88,20 @@ export default function Audit() {
                 </div>
             </div>
 
-            {/* Framework Stats */}
+            {/* Module Stats */}
             <div className="flex gap-4 mb-6">
                 <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-lg px-4 py-3 flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
                     <div>
-                        <div className="text-lg font-bold text-cyan-400">{vorionCount}</div>
-                        <div className="text-xs text-slate-500">Vorion Events</div>
+                        <div className="text-lg font-bold text-cyan-400">{bootstrapCount}</div>
+                        <div className="text-xs text-slate-500">Bootstrap Events</div>
                     </div>
                 </div>
                 <div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-lg px-4 py-3 flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full bg-violet-500"></div>
                     <div>
-                        <div className="text-lg font-bold text-violet-400">{bmadCount}</div>
-                        <div className="text-xs text-slate-500">BMAD Events</div>
+                        <div className="text-lg font-bold text-violet-400">{extendedCount}</div>
+                        <div className="text-xs text-slate-500">Extended Events</div>
                     </div>
                 </div>
             </div>
@@ -107,13 +116,13 @@ export default function Audit() {
                 />
 
                 <select
-                    value={frameworkFilter}
-                    onChange={(e) => setFrameworkFilter(e.target.value)}
+                    value={moduleFilter}
+                    onChange={(e) => setModuleFilter(e.target.value)}
                     className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50"
                 >
-                    {FRAMEWORKS.map(fw => (
-                        <option key={fw.value} value={fw.value} className="bg-[#0a0a0a]">
-                            {fw.label}
+                    {MODULES.map(mod => (
+                        <option key={mod.value} value={mod.value} className="bg-[#0a0a0a]">
+                            {mod.label}
                         </option>
                     ))}
                 </select>
@@ -130,12 +139,12 @@ export default function Audit() {
                     ))}
                 </select>
 
-                {(agentFilter || typeFilter || frameworkFilter) && (
+                {(agentFilter || typeFilter || moduleFilter) && (
                     <button
                         onClick={() => {
                             setAgentFilter('');
                             setTypeFilter('');
-                            setFrameworkFilter('');
+                            setModuleFilter('');
                         }}
                         className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
                     >
