@@ -255,7 +255,7 @@ export function TrustRadarMini({
     return <TrustRadar dimensions={dimensions} size={size} showLabels={false} animated={false} />;
 }
 
-// Trust tier badge (BASIS T0-T5 scale)
+// Trust tier badge (7-tier T0-T6 scale)
 export function TrustTierBadge({
     tier,
     tierName,
@@ -265,23 +265,25 @@ export function TrustTierBadge({
     tierName?: string;
     score: number;
 }) {
-    // BASIS-aligned tier colors
+    // 7-tier system colors
     const tierColors: Record<string, string> = {
-        T0: 'bg-red-500/20 text-red-400 border-red-500/30',      // Quarantined
-        T1: 'bg-orange-500/20 text-orange-400 border-orange-500/30', // Restricted
-        T2: 'bg-amber-500/20 text-amber-400 border-amber-500/30',    // Monitored
-        T3: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', // Verified
-        T4: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',    // Trusted
-        T5: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', // Sovereign
+        T0: 'bg-red-500/20 text-red-400 border-red-500/30',        // Sandbox
+        T1: 'bg-orange-500/20 text-orange-400 border-orange-500/30', // Probationary
+        T2: 'bg-amber-500/20 text-amber-400 border-amber-500/30',    // Supervised
+        T3: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', // Certified
+        T4: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',      // Accredited
+        T5: 'bg-blue-500/20 text-blue-400 border-blue-500/30',      // Autonomous
+        T6: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', // Sovereign
     };
 
     const tierLabels: Record<string, string> = {
-        T0: 'Quarantined',
-        T1: 'Restricted',
-        T2: 'Monitored',
-        T3: 'Verified',
-        T4: 'Trusted',
-        T5: 'Sovereign',
+        T0: 'Sandbox',
+        T1: 'Probationary',
+        T2: 'Supervised',
+        T3: 'Certified',
+        T4: 'Accredited',
+        T5: 'Autonomous',
+        T6: 'Sovereign',
     };
 
     const label = tierName || tierLabels[tier] || tier;
