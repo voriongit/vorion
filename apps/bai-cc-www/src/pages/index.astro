@@ -282,17 +282,17 @@ const packages = [
 
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
-          { level: 0, name: 'Sandbox', score: '0-99', color: 'from-slate-600 to-slate-700' },
-          { level: 1, name: 'Provisional', score: '100-299', color: 'from-slate-500 to-slate-600' },
-          { level: 2, name: 'Standard', score: '300-499', color: 'from-vorion-600 to-vorion-700' },
-          { level: 3, name: 'Trusted', score: '500-699', color: 'from-vorion-500 to-vorion-600' },
-          { level: 4, name: 'Certified', score: '700-899', color: 'from-emerald-600 to-emerald-700' },
-          { level: 5, name: 'Autonomous', score: '900-1000', color: 'from-emerald-500 to-emerald-600' },
+          { level: 0, name: 'Sandbox', score: '0-99', bg: 'bg-trust-sandbox' },
+          { level: 1, name: 'Provisional', score: '100-299', bg: 'bg-trust-provisional' },
+          { level: 2, name: 'Standard', score: '300-499', bg: 'bg-trust-standard text-slate-900' },
+          { level: 3, name: 'Trusted', score: '500-699', bg: 'bg-trust-trusted' },
+          { level: 4, name: 'Certified', score: '700-899', bg: 'bg-trust-certified' },
+          { level: 5, name: 'Autonomous', score: '900-1000', bg: 'bg-trust-autonomous' },
         ].map(tier => (
           <div class="p-4 rounded-xl bg-slate-900/50 border border-slate-800 text-center">
             <div class:list={[
-              'w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br',
-              tier.color
+              'w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center font-bold text-lg',
+              tier.bg
             ]}>
               L{tier.level}
             </div>

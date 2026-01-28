@@ -79,7 +79,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           Every AI action flows through three governance layers before and after execution:
         </p>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <a href="https://vorion.org/basis/intent" target="_blank" rel="noopener noreferrer" class="p-6 rounded-xl bg-gradient-to-br from-vorion-500/10 to-transparent border border-slate-800 hover:border-vorion-500/50 transition-colors group">
+          <div class="p-6 rounded-xl bg-gradient-to-br from-vorion-500/10 to-transparent border border-slate-800">
             <div class="flex items-center gap-3 mb-3">
               <div class="w-8 h-8 rounded-lg bg-vorion-500/20 flex items-center justify-center text-vorion-400 font-mono text-sm font-bold">1</div>
               <h3 class="font-semibold text-white">Intent Layer</h3>
@@ -92,8 +92,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
               <li>Prompt injection detection</li>
               <li>IntentRecord schema validation</li>
             </ul>
-          </a>
-          <a href="https://vorion.org/basis/enforce" target="_blank" rel="noopener noreferrer" class="p-6 rounded-xl bg-gradient-to-br from-emerald-500/10 to-transparent border border-slate-800 hover:border-emerald-500/50 transition-colors group">
+          </div>
+          <div class="p-6 rounded-xl bg-gradient-to-br from-emerald-500/10 to-transparent border border-slate-800">
             <div class="flex items-center gap-3 mb-3">
               <div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-mono text-sm font-bold">2</div>
               <h3 class="font-semibold text-white">Enforce Layer</h3>
@@ -106,8 +106,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
               <li>Policy evaluation order</li>
               <li>Human escalation triggers</li>
             </ul>
-          </a>
-          <a href="https://vorion.org/basis/proof" target="_blank" rel="noopener noreferrer" class="p-6 rounded-xl bg-gradient-to-br from-amber-500/10 to-transparent border border-slate-800 hover:border-amber-500/50 transition-colors group">
+          </div>
+          <div class="p-6 rounded-xl bg-gradient-to-br from-amber-500/10 to-transparent border border-slate-800">
             <div class="flex items-center gap-3 mb-3">
               <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400 font-mono text-sm font-bold">3</div>
               <h3 class="font-semibold text-white">Proof Layer</h3>
@@ -120,7 +120,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
               <li>7-10 year retention</li>
               <li>Tamper-evident storage</li>
             </ul>
-          </a>
+          </div>
         </div>
       </section>
 
@@ -222,37 +222,37 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             </thead>
             <tbody class="divide-y divide-slate-800">
               <tr>
-                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-slate-700 text-slate-300 font-mono">L0</span></td>
+                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-trust-sandbox text-white font-mono">L0</span></td>
                 <td class="px-4 py-4 text-white">Sandbox</td>
                 <td class="px-4 py-4 text-slate-400 font-mono">0-99</td>
                 <td class="px-4 py-4 text-slate-400">Read-only, sandboxed execution</td>
               </tr>
               <tr>
-                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-slate-600 text-slate-200 font-mono">L1</span></td>
+                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-trust-provisional text-white font-mono">L1</span></td>
                 <td class="px-4 py-4 text-white">Provisional</td>
                 <td class="px-4 py-4 text-slate-400 font-mono">100-299</td>
                 <td class="px-4 py-4 text-slate-400">Basic operations, supervised</td>
               </tr>
               <tr>
-                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-vorion-600 text-white font-mono">L2</span></td>
+                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-trust-standard text-slate-900 font-mono">L2</span></td>
                 <td class="px-4 py-4 text-white">Standard</td>
                 <td class="px-4 py-4 text-slate-400 font-mono">300-499</td>
                 <td class="px-4 py-4 text-slate-400">Standard operations, external API</td>
               </tr>
               <tr>
-                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-vorion-500 text-white font-mono">L3</span></td>
+                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-trust-trusted text-white font-mono">L3</span></td>
                 <td class="px-4 py-4 text-white">Trusted</td>
                 <td class="px-4 py-4 text-slate-400 font-mono">500-699</td>
                 <td class="px-4 py-4 text-slate-400">Cross-agent communication</td>
               </tr>
               <tr>
-                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-emerald-600 text-white font-mono">L4</span></td>
+                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-trust-certified text-white font-mono">L4</span></td>
                 <td class="px-4 py-4 text-white">Certified</td>
                 <td class="px-4 py-4 text-slate-400 font-mono">700-899</td>
                 <td class="px-4 py-4 text-slate-400">Admin tasks, agent spawning</td>
               </tr>
               <tr>
-                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-emerald-500 text-white font-mono">L5</span></td>
+                <td class="px-4 py-4"><span class="px-2 py-1 rounded bg-trust-autonomous text-white font-mono">L5</span></td>
                 <td class="px-4 py-4 text-white">Autonomous</td>
                 <td class="px-4 py-4 text-slate-400 font-mono">900-1000</td>
                 <td class="px-4 py-4 text-slate-400">Full autonomy, self-governance</td>
