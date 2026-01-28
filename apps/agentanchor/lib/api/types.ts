@@ -102,9 +102,16 @@ export const WEBHOOK_EVENT_TYPES = [
   'acquisition.created',
   'acquisition.terminated',
   'trust.changed',
+  'trust.tier_change',
+  'trust.violation',
+  'trust.score_threshold',
   'observer.anomaly',
   'feedback.received',
   'payout.completed',
+  'certification.applied',
+  'certification.approved',
+  'certification.denied',
+  'certification.expired',
 ] as const
 
 export type WebhookEventType = typeof WEBHOOK_EVENT_TYPES[number]

@@ -34,6 +34,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { validateApiKey, checkRateLimit, logApiUsage } from '@/lib/api'
+import { queueWebhookEvent } from '@/lib/api/webhook-service'
 import { createHmac, createHash } from 'crypto'
 import { z } from 'zod'
 
@@ -224,6 +225,62 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', agent_id)
+
+    // Trigger webhooks for trust events
+    const webhookPromises: Promise<void>[] = []
+
+    // Tier change webhook
+    if (tierNew !== tierPrev) {
+      webhookPromises.push(
+        queueWebhookEvent('trust.tier_change', {
+          agent_id,
+          previous_tier: tierPrev,
+          new_tier: tierNew,
+          previous_score: scorePrev,
+          new_score: scoreNew,
+          timestamp: new Date().toISOString(),
+        }, { userId, agentId: agent_id })
+      )
+    }
+
+    // Violation webhooks (for each proof with a violation code)
+    const violations = proofs.filter(p => p.v)
+    if (violations.length > 0) {
+      webhookPromises.push(
+        queueWebhookEvent('trust.violation', {
+          agent_id,
+          violations: violations.map(v => ({
+            code: v.v,
+            timestamp: new Date(v.t).toISOString(),
+            proof_hash: v.h,
+          })),
+          score_impact: violations.reduce((sum, v) =>
+            sum + (VIOLATION_PENALTIES[v.v!] || 0), 0
+          ),
+        }, { userId, agentId: agent_id })
+      )
+    }
+
+    // Score threshold webhooks (when crossing critical thresholds)
+    const thresholdsCrossed = TIER_THRESHOLDS.filter(t =>
+      (scorePrev < t && scoreNew >= t) || (scorePrev >= t && scoreNew < t)
+    )
+    if (thresholdsCrossed.length > 0) {
+      webhookPromises.push(
+        queueWebhookEvent('trust.score_threshold', {
+          agent_id,
+          thresholds_crossed: thresholdsCrossed,
+          direction: scoreNew > scorePrev ? 'up' : 'down',
+          previous_score: scorePrev,
+          new_score: scoreNew,
+        }, { userId, agentId: agent_id })
+      )
+    }
+
+    // Queue all webhooks (fire and forget, don't block response)
+    Promise.all(webhookPromises).catch(err =>
+      console.error('Webhook queueing error:', err)
+    )
 
     const responseTime = Date.now() - startTime
     await logApiUsage(keyId, userId, '/api/v1/events', 'POST', 200, responseTime)
