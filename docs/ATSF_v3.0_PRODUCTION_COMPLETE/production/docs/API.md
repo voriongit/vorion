@@ -456,6 +456,6 @@ console.log(`Threat level: ${assessment.threatLevel}`);
 
 ## Support
 
-- Documentation: https://docs.agentanchor.com/atsf
+- Documentation: https://docs.agentanchorai.com/atsf
 - Issues: https://github.com/agentanchor/atsf/issues
-- Email: support@agentanchor.com
+- Email: support@agentanchorai.com

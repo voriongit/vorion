@@ -257,7 +257,7 @@ upstream atsf_api {
 
 ```bash
 # Add helm repo
-helm repo add atsf https://charts.agentanchor.com
+helm repo add atsf https://charts.agentanchorai.com
 
 # Install
 helm install atsf atsf/atsf \
@@ -399,6 +399,6 @@ curl -X POST http://localhost:8000/admin/api-keys \
 
 ## Support
 
-- Documentation: https://docs.agentanchor.com/atsf
+- Documentation: https://docs.agentanchorai.com/atsf
 - Issues: https://github.com/agentanchor/atsf/issues
-- Email: support@agentanchor.com
+- Email: support@agentanchorai.com

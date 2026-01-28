@@ -11,13 +11,13 @@ setup(
     name="atsf-sdk",
     version="3.0.0",
     author="ATSF Development Team",
-    author_email="dev@agentanchor.com",
+    author_email="dev@agentanchorai.com",
     description="Official Python SDK for the Agentic Trust Scoring Framework",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/agentanchor/atsf-sdk",
     project_urls={
-        "Documentation": "https://docs.agentanchor.com/atsf",
+        "Documentation": "https://docs.agentanchorai.com/atsf",
         "Bug Tracker": "https://github.com/agentanchor/atsf-sdk/issues",
     },
     classifiers=[

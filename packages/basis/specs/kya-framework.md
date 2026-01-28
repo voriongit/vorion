@@ -93,7 +93,7 @@ did:vorion:ed25519:5Z8K3q2YvU8pVzNxF9sT7bQw6JhR1XmDcL4nVk
     {
       "id": "did:vorion:ed25519:5Z8K3q2YvU8pVzNxF9sT7bQw6JhR1XmDcL4nVk#agentcard",
       "type": "AgentCard",
-      "serviceEndpoint": "https://agentanchor.com/cards/5Z8K3q2YvU8pVzNxF9sT7bQw6JhR1XmDcL4nVk"
+      "serviceEndpoint": "https://agentanchorai.com/cards/5Z8K3q2YvU8pVzNxF9sT7bQw6JhR1XmDcL4nVk"
     },
     {
       "id": "did:vorion:ed25519:5Z8K3q2YvU8pVzNxF9sT7bQw6JhR1XmDcL4nVk#kaizen",

@@ -128,7 +128,7 @@ export class IdentityVerifier {
           {
             id: `${did}#agentcard`,
             type: 'AgentCard',
-            serviceEndpoint: `https://agentanchor.com/cards/${identifier}`,
+            serviceEndpoint: `https://agentanchorai.com/cards/${identifier}`,
           },
         ],
         kya: {
