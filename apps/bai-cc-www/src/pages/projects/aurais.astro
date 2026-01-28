@@ -2,7 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout title="Aurais" description="AI assistant with integrated governance - Mission control for AI agents">
+<BaseLayout title="Aurais" description="Trust-verified AI agents for enterprise - Consumer frontend powered by Cognigate governance">
   <article class="py-16 sm:py-20">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Header -->
@@ -15,134 +15,165 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         </a>
 
         <div class="flex items-start gap-4 mb-6">
-          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-vorion-500/20 to-accent-cyan/20 border border-vorion-500/20 flex items-center justify-center text-3xl">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center text-3xl">
             🤖
           </div>
           <div>
             <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">Aurais</h1>
             <div class="flex flex-wrap items-center gap-3">
-              <span class="px-3 py-1 text-sm font-medium rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Live
+              <span class="px-3 py-1 text-sm font-medium rounded-full bg-vorion-500/20 text-vorion-400 border border-vorion-500/30">
+                Active Development
               </span>
-              <span class="px-3 py-1 text-sm font-medium rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                README Available
-              </span>
-              <span class="text-sm text-slate-500">Proprietary</span>
+              <span class="text-sm text-slate-500">aurais.net</span>
             </div>
           </div>
         </div>
 
         <p class="text-xl text-slate-400 leading-relaxed">
-          AI assistant with integrated governance. Real-time monitoring, human-in-the-loop approval
-          workflows, and mission control for your AI agent fleet.
+          Trust-verified AI agents for enterprise. Deploy agents with confidence using Cognigate
+          governance and AgentAnchor certification.
         </p>
       </div>
 
       <!-- Links -->
       <div class="flex flex-wrap gap-4 mb-12 p-6 rounded-xl bg-slate-900/50 border border-slate-800">
         <a
-          href="https://aurais.agentanchorai.com"
+          href="https://aurais.net"
           target="_blank"
           rel="noopener noreferrer"
-          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-vorion-500 hover:bg-vorion-600 text-white transition-colors"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white transition-colors"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
           Open Aurais
         </a>
-      </div>
-
-      <!-- Notice -->
-      <div class="mb-12 p-6 rounded-xl bg-amber-500/10 border border-amber-500/30">
-        <div class="flex items-start gap-3">
-          <svg class="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div>
-            <h3 class="font-semibold text-amber-400 mb-1">Proprietary Application</h3>
-            <p class="text-sm text-amber-200/70">
-              Aurais is a proprietary application. The Agent SDK used for connecting agents is open source.
-            </p>
-          </div>
-        </div>
+        <a
+          href="https://cognigate.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+        >
+          Cognigate API
+        </a>
       </div>
 
       <!-- Overview -->
       <section class="mb-12">
         <h2 class="text-2xl font-bold text-white mb-4">Overview</h2>
         <p class="text-slate-400 leading-relaxed mb-4">
-          Aurais serves as the mission control interface for AI agent operations. Unlike traditional
-          chatbots, Aurais maintains awareness of agent trust levels, enforces governance policies,
-          and provides human operators with the tools to oversee autonomous operations.
+          Aurais is the consumer-facing frontend for the Vorion AI governance ecosystem.
+          It provides a modern dashboard for deploying and managing trust-verified AI agents,
+          with real-time governance powered by the Cognigate runtime.
         </p>
         <p class="text-slate-400 leading-relaxed">
-          Agents connect to Aurais via the open-source Agent SDK, enabling real-time status updates,
-          task assignment, and approval request workflows.
+          Every agent deployed through Aurais is governed by BASIS-compliant trust scoring,
+          certified through AgentAnchor, and monitored in real-time for policy compliance.
         </p>
+      </section>
+
+      <!-- Pricing Tiers -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-white mb-6">Product Tiers</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Core</h3>
+            <p class="text-2xl font-bold text-white mb-2">Free</p>
+            <ul class="text-sm text-slate-400 space-y-2">
+              <li>3 agents</li>
+              <li>Basic governance</li>
+              <li>Community support</li>
+              <li>Public trust badges</li>
+            </ul>
+          </div>
+          <div class="p-6 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
+            <h3 class="font-semibold text-indigo-400 mb-2">Pro</h3>
+            <p class="text-2xl font-bold text-white mb-2">$49/mo</p>
+            <ul class="text-sm text-slate-400 space-y-2">
+              <li>25 agents</li>
+              <li>Advanced governance</li>
+              <li>Priority support</li>
+              <li>Custom policies</li>
+            </ul>
+          </div>
+          <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+            <h3 class="font-semibold text-white mb-2">Exec</h3>
+            <p class="text-2xl font-bold text-white mb-2">Custom</p>
+            <ul class="text-sm text-slate-400 space-y-2">
+              <li>Unlimited agents</li>
+              <li>White-label options</li>
+              <li>Dedicated support</li>
+              <li>SLA guarantees</li>
+            </ul>
+          </div>
+        </div>
       </section>
 
       <!-- Features -->
       <section class="mb-12">
-        <h2 class="text-2xl font-bold text-white mb-6">Capabilities</h2>
+        <h2 class="text-2xl font-bold text-white mb-6">Features</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
-            <h3 class="font-semibold text-white mb-2">Agent Fleet View</h3>
+            <h3 class="font-semibold text-white mb-2">Dashboard</h3>
             <p class="text-sm text-slate-400">
-              Real-time visibility into all connected agents. Monitor status, current tasks,
-              and trust scores from a unified dashboard.
+              Real-time agent overview with trust scores, execution history, and tier status.
+              Monitor your entire fleet from a single pane of glass.
             </p>
           </div>
           <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
-            <h3 class="font-semibold text-white mb-2">Task Assignment</h3>
+            <h3 class="font-semibold text-white mb-2">Cognigate Integration</h3>
             <p class="text-sm text-slate-400">
-              Assign tasks to agents based on capability and trust level. Automatic routing
-              respects governance policies.
+              Native integration with the Cognigate governance runtime. Intent parsing,
+              policy enforcement, and proof chain verification built-in.
             </p>
           </div>
           <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
-            <h3 class="font-semibold text-white mb-2">Approval Queues</h3>
+            <h3 class="font-semibold text-white mb-2">AgentAnchor Certification</h3>
             <p class="text-sm text-slate-400">
-              Review and approve high-risk agent actions. Severity-based routing ensures
-              appropriate stakeholder review.
+              All agents are certified through AgentAnchor. Trust badges, public profiles,
+              and verifiable audit trails for compliance.
             </p>
           </div>
           <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
-            <h3 class="font-semibold text-white mb-2">Chat Interface</h3>
+            <h3 class="font-semibold text-white mb-2">BASIS Trust Tiers</h3>
             <p class="text-sm text-slate-400">
-              Natural language interaction with the AI system. Queries are processed
-              through governance-aware routing.
+              6-tier trust model from Sandbox (0-99) to Autonomous (900-1000).
+              Capabilities unlock progressively as trust is earned.
             </p>
           </div>
         </div>
       </section>
 
-      <!-- SDK -->
+      <!-- Trust Architecture -->
       <section class="mb-12">
-        <h2 class="text-2xl font-bold text-white mb-4">Agent SDK</h2>
-        <p class="text-slate-400 mb-6">
-          Connect your agents to Aurais using the open-source SDK:
-        </p>
-        <div class="rounded-xl bg-slate-900 border border-slate-800 overflow-hidden">
-          <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700">
-            <span class="text-sm text-slate-400">TypeScript</span>
+        <h2 class="text-2xl font-bold text-white mb-4">Trust Architecture</h2>
+        <div class="p-6 rounded-xl bg-slate-900/50 border border-slate-800">
+          <div class="grid grid-cols-6 gap-2 text-center text-xs">
+            <div class="p-3 rounded-lg bg-red-500/20 text-red-400">
+              <div class="font-bold">Sandbox</div>
+              <div class="text-slate-500">0-99</div>
+            </div>
+            <div class="p-3 rounded-lg bg-orange-500/20 text-orange-400">
+              <div class="font-bold">Provisional</div>
+              <div class="text-slate-500">100-299</div>
+            </div>
+            <div class="p-3 rounded-lg bg-yellow-500/20 text-yellow-400">
+              <div class="font-bold">Standard</div>
+              <div class="text-slate-500">300-499</div>
+            </div>
+            <div class="p-3 rounded-lg bg-blue-500/20 text-blue-400">
+              <div class="font-bold">Trusted</div>
+              <div class="text-slate-500">500-699</div>
+            </div>
+            <div class="p-3 rounded-lg bg-purple-500/20 text-purple-400">
+              <div class="font-bold">Certified</div>
+              <div class="text-slate-500">700-899</div>
+            </div>
+            <div class="p-3 rounded-lg bg-green-500/20 text-green-400">
+              <div class="font-bold">Autonomous</div>
+              <div class="text-slate-500">900-1000</div>
+            </div>
           </div>
-          <pre class="p-4 text-sm overflow-x-auto"><code class="text-slate-300">import {'{'} AuraisAgent {'}'} from '@vorion/agent-sdk';
-
-const agent = new AuraisAgent({'{'}
-  apiKey: process.env.AURAIS_API_KEY,
-  capabilities: ['execute', 'external'],
-  skills: ['data-analysis', 'web-dev'],
-{'}'});
-
-agent.on('task:assigned', async (task) => {'{'}
-  await agent.updateStatus('WORKING');
-  // ... execute task
-  await agent.completeTask(task.id, result);
-{'}'});
-
-await agent.connect();</code></pre>
         </div>
       </section>
 
@@ -150,11 +181,14 @@ await agent.connect();</code></pre>
       <section>
         <h2 class="text-2xl font-bold text-white mb-4">Related</h2>
         <div class="flex flex-wrap gap-4">
+          <a href="/projects/cognigate" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            Cognigate
+          </a>
           <a href="/projects/agentanchor" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
             AgentAnchor
           </a>
-          <a href="/packages#agent-sdk" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
-            @vorion/agent-sdk
+          <a href="/projects/basis" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors">
+            BASIS Standard
           </a>
         </div>
       </section>
