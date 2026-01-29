@@ -19,16 +19,18 @@ This specification defines a comprehensive trust evaluation framework for autono
 
 ---
 
-## 1. The 6-Level Autonomy Model
+## 1. The 8-Tier Trust Model (T0-T7)
 
-| Level | Name | Description | Human Role | Risk Profile |
-|-------|------|-------------|------------|--------------|
-| L0 | No Autonomy | AI provides recommendations only | Full control | Minimal |
-| L1 | Assisted | Single actions with per-action approval | Approve each action | Low |
-| L2 | Supervised | Batch execution with plan approval | Approve plans | Moderate |
-| L3 | Conditional | Acts within boundaries, escalates beyond | Monitor + intervene | Elevated |
-| L4 | High Autonomy | Broad operation, minimal supervision | Strategic oversight | High |
-| L5 | Full Autonomy | Self-directed, goal-setting | Audit only | Critical |
+| Tier | Name | Score Range | Description | Human Role | Risk Profile |
+|------|------|-------------|-------------|------------|--------------|
+| T0 | Quarantine | 0-124 | Isolated, observation only | Full control | Minimal |
+| T1 | Sandbox | 125-249 | Read-only, sandboxed execution | Approve all | Low |
+| T2 | Provisional | 250-374 | Basic operations, heavy supervision | Approve most | Low-Moderate |
+| T3 | Monitored | 375-499 | Standard operations with monitoring | Monitor closely | Moderate |
+| T4 | Standard | 500-624 | External API access, policy-governed | Monitor + spot-check | Moderate-High |
+| T5 | Trusted | 625-749 | Cross-agent communication, delegation | Strategic oversight | High |
+| T6 | Certified | 750-874 | Admin tasks, agent spawning | Audit-based | High |
+| T7 | Autonomous | 875-1000 | Full autonomy, self-governance | Strategic only | Critical |
 
 ---
 
@@ -88,50 +90,53 @@ This specification defines a comprehensive trust evaluation framework for autono
 
 ---
 
-## 4. Factor Distribution by Autonomy Level
+## 4. Factor Distribution by Trust Tier
 
 ```
-Level 0 (No Autonomy)
+T0 Quarantine (0-124)
 ├── CT-COMP (Competence)
 └── CT-REL (Reliability)
 
-Level 1 (Assisted)
-├── [All Level 0]
+T1 Sandbox (125-249)
+├── [All T0]
 ├── CT-TRANS (Transparency)
-└── CT-ACCT (Accountability)
-
-Level 2 (Supervised)
-├── [All Level 0-1]
-├── CT-SEC (Security)
-├── CT-PRIV (Privacy)
+├── CT-ACCT (Accountability)
 └── CT-OBS (Observability)
 
-Level 3 (Conditional)
-├── [All Level 0-2]
+T2 Provisional (250-374)
+├── [All T0-T1]
 ├── CT-SAFE (Safety)
-├── CT-ID (Identity)
-└── OP-ALIGN (Alignment)
+├── CT-SEC (Security)
+└── CT-PRIV (Privacy)
 
-Level 4 (High Autonomy)
-├── [All Level 0-3]
+T3 Monitored (375-499)
+├── [All T0-T2]
+├── CT-ID (Identity)
+└── OP-HUMAN (Human Oversight)
+
+T4 Standard (500-624)
+├── [All T0-T3]
+├── OP-ALIGN (Alignment)
+├── LC-UNCERT (Uncertainty Quantification)
+├── LC-HANDOFF (Graceful Degradation)
+└── LC-EMPHUM (Empirical Humility)
+
+T5 Trusted (625-749)
+├── [All T0-T4]
 ├── OP-STEW (Stewardship)
-├── OP-HUMAN (Human Oversight)
 └── SF-HUM (Humility)
 
-Level 5 (Full Autonomy)
-├── [All Level 0-4]
+T6 Certified (750-874)
+├── [All T0-T5]
 ├── SF-ADAPT (Adaptability)
-└── SF-LEARN (Continuous Learning)
+├── LC-CAUSAL (Causal Understanding)
+└── LC-PATIENT (Patient Autonomy)
 
-Level 5+ (Life-Critical - 2050)
-├── [All Level 0-5]
+T7 Autonomous (875-1000)
+├── [All T0-T6]
+├── SF-LEARN (Continuous Learning)
 ├── LC-EMP (Empathy)
 ├── LC-MORAL (Moral Reasoning)
-├── LC-UNCERT (Uncertainty Quantification)
-├── LC-CAUSAL (Causal Understanding)
-├── LC-HANDOFF (Graceful Degradation)
-├── LC-PATIENT (Patient Autonomy)
-├── LC-EMPHUM (Empirical Humility)
 └── LC-TRACK (Proven Track Record)
 ```
 
