@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -22,7 +22,7 @@ const plans = {
   pro: { name: 'Pro', price: '$49/mo' },
 }
 
-export default function SignupPage() {
+function SignupForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const selectedPlan = (searchParams.get('plan') as 'core' | 'pro') || 'core'
@@ -318,4 +318,16 @@ function getPasswordStrength(password: string): {
   if (score <= 2) return { level: 2, label: 'Fair', color: 'bg-yellow-500', textColor: 'text-yellow-400' }
   if (score <= 3) return { level: 3, label: 'Good', color: 'bg-blue-500', textColor: 'text-blue-400' }
   return { level: 4, label: 'Strong', color: 'bg-green-500', textColor: 'text-green-400' }
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+      </div>
+    }>
+      <SignupForm />
+    </Suspense>
+  )
 }
